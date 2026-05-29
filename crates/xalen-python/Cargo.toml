@@ -1,0 +1,28 @@
+[package]
+name = "xalen-python"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Python bindings (PyO3) for XALEN Ephemeris — pip install xalen"
+keywords = ["python", "ephemeris", "astrology", "pyo3", "astronomy"]
+categories = ["science", "api-bindings"]
+
+[lib]
+name = "xalen"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.28", features = ["extension-module"] }
+xalen-ephem = { version = "0.1.0", path = "../xalen-ephem" }
+xalen-time = { version = "0.1.0", path = "../xalen-time" }
+xalen-ayanamsa = { version = "0.1.0", path = "../xalen-ayanamsa" }
+xalen-vedic = { version = "0.1.0", path = "../xalen-vedic" }
+xalen-houses = { version = "0.1.0", path = "../xalen-houses" }
+xalen-stars = { version = "0.1.0", path = "../xalen-stars" }
+xalen-western = { version = "0.1.0", path = "../xalen-western" }
+xalen-numerology = { version = "0.1.0", path = "../xalen-numerology" }
+xalen-coords = { version = "0.1.0", path = "../xalen-coords" }
+
+[lints]
+workspace = true

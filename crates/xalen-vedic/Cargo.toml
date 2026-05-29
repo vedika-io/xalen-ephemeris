@@ -1,0 +1,18 @@
+[package]
+name = "xalen-vedic"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Vedic astrology computations — nakshatra, dasha, panchang, yoga, dosha, compatibility"
+keywords = ["vedic", "jyotish", "nakshatra", "dasha", "panchang"]
+categories = ["science", "mathematics"]
+
+[dependencies]
+xalen-time = { version = "0.1.0", path = "../xalen-time" }
+xalen-coords = { version = "0.1.0", path = "../xalen-coords" }
+xalen-ayanamsa = { version = "0.1.0", path = "../xalen-ayanamsa" }
+serde.workspace = true
+
+[lints]
+workspace = true

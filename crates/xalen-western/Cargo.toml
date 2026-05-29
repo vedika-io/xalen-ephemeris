@@ -1,0 +1,17 @@
+[package]
+name = "xalen-western"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Western astrology computations — aspects, dignities, returns, progressions, Hellenistic"
+keywords = ["western-astrology", "aspects", "dignities", "zodiac", "horoscope"]
+categories = ["science", "mathematics"]
+
+[dependencies]
+xalen-time = { version = "0.1.0", path = "../xalen-time" }
+xalen-coords = { version = "0.1.0", path = "../xalen-coords" }
+serde.workspace = true
+
+[lints]
+workspace = true

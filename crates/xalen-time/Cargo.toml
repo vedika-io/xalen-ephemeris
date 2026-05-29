@@ -1,0 +1,16 @@
+[package]
+name = "xalen-time"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Astronomical time primitives — JD, delta-T, time scales, calendar conversions"
+keywords = ["julian-day", "delta-t", "time-scales", "calendar", "astronomy"]
+categories = ["science", "date-and-time"]
+
+[dependencies]
+thiserror.workspace = true
+serde.workspace = true
+
+[lints]
+workspace = true

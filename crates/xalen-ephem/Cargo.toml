@@ -1,0 +1,25 @@
+[package]
+name = "xalen-ephem"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Planetary position computation for XALEN Ephemeris — VSOP87 analytical + JPL DE support"
+keywords = ["ephemeris", "vsop87", "planets", "astronomy", "astrology"]
+categories = ["science", "mathematics"]
+
+[dependencies]
+xalen-time = { version = "0.1.0", path = "../xalen-time" }
+xalen-coords = { version = "0.1.0", path = "../xalen-coords" }
+xalen-ayanamsa = { version = "0.1.0", path = "../xalen-ayanamsa" }
+xalen-houses = { version = "0.1.0", path = "../xalen-houses" }
+xalen-stars = { version = "0.1.0", path = "../xalen-stars" }
+thiserror.workspace = true
+serde.workspace = true
+vsop87 = "3.0.0"
+
+[dev-dependencies]
+xalen-vedic = { version = "0.1.0", path = "../xalen-vedic" }
+
+[lints]
+workspace = true

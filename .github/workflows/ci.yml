@@ -1,0 +1,49 @@
+name: CI
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo test --workspace --exclude xalen-python
+      - run: cargo clippy --workspace --exclude xalen-python -- -D warnings
+      - run: cargo doc --no-deps --workspace --exclude xalen-python
+
+  wasm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - run: cargo build -p xalen-wasm --target wasm32-unknown-unknown
+
+  # Build the language bindings so a broken binding is caught in CI. The Rust
+  # logic is covered by the `test` job; these verify the bindings compile and
+  # (for Node) that the addon loads and marshals values across the FFI boundary.
+  python-binding:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install maturin
+      - run: maturin build --manifest-path crates/xalen-python/Cargo.toml
+
+  node-binding:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - working-directory: crates/xalen-node
+        run: |
+          npm install
+          npm run build:debug
+          npm test

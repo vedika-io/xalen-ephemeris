@@ -1,0 +1,18 @@
+[package]
+name = "xalen-houses"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "18+ astrological house systems with polar region handling for XALEN Ephemeris"
+keywords = ["houses", "placidus", "whole-sign", "astrology", "ascendant"]
+categories = ["science", "mathematics"]
+
+[dependencies]
+xalen-time = { version = "0.1.0", path = "../xalen-time" }
+xalen-coords = { version = "0.1.0", path = "../xalen-coords" }
+thiserror.workspace = true
+serde.workspace = true
+
+[lints]
+workspace = true

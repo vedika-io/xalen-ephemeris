@@ -1,0 +1,23 @@
+[package]
+name = "xalen-ffi"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "C FFI export layer for XALEN Ephemeris — embed in any language"
+keywords = ["ffi", "ephemeris", "astrology", "c-bindings", "astronomy"]
+categories = ["science", "api-bindings"]
+
+[lib]
+crate-type = ["cdylib", "staticlib"]
+
+[dependencies]
+xalen-time = { version = "0.1.0", path = "../xalen-time" }
+xalen-coords = { version = "0.1.0", path = "../xalen-coords" }
+xalen-ephem = { version = "0.1.0", path = "../xalen-ephem" }
+xalen-houses = { version = "0.1.0", path = "../xalen-houses" }
+xalen-ayanamsa = { version = "0.1.0", path = "../xalen-ayanamsa" }
+xalen-vedic = { version = "0.1.0", path = "../xalen-vedic" }
+
+[lints]
+workspace = true

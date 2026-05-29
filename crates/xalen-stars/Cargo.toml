@@ -1,0 +1,17 @@
+[package]
+name = "xalen-stars"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Fixed star catalog with precession-corrected positions for XALEN Ephemeris"
+keywords = ["fixed-stars", "star-catalog", "precession", "astronomy", "astrology"]
+categories = ["science", "mathematics"]
+
+[dependencies]
+xalen-time = { version = "0.1.0", path = "../xalen-time" }
+xalen-coords = { version = "0.1.0", path = "../xalen-coords" }
+serde.workspace = true
+
+[lints]
+workspace = true

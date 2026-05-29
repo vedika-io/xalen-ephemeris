@@ -1,0 +1,19 @@
+[package]
+name = "xalen-lalkitab"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Lal Kitab remedial astrology — house-based analysis, planetary debts, dormancy, 108 remedies, varshphal"
+keywords = ["lal-kitab", "remedies", "vedic", "astrology", "varshphal"]
+categories = ["science", "mathematics"]
+
+[dependencies]
+xalen-coords = { version = "0.1.0", path = "../xalen-coords" }
+serde.workspace = true
+
+[dev-dependencies]
+serde_json = "1"
+
+[lints]
+workspace = true

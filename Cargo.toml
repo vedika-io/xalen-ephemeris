@@ -1,0 +1,107 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/xalen-time",
+    "crates/xalen-coords",
+    "crates/xalen-ephem",
+    "crates/xalen-houses",
+    "crates/xalen-ayanamsa",
+    "crates/xalen-stars",
+    "crates/xalen-vedic",
+    "crates/xalen-western",
+    "crates/xalen-ffi",
+    "crates/xalen-wasm",
+    "crates/xalen-chinese",
+    "crates/xalen-numerology",
+    "crates/xalen-world",
+    "crates/xalen-python",
+    "crates/xalen-node",
+    "crates/xalen-lalkitab",
+    "crates/xalen-iching",
+    "crates/xalen-chart",
+]
+# xalen-python is a PyO3 extension-module — its cdylib needs Python at link
+# time, so plain `cargo build` / `cargo build --workspace` cannot produce its
+# .dylib.  Keep it in `members` (for `cargo check -p xalen-python`) but omit
+# it from `default-members` so workspace-wide builds succeed.
+# Build it with:  cd crates/xalen-python && maturin develop
+default-members = [
+    "crates/xalen-time",
+    "crates/xalen-coords",
+    "crates/xalen-ephem",
+    "crates/xalen-houses",
+    "crates/xalen-ayanamsa",
+    "crates/xalen-stars",
+    "crates/xalen-vedic",
+    "crates/xalen-western",
+    "crates/xalen-ffi",
+    "crates/xalen-wasm",
+    "crates/xalen-chinese",
+    "crates/xalen-numerology",
+    "crates/xalen-world",
+    "crates/xalen-node",
+    "crates/xalen-lalkitab",
+    "crates/xalen-iching",
+    "crates/xalen-chart",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+repository = "https://github.com/vedika-io/xalen-ephemeris"
+description = "XALEN Ephemeris — next-generation astronomical library — pure Rust, thread-safe, Vedic-first"
+keywords = ["ephemeris", "astronomy", "astrology", "jyotish", "vedic"]
+categories = ["science", "mathematics"]
+
+[workspace.dependencies]
+thiserror = "2"
+serde = { version = "1", features = ["derive"] }
+
+# Workspace-wide lint policy. CI runs `cargo clippy -- -D warnings`, so every
+# member opts in via `[lints] workspace = true`. The two allows below are the
+# standard exceptions for a numerics/ephemeris library, each justified:
+[workspace.lints.clippy]
+# Coordinate, cusp, ashtakavarga and pillar math repeatedly indexes several
+# fixed-size arrays in lock-step by the same loop variable, where an indexed
+# `for i in 0..N` is clearer and less error-prone than zipped iterators.
+needless_range_loop = "allow"
+# Astronomical routines (house cusps, aspect geometry) legitimately take many
+# independent scalar angles; bundling them into a struct hurts call-site clarity.
+too_many_arguments = "allow"
+
+[package]
+name = "xalen-ephemeris"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+xalen-time = { path = "crates/xalen-time", version = "0.1.0" }
+xalen-coords = { path = "crates/xalen-coords", version = "0.1.0" }
+xalen-ephem = { path = "crates/xalen-ephem", version = "0.1.0" }
+xalen-houses = { path = "crates/xalen-houses", version = "0.1.0" }
+xalen-ayanamsa = { path = "crates/xalen-ayanamsa", version = "0.1.0" }
+xalen-vedic = { path = "crates/xalen-vedic", version = "0.1.0" }
+xalen-western = { path = "crates/xalen-western", version = "0.1.0" }
+xalen-stars = { path = "crates/xalen-stars", version = "0.1.0" }
+xalen-chinese = { path = "crates/xalen-chinese", version = "0.1.0" }
+xalen-numerology = { path = "crates/xalen-numerology", version = "0.1.0" }
+xalen-lalkitab = { path = "crates/xalen-lalkitab", version = "0.1.0" }
+xalen-iching = { path = "crates/xalen-iching", version = "0.1.0" }
+xalen-world = { path = "crates/xalen-world", version = "0.1.0" }
+xalen-chart = { path = "crates/xalen-chart", version = "0.1.0" }
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "core_bench"
+harness = false
+
+[lints]
+workspace = true

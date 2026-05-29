@@ -1,0 +1,30 @@
+[package]
+name = "xalen-wasm"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "WASM bindings for XALEN Ephemeris — run in any browser or Node.js"
+keywords = ["wasm", "ephemeris", "astrology", "browser", "astronomy"]
+categories = ["science", "wasm"]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+xalen-time = { version = "0.1.0", path = "../xalen-time" }
+xalen-coords = { version = "0.1.0", path = "../xalen-coords" }
+xalen-ephem = { version = "0.1.0", path = "../xalen-ephem" }
+xalen-houses = { version = "0.1.0", path = "../xalen-houses" }
+xalen-ayanamsa = { version = "0.1.0", path = "../xalen-ayanamsa" }
+xalen-vedic = { version = "0.1.0", path = "../xalen-vedic" }
+xalen-western = { version = "0.1.0", path = "../xalen-western" }
+xalen-stars = { version = "0.1.0", path = "../xalen-stars" }
+serde.workspace = true
+serde_json = "1"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "0.2"
+
+[lints]
+workspace = true

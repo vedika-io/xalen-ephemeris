@@ -1,0 +1,17 @@
+[package]
+name = "xalen-chart"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "SVG chart rendering for Vedic, South Indian, and Western wheel charts — zero external dependencies"
+keywords = ["astrology", "chart", "svg", "vedic", "horoscope"]
+categories = ["visualization", "science"]
+
+[dependencies]
+xalen-coords = { version = "0.1.0", path = "../xalen-coords" }
+xalen-houses = { version = "0.1.0", path = "../xalen-houses" }
+serde.workspace = true
+
+[lints]
+workspace = true

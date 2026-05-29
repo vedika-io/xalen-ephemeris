@@ -1,0 +1,15 @@
+[package]
+name = "xalen-world"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Non-Western/non-Chinese calendar and astrology systems — Mayan, Tibetan, Korean Saju, Japanese Nine Star Ki, Burmese Mahabote"
+keywords = ["mayan", "tibetan", "saju", "nine-star-ki", "astrology"]
+categories = ["science", "mathematics"]
+
+[dependencies]
+serde.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,31 @@
+[package]
+name = "xalen-node"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Node.js N-API bindings for XALEN Ephemeris — npm install xalen"
+keywords = ["node", "napi", "ephemeris", "astrology", "astronomy"]
+categories = ["science", "api-bindings"]
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+napi = { version = "2", features = ["serde-json"] }
+napi-derive = "2"
+serde_json = "1"
+xalen-ephem = { version = "0.1.0", path = "../xalen-ephem" }
+xalen-time = { version = "0.1.0", path = "../xalen-time" }
+xalen-ayanamsa = { version = "0.1.0", path = "../xalen-ayanamsa" }
+xalen-vedic = { version = "0.1.0", path = "../xalen-vedic" }
+xalen-houses = { version = "0.1.0", path = "../xalen-houses" }
+xalen-stars = { version = "0.1.0", path = "../xalen-stars" }
+xalen-numerology = { version = "0.1.0", path = "../xalen-numerology" }
+xalen-coords = { version = "0.1.0", path = "../xalen-coords" }
+
+[build-dependencies]
+napi-build = "2"
+
+[lints]
+workspace = true

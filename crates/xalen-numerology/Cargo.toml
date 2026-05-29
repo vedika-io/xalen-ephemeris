@@ -1,0 +1,15 @@
+[package]
+name = "xalen-numerology"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Numerology — Pythagorean & Chaldean systems, Life Path, Expression, Soul Urge"
+keywords = ["numerology", "pythagorean", "chaldean", "life-path", "gematria"]
+categories = ["science", "mathematics"]
+
+[dependencies]
+serde = { workspace = true }
+
+[lints]
+workspace = true

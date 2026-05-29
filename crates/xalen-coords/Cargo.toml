@@ -1,0 +1,17 @@
+[package]
+name = "xalen-coords"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Coordinate frames, precession, nutation, and frame transforms for XALEN Ephemeris"
+keywords = ["coordinates", "precession", "nutation", "ecliptic", "astronomy"]
+categories = ["science", "mathematics"]
+
+[dependencies]
+xalen-time = { version = "0.1.0", path = "../xalen-time" }
+thiserror.workspace = true
+serde.workspace = true
+
+[lints]
+workspace = true

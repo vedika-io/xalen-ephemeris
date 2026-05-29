@@ -1,0 +1,15 @@
+[package]
+name = "xalen-iching"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "I Ching (Yijing) — 64 hexagrams, 8 trigrams, date-based casting, nuclear & relating hexagrams"
+keywords = ["i-ching", "yijing", "hexagrams", "trigrams", "divination"]
+categories = ["science", "mathematics"]
+
+[dependencies]
+serde.workspace = true
+
+[lints]
+workspace = true

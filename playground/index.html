@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>XALEN Ephemeris Playground</title>
+<!--
+  XALEN Ephemeris — Interactive WASM Playground
+
+  Build the WASM module:
+    cd crates/xalen-wasm
+    wasm-pack build --target web --out-dir ../../playground/pkg
+
+  Then serve this directory:
+    python3 -m http.server 8000 --directory playground
+    # or
+    npx serve playground
+
+  Open http://localhost:8000 in your browser.
+
+  Until the WASM module is compiled, this page runs with mock data
+  showing realistic Vedic chart output for Pune, 1990-01-15 06:30 Lahiri.
+
+  SECURITY NOTE: This is a self-contained playground. All data rendered
+  into the DOM originates from hardcoded constants and numeric computations
+  within this file. No external/untrusted input is rendered as HTML.
+-->
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0d1117;--surface:#161b22;--surface-2:#1c2333;--border:#30363d;
+  --text:#c9d1d9;--text-muted:#8b949e;--text-dim:#484f58;
+  --accent:#58a6ff;--accent-hover:#79c0ff;--accent-dim:#1f6feb;
+  --gold:#f0c040;--gold-dim:#8b6914;
+  --green:#3fb950;--red:#f85149;--orange:#d29922;
+  --font-mono:'JetBrains Mono','Fira Code','SF Mono',Consolas,monospace;
+  --font-sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;
+  --radius:8px;
+}
+html{font-size:15px;scroll-behavior:smooth}
+body{
+  background:var(--bg);color:var(--text);font-family:var(--font-sans);
+  line-height:1.6;min-height:100vh;
+}
+a{color:var(--accent);text-decoration:none}
+a:hover{color:var(--accent-hover);text-decoration:underline}
+
+/* ---- Layout ---- */
+.container{max-width:1200px;margin:0 auto;padding:0 24px}
+header{
+  background:linear-gradient(180deg,#0d1117 0%,#161b22 100%);
+  border-bottom:1px solid var(--border);padding:32px 0 28px;
+}
+header .logo{
+  font-size:1.1rem;font-weight:700;letter-spacing:0.06em;
+  color:var(--gold);text-transform:uppercase;font-family:var(--font-mono);
+}
+header h1{
+  font-size:1.65rem;font-weight:600;color:var(--text);margin:8px 0 4px;
+  letter-spacing:-0.01em;
+}
+header .subtitle{color:var(--text-muted);font-size:0.9rem}
+
+.main-grid{
+  display:grid;grid-template-columns:380px 1fr;gap:24px;
+  margin:28px 0 48px;align-items:start;
+}
+@media(max-width:860px){
+  .main-grid{grid-template-columns:1fr}
+}
+
+/* ---- Card ---- */
+.card{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius);overflow:hidden;
+}
+.card-header{
+  padding:14px 20px;border-bottom:1px solid var(--border);
+  font-size:0.8rem;font-weight:600;text-transform:uppercase;
+  letter-spacing:0.06em;color:var(--text-muted);
+}
+.card-body{padding:20px}
+
+/* ---- Form ---- */
+.form-row{margin-bottom:16px}
+.form-row label{
+  display:block;font-size:0.78rem;font-weight:600;
+  text-transform:uppercase;letter-spacing:0.05em;
+  color:var(--text-muted);margin-bottom:6px;
+}
+.form-row input,.form-row select{
+  width:100%;padding:9px 12px;background:var(--bg);color:var(--text);
+  border:1px solid var(--border);border-radius:6px;font-size:0.9rem;
+  font-family:var(--font-sans);transition:border-color 0.15s;
+}
+.form-row input:focus,.form-row select:focus{
+  outline:none;border-color:var(--accent);
+  box-shadow:0 0 0 3px rgba(88,166,255,0.15);
+}
+.form-inline{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.form-inline-2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.btn-compute{
+  width:100%;padding:11px 0;background:var(--accent-dim);color:#fff;
+  border:1px solid var(--accent);border-radius:6px;font-size:0.9rem;
+  font-weight:600;cursor:pointer;transition:all 0.15s;
+  letter-spacing:0.02em;margin-top:4px;
+}
+.btn-compute:hover{background:var(--accent);color:#fff}
+.btn-compute:active{transform:scale(0.98)}
+
+/* ---- Status badge ---- */
+.status{
+  display:inline-flex;align-items:center;gap:6px;
+  font-size:0.75rem;font-weight:600;padding:4px 10px;
+  border-radius:20px;margin-top:12px;
+}
+.status-mock{background:rgba(210,153,34,0.15);color:var(--orange)}
+.status-live{background:rgba(63,185,80,0.15);color:var(--green)}
+.status-dot{width:7px;height:7px;border-radius:50%;display:inline-block}
+.status-mock .status-dot{background:var(--orange)}
+.status-live .status-dot{background:var(--green)}
+
+/* ---- Output ---- */
+.output-stack{display:flex;flex-direction:column;gap:20px}
+
+/* Planet table */
+.planet-table{width:100%;border-collapse:collapse;font-size:0.85rem}
+.planet-table thead th{
+  text-align:left;padding:8px 10px;font-size:0.72rem;
+  text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);
+  border-bottom:2px solid var(--border);font-weight:600;
+}
+.planet-table tbody td{
+  padding:7px 10px;border-bottom:1px solid var(--border);
+  font-family:var(--font-mono);font-size:0.82rem;
+}
+.planet-table tbody tr:hover{background:rgba(88,166,255,0.04)}
+.planet-name{color:var(--gold);font-weight:600;font-family:var(--font-sans)}
+.deg-cell{color:var(--text)}
+.sign-cell{color:var(--accent)}
+.nak-cell{color:var(--green)}
+.pada-cell{color:var(--text-muted);text-align:center}
+.house-cell{text-align:center;color:var(--text-muted)}
+.sign-western{color:var(--text-dim);font-size:0.75rem}
+
+/* Chart SVG container */
+.chart-wrap{
+  display:flex;justify-content:center;align-items:center;
+  padding:20px;background:var(--bg);border-radius:6px;
+  min-height:300px;
+}
+.chart-wrap svg{max-width:100%;height:auto}
+
+/* House cusps */
+.cusps-grid{
+  display:grid;grid-template-columns:repeat(4,1fr);gap:6px;
+  font-size:0.8rem;font-family:var(--font-mono);
+}
+.cusp-cell{
+  padding:6px 8px;background:var(--bg);border-radius:4px;
+  border:1px solid var(--border);text-align:center;
+}
+.cusp-num{font-size:0.68rem;color:var(--text-muted);font-weight:600;text-transform:uppercase}
+.cusp-val{color:var(--text);font-size:0.82rem}
+
+/* Panchang */
+.panchang-grid{
+  display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;
+  font-size:0.85rem;
+}
+.panchang-item{display:flex;flex-direction:column}
+.panchang-label{font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em}
+.panchang-val{color:var(--text);font-family:var(--font-mono)}
+
+/* Meta bar */
+.meta-bar{
+  display:flex;flex-wrap:wrap;gap:16px;font-size:0.78rem;
+  color:var(--text-muted);padding:10px 0;
+  border-top:1px solid var(--border);margin-top:4px;
+}
+.meta-label{font-weight:600;color:var(--text-dim)}
+
+/* Footer */
+footer{
+  text-align:center;padding:24px 0 32px;color:var(--text-dim);
+  font-size:0.78rem;border-top:1px solid var(--border);
+}
+footer strong{color:var(--text-muted);font-weight:600}
+
+/* Empty state */
+.empty-state{
+  display:flex;flex-direction:column;align-items:center;
+  justify-content:center;padding:48px 20px;color:var(--text-dim);
+  text-align:center;
+}
+.empty-icon{font-size:2.4rem;margin-bottom:12px;opacity:0.4}
+.empty-state p{font-size:0.88rem;max-width:280px;line-height:1.5}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="container">
+    <div class="logo">XALEN Ephemeris</div>
+    <h1>Vedic Birth Chart Calculator</h1>
+    <div class="subtitle">Interactive playground -- pure Rust compiled to WebAssembly, zero server calls</div>
+  </div>
+</header>
+
+<div class="container">
+  <div class="main-grid">
+
+    <!-- ===== INPUT PANEL ===== -->
+    <div class="card">
+      <div class="card-header">Birth Details</div>
+      <div class="card-body">
+        <div class="form-row">
+          <label>Date of Birth</label>
+          <div class="form-inline">
+            <input type="number" id="year" min="1900" max="2100" value="1990" placeholder="Year">
+            <input type="number" id="month" min="1" max="12" value="1" placeholder="Month">
+            <input type="number" id="day" min="1" max="31" value="15" placeholder="Day">
+          </div>
+        </div>
+        <div class="form-row">
+          <label>Time of Birth (24h)</label>
+          <div class="form-inline-2">
+            <input type="number" id="hour" min="0" max="23" value="6" placeholder="Hour">
+            <input type="number" id="minute" min="0" max="59" value="30" placeholder="Minute">
+          </div>
+        </div>
+        <div class="form-row">
+          <label>City</label>
+          <select id="city"></select>
+        </div>
+        <div class="form-row">
+          <label>Ayanamsa</label>
+          <select id="ayanamsa"></select>
+        </div>
+        <div class="form-row">
+          <label>House System</label>
+          <select id="houseSystem"></select>
+        </div>
+        <button class="btn-compute" id="computeBtn">Compute Chart</button>
+        <div id="statusBadge"></div>
+      </div>
+    </div>
+
+    <!-- ===== OUTPUT PANEL ===== -->
+    <div class="output-stack" id="outputPanel">
+      <div class="card" id="emptyCard">
+        <div class="card-body">
+          <div class="empty-state">
+            <div class="empty-icon">&#9788;</div>
+            <p>Enter birth details and click <strong>Compute Chart</strong> to generate a Vedic birth chart.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<footer>
+  <div class="container">
+    Powered by <strong>XALEN Ephemeris v0.1.0</strong> -- Pure Rust, Apache-2.0<br>
+    <a href="https://github.com/vedika-io/xalen-ephemeris" style="color:var(--text-dim)">github.com/vedika-io/xalen-ephemeris</a>
+  </div>
+</footer>
+
+<script>
+// ============================================================================
+// XALEN Ephemeris Playground — Client-Side Vedic Chart Calculator
+//
+// SECURITY: All data rendered into the DOM originates from hardcoded constants
+// and numeric computations within this file. No external/untrusted input is
+// rendered as HTML. DOM manipulation uses safe createElement/textContent methods
+// for all dynamic content.
+// ============================================================================
+
+// ---- City database (from xalen-houses/src/geocoding.rs) ----
+const CITIES = [
+  {name:"Pune",lat:18.5204,lon:73.8567},{name:"Mumbai",lat:19.076,lon:72.8777},
+  {name:"Delhi",lat:28.6139,lon:77.209},{name:"Chennai",lat:13.0827,lon:80.2707},
+  {name:"Kolkata",lat:22.5726,lon:88.3639},{name:"Bangalore",lat:12.9716,lon:77.5946},
+  {name:"Hyderabad",lat:17.385,lon:78.4867},{name:"Ahmedabad",lat:23.0225,lon:72.5714},
+  {name:"Jaipur",lat:26.9124,lon:75.7873},{name:"Lucknow",lat:26.8467,lon:80.9462},
+  {name:"Nagpur",lat:21.1458,lon:79.0882},{name:"Indore",lat:22.7196,lon:75.8577},
+  {name:"Bhopal",lat:23.2599,lon:77.4126},{name:"Patna",lat:25.6093,lon:85.1376},
+  {name:"Varanasi",lat:25.3176,lon:83.0103},{name:"Surat",lat:21.1702,lon:72.8311},
+  {name:"Ujjain",lat:23.1765,lon:75.7885},{name:"Kochi",lat:9.9312,lon:76.2673},
+  {name:"Coimbatore",lat:11.0168,lon:76.9558},{name:"Madurai",lat:9.9252,lon:78.1198},
+  {name:"Chandigarh",lat:30.7333,lon:76.7794},{name:"Srinagar",lat:34.0837,lon:74.7973},
+  {name:"Colombo",lat:6.9271,lon:79.8612},{name:"Kathmandu",lat:27.7172,lon:85.324},
+  {name:"Dhaka",lat:23.8103,lon:90.4125},{name:"Karachi",lat:24.8607,lon:67.0011},
+  {name:"Lahore",lat:31.5204,lon:74.3587},
+  {name:"Singapore",lat:1.3521,lon:103.8198},{name:"Bangkok",lat:13.7563,lon:100.5018},
+  {name:"Jakarta",lat:-6.2088,lon:106.8456},{name:"Kuala Lumpur",lat:3.139,lon:101.6869},
+  {name:"Tokyo",lat:35.6762,lon:139.6503},{name:"Beijing",lat:39.9042,lon:116.4074},
+  {name:"Shanghai",lat:31.2304,lon:121.4737},{name:"Hong Kong",lat:22.3193,lon:114.1694},
+  {name:"Seoul",lat:37.5665,lon:126.978},
+  {name:"Dubai",lat:25.2048,lon:55.2708},{name:"Riyadh",lat:24.7136,lon:46.6753},
+  {name:"Tehran",lat:35.6892,lon:51.389},{name:"Istanbul",lat:41.0082,lon:28.9784},
+  {name:"Cairo",lat:30.0444,lon:31.2357},{name:"Nairobi",lat:-1.2921,lon:36.8219},
+  {name:"Lagos",lat:6.5244,lon:3.3792},{name:"Johannesburg",lat:-26.2041,lon:28.0473},
+  {name:"London",lat:51.5074,lon:-0.1278},{name:"Paris",lat:48.8566,lon:2.3522},
+  {name:"Berlin",lat:52.52,lon:13.405},{name:"Rome",lat:41.9028,lon:12.4964},
+  {name:"Madrid",lat:40.4168,lon:-3.7038},{name:"Amsterdam",lat:52.3676,lon:4.9041},
+  {name:"Vienna",lat:48.2082,lon:16.3738},{name:"Moscow",lat:55.7558,lon:37.6173},
+  {name:"Athens",lat:37.9838,lon:23.7275},
+  {name:"New York",lat:40.7128,lon:-74.006},{name:"Los Angeles",lat:34.0522,lon:-118.2437},
+  {name:"Chicago",lat:41.8781,lon:-87.6298},{name:"Houston",lat:29.7604,lon:-95.3698},
+  {name:"San Francisco",lat:37.7749,lon:-122.4194},{name:"Seattle",lat:47.6062,lon:-122.3321},
+  {name:"Denver",lat:39.7392,lon:-104.9903},{name:"Boston",lat:42.3601,lon:-71.0589},
+  {name:"Washington DC",lat:38.9072,lon:-77.0369},{name:"Miami",lat:25.7617,lon:-80.1918},
+  {name:"Toronto",lat:43.6532,lon:-79.3832},{name:"Vancouver",lat:49.2827,lon:-123.1207},
+  {name:"Mexico City",lat:19.4326,lon:-99.1332},{name:"Sao Paulo",lat:-23.5558,lon:-46.6396},
+  {name:"Buenos Aires",lat:-34.6037,lon:-58.3816},{name:"Lima",lat:-12.0464,lon:-77.0428},
+  {name:"Sydney",lat:-33.8688,lon:151.2093},{name:"Melbourne",lat:-37.8136,lon:144.9631},
+  {name:"Auckland",lat:-36.8485,lon:174.7633},
+].sort(function(a,b){ return a.name.localeCompare(b.name); });
+
+// ---- Ayanamsa options (from xalen-wasm ayanamsa_from_id) ----
+const AYANAMSAS = [
+  {id:0,name:"Lahiri (Chitrapaksha)"},
+  {id:1,name:"KP (Krishnamurti)"},
+  {id:2,name:"B.V. Raman"},
+  {id:3,name:"Fagan-Bradley"},
+  {id:4,name:"True Chitrapaksha"},
+  {id:5,name:"True Revati"},
+  {id:6,name:"Surya Siddhanta"},
+  {id:7,name:"Sri Yukteswar"},
+  {id:8,name:"J.N. Bhasin"},
+  {id:9,name:"De Luce"},
+  {id:10,name:"Usha/Shashi"},
+  {id:11,name:"Pushya Paksha"},
+  {id:12,name:"Galactic Center 0 Sag"},
+  {id:13,name:"Lahiri (ICRC 1956)"},
+  {id:14,name:"KP Straight Line"},
+  {id:15,name:"Hipparchos"},
+  {id:16,name:"Lahiri VP285 (1980)"},
+];
+
+// ---- House systems (from xalen-wasm house_system_from_id) ----
+const HOUSE_SYSTEMS = [
+  {id:0,name:"Whole Sign"},{id:1,name:"Equal"},{id:2,name:"Placidus"},
+  {id:3,name:"Koch"},{id:4,name:"Porphyry"},{id:5,name:"Regiomontanus"},
+  {id:6,name:"Campanus"},{id:7,name:"Morinus"},{id:8,name:"Alcabitius"},
+  {id:9,name:"Topocentric"},{id:10,name:"Sripati"},{id:11,name:"Vehlow"},
+  {id:12,name:"Meridian"},{id:13,name:"Krusinski-Pisa"},
+];
+
+// ---- Vedic constants ----
+var RASHIS = [
+  "Mesha","Vrishabha","Mithuna","Karka","Simha","Kanya",
+  "Tula","Vrishchika","Dhanu","Makara","Kumbha","Meena"
+];
+var RASHI_WESTERN = [
+  "Aries","Taurus","Gemini","Cancer","Leo","Virgo",
+  "Libra","Scorpio","Sagittarius","Capricorn","Aquarius","Pisces"
+];
+var NAKSHATRAS = [
+  "Ashwini","Bharani","Krittika","Rohini","Mrigashira","Ardra",
+  "Punarvasu","Pushya","Ashlesha","Magha","Purva Phalguni","Uttara Phalguni",
+  "Hasta","Chitra","Swati","Vishakha","Anuradha","Jyeshtha",
+  "Mula","Purva Ashadha","Uttara Ashadha","Shravana","Dhanishta",
+  "Shatabhisha","Purva Bhadrapada","Uttara Bhadrapada","Revati"
+];
+var SIGN_ABBR = ["Ar","Ta","Ge","Cn","Le","Vi","Li","Sc","Sg","Cp","Aq","Pi"];
+var PLANET_ABBR = {Sun:"Su",Moon:"Mo",Mars:"Ma",Mercury:"Me",Jupiter:"Ju",Venus:"Ve",Saturn:"Sa",Rahu:"Ra",Ketu:"Ke"};
+
+// ---- Populate dropdowns using safe DOM methods ----
+(function init(){
+  var cityEl = document.getElementById('city');
+  CITIES.forEach(function(c){
+    var opt = document.createElement('option');
+    opt.value = c.name;
+    opt.textContent = c.name + ' (' + c.lat.toFixed(2) + ', ' + c.lon.toFixed(2) + ')';
+    if(c.name === 'Pune') opt.selected = true;
+    cityEl.appendChild(opt);
+  });
+  var ayaEl = document.getElementById('ayanamsa');
+  AYANAMSAS.forEach(function(a){
+    var opt = document.createElement('option');
+    opt.value = a.id;
+    opt.textContent = a.name;
+    ayaEl.appendChild(opt);
+  });
+  var hsEl = document.getElementById('houseSystem');
+  HOUSE_SYSTEMS.forEach(function(h){
+    var opt = document.createElement('option');
+    opt.value = h.id;
+    opt.textContent = h.name;
+    hsEl.appendChild(opt);
+  });
+
+  document.getElementById('computeBtn').addEventListener('click', computeChart);
+})();
+
+// ---- WASM loading ----
+var wasmModule = null;
+var wasmReady = false;
+
+async function loadWasm() {
+  try {
+    var mod = await import('./pkg/xalen_wasm.js');
+    await mod.default();
+    wasmModule = new mod.XalenWasm();
+    wasmReady = true;
+    console.log('[XALEN] WASM module loaded');
+  } catch(e) {
+    console.warn('[XALEN] WASM not available, using mock data.', e.message);
+    wasmReady = false;
+  }
+}
+loadWasm();
+
+// ---- Helpers ----
+function normDeg(deg) { return ((deg % 360) + 360) % 360; }
+
+function formatDeg(deg) {
+  deg = normDeg(deg);
+  var sign = Math.floor(deg / 30);
+  var inSign = deg - sign * 30;
+  var d = Math.floor(inSign);
+  var m = Math.floor((inSign - d) * 60);
+  var s = Math.floor(((inSign - d) * 60 - m) * 60);
+  return d + '°' + String(m).padStart(2,'0') + "'" + String(s).padStart(2,'0') + '"';
+}
+
+function rashiFromDeg(deg) { return RASHIS[Math.floor(normDeg(deg) / 30)]; }
+function westernFromDeg(deg) { return RASHI_WESTERN[Math.floor(normDeg(deg) / 30)]; }
+
+function nakshatraFromDeg(deg) {
+  var span = 360 / 27;
+  return NAKSHATRAS[Math.floor(normDeg(deg) / span)];
+}
+
+function padaFromDeg(deg) {
+  var span = 360 / 27;
+  var padaSpan = span / 4;
+  var posInNak = normDeg(deg) % span;
+  return Math.floor(posInNak / padaSpan) + 1;
+}
+
+function houseFromDeg(deg, ascDeg) {
+  var diff = normDeg(deg - ascDeg);
+  return Math.floor(diff / 30) + 1;
+}
+
+// ---- Mock data: Pune, 1990-01-15, 06:30 IST, Lahiri ----
+function getMockData() {
+  return {
+    jd: 2447908.0417,
+    ayanamsa_deg: 23.72,
+    ascendant_deg: 264.31,
+    mc_deg: 192.47,
+    planets: [
+      {name:"Sun",     deg:270.88},
+      {name:"Moon",    deg: 78.43},
+      {name:"Mars",    deg: 23.17},
+      {name:"Mercury", deg:257.92},
+      {name:"Jupiter", deg: 86.51},
+      {name:"Venus",   deg:289.64},
+      {name:"Saturn",  deg:278.15},
+      {name:"Rahu",    deg:297.34},
+      {name:"Ketu",    deg:117.34},
+    ],
+    houses: [
+      264.31, 294.31, 324.31, 354.31, 24.31, 54.31,
+       84.31, 114.31, 144.31, 174.31, 204.31, 234.31
+    ],
+    panchang: {
+      tithi: "Shukla Navami",
+      nakshatra: "Mrigashira",
+      yoga: "Siddha",
+      karana: "Balava",
+    }
+  };
+}
+
+// ---- Main compute function ----
+function computeChart() {
+  var year   = parseInt(document.getElementById('year').value);
+  var month  = parseInt(document.getElementById('month').value);
+  var day    = parseInt(document.getElementById('day').value);
+  var hour   = parseInt(document.getElementById('hour').value);
+  var minute = parseInt(document.getElementById('minute').value);
+  var cityName = document.getElementById('city').value;
+  var ayaId  = parseInt(document.getElementById('ayanamsa').value);
+  var hsId   = parseInt(document.getElementById('houseSystem').value);
+
+  var city = CITIES.find(function(c){ return c.name === cityName; });
+  if(!city) return;
+
+  var hourDec = hour + minute / 60;
+  var data;
+  var usingMock = false;
+
+  if(wasmReady && wasmModule) {
+    try {
+      var jd = wasmModule.julianDay(year, month, day, hourDec);
+      var chartJson = JSON.parse(wasmModule.fullChartJson(jd, city.lat, city.lon, ayaId));
+      var housesJson = JSON.parse(wasmModule.housesJson(jd, city.lat, city.lon, hsId));
+      var ayaDeg = wasmModule.ayanamsaDeg(jd, ayaId);
+      var panchangJson = JSON.parse(wasmModule.panchangJson(jd, ayaId));
+
+      var planetOrder = ["Sun","Moon","Mars","Mercury","Jupiter","Venus","Saturn","MeanNode"];
+      var planets = planetOrder.map(function(name){
+        var p = chartJson.planets[name];
+        var displayName = name === "MeanNode" ? "Rahu" : name;
+        return {name: displayName, deg: p.longitude};
+      });
+      var rahuDeg = chartJson.planets["MeanNode"].longitude;
+      planets.push({name:"Ketu", deg: (rahuDeg + 180) % 360});
+
+      data = {
+        jd: jd,
+        ayanamsa_deg: ayaDeg,
+        ascendant_deg: chartJson.ascendant_deg,
+        mc_deg: chartJson.mc_deg,
+        planets: planets,
+        houses: housesJson.cusps || housesJson.cusp_degrees || Array.from({length:12}, function(_,i){ return (chartJson.ascendant_deg + i * 30) % 360; }),
+        panchang: panchangJson,
+      };
+    } catch(e) {
+      console.error('[XALEN] WASM error, falling back to mock:', e);
+      data = getMockData();
+      usingMock = true;
+    }
+  } else {
+    data = getMockData();
+    usingMock = true;
+  }
+
+  renderOutput(data, usingMock);
+}
+
+// ---- Safe DOM rendering (no innerHTML with untrusted data) ----
+function clearElement(el) {
+  while(el.firstChild) el.removeChild(el.firstChild);
+}
+
+function el(tag, attrs, children) {
+  var node = document.createElement(tag);
+  if(attrs) {
+    Object.keys(attrs).forEach(function(k){
+      if(k === 'className') node.className = attrs[k];
+      else if(k === 'textContent') node.textContent = attrs[k];
+      else node.setAttribute(k, attrs[k]);
+    });
+  }
+  if(children) {
+    if(typeof children === 'string') node.textContent = children;
+    else if(Array.isArray(children)) children.forEach(function(c){ if(c) node.appendChild(c); });
+  }
+  return node;
+}
+
+function textNode(str) { return document.createTextNode(str); }
+
+function renderOutput(data, isMock) {
+  var panel = document.getElementById('outputPanel');
+  clearElement(panel);
+
+  var ascSignIdx = Math.floor(normDeg(data.ascendant_deg) / 30);
+
+  // ---- Planet Positions Card ----
+  var planetCard = el('div', {className:'card'});
+  planetCard.appendChild(el('div', {className:'card-header'}, 'Planet Positions (Sidereal)'));
+
+  var tableWrap = el('div', {className:'card-body', style:'padding:0;overflow-x:auto'});
+  var table = el('table', {className:'planet-table'});
+
+  var thead = el('thead');
+  var headerRow = el('tr');
+  ['Planet','Longitude','Rashi','Nakshatra','Pada','House'].forEach(function(h){
+    headerRow.appendChild(el('th', {}, h));
+  });
+  thead.appendChild(headerRow);
+  table.appendChild(thead);
+
+  var tbody = el('tbody');
+  data.planets.forEach(function(p){
+    var tr = el('tr');
+    tr.appendChild(el('td', {className:'planet-name'}, p.name));
+    tr.appendChild(el('td', {className:'deg-cell'}, formatDeg(p.deg)));
+
+    var signTd = el('td', {className:'sign-cell'});
+    signTd.appendChild(textNode(rashiFromDeg(p.deg) + ' '));
+    signTd.appendChild(el('span', {className:'sign-western'}, '(' + westernFromDeg(p.deg) + ')'));
+    tr.appendChild(signTd);
+
+    tr.appendChild(el('td', {className:'nak-cell'}, nakshatraFromDeg(p.deg)));
+    tr.appendChild(el('td', {className:'pada-cell'}, String(padaFromDeg(p.deg))));
+    tr.appendChild(el('td', {className:'house-cell'}, String(houseFromDeg(p.deg, data.ascendant_deg))));
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  tableWrap.appendChild(table);
+  planetCard.appendChild(tableWrap);
+  panel.appendChild(planetCard);
+
+  // ---- North Indian Chart Card ----
+  var chartCard = el('div', {className:'card'});
+  chartCard.appendChild(el('div', {className:'card-header'}, 'North Indian Chart'));
+  var chartBody = el('div', {className:'card-body'});
+  var chartWrap = el('div', {className:'chart-wrap'});
+  chartWrap.appendChild(buildNorthIndianSVG(data, ascSignIdx));
+  chartBody.appendChild(chartWrap);
+  chartCard.appendChild(chartBody);
+  panel.appendChild(chartCard);
+
+  // ---- House Cusps Card ----
+  var cuspsCard = el('div', {className:'card'});
+  cuspsCard.appendChild(el('div', {className:'card-header'}, 'House Cusps'));
+  var cuspsBody = el('div', {className:'card-body'});
+  var cuspsGrid = el('div', {className:'cusps-grid'});
+  var houses = data.houses || Array.from({length:12}, function(_,i){ return (data.ascendant_deg + i * 30) % 360; });
+  for(var i = 0; i < 12; i++) {
+    var cell = el('div', {className:'cusp-cell'});
+    cell.appendChild(el('div', {className:'cusp-num'}, 'H' + (i+1)));
+    cell.appendChild(el('div', {className:'cusp-val'}, formatDeg(houses[i])));
+    cuspsGrid.appendChild(cell);
+  }
+  cuspsBody.appendChild(cuspsGrid);
+  cuspsCard.appendChild(cuspsBody);
+  panel.appendChild(cuspsCard);
+
+  // ---- Panchang Card ----
+  var panchangCard = el('div', {className:'card'});
+  panchangCard.appendChild(el('div', {className:'card-header'}, 'Panchang'));
+  var panchangBody = el('div', {className:'card-body'});
+  var panchangGrid = el('div', {className:'panchang-grid'});
+  var panch = data.panchang || {};
+  var panchangFields = [
+    ['Tithi', panch.tithi || panch.tithi_name || '--'],
+    ['Nakshatra', panch.nakshatra || panch.nakshatra_name || '--'],
+    ['Yoga', panch.yoga || panch.yoga_name || '--'],
+    ['Karana', panch.karana || panch.karana_name || '--'],
+  ];
+  panchangFields.forEach(function(pair){
+    var item = el('div', {className:'panchang-item'});
+    item.appendChild(el('span', {className:'panchang-label'}, pair[0]));
+    item.appendChild(el('span', {className:'panchang-val'}, pair[1]));
+    panchangGrid.appendChild(item);
+  });
+  panchangBody.appendChild(panchangGrid);
+  panchangCard.appendChild(panchangBody);
+  panel.appendChild(panchangCard);
+
+  // ---- Meta bar ----
+  var metaBar = el('div', {className:'meta-bar'});
+  var metaItems = [
+    ['JD', data.jd.toFixed(4)],
+    ['Ayanamsa', data.ayanamsa_deg.toFixed(4) + '°'],
+    ['Ascendant', formatDeg(data.ascendant_deg) + ' ' + rashiFromDeg(data.ascendant_deg)],
+    ['MC', formatDeg(data.mc_deg) + ' ' + rashiFromDeg(data.mc_deg)],
+  ];
+  metaItems.forEach(function(pair){
+    var span = el('span');
+    span.appendChild(el('span', {className:'meta-label'}, pair[0] + ': '));
+    span.appendChild(textNode(pair[1]));
+    metaBar.appendChild(span);
+  });
+  panel.appendChild(metaBar);
+
+  // ---- Status badge ----
+  var statusEl = document.getElementById('statusBadge');
+  clearElement(statusEl);
+  var badge = el('div', {className: isMock ? 'status status-mock' : 'status status-live'});
+  badge.appendChild(el('span', {className:'status-dot'}));
+  badge.appendChild(textNode(isMock ? 'Mock Data -- WASM not loaded' : 'Live WASM Computation'));
+  statusEl.appendChild(badge);
+}
+
+// ---- North Indian Diamond SVG (mirrors xalen-chart/src/north_indian.rs) ----
+function buildNorthIndianSVG(data, ascSignIdx) {
+  var S = 400, H = S/2, PAD = 10, INNER = (S - 2*PAD)/2;
+  var BG = '#161b22', STROKE = '#30363d', SIGN_CLR = '#8b949e', PLANET_CLR = '#c9d1d9';
+  var ASC_CLR = '#58a6ff', DIM = '#484f58';
+
+  var ns = 'http://www.w3.org/2000/svg';
+
+  function svgEl(tag, attrs) {
+    var node = document.createElementNS(ns, tag);
+    if(attrs) Object.keys(attrs).forEach(function(k){ node.setAttribute(k, attrs[k]); });
+    return node;
+  }
+
+  var svg = svgEl('svg', {
+    viewBox: '0 0 ' + S + ' ' + S,
+    width: String(S), height: String(S),
+    'font-family': "-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif"
+  });
+
+  // Background
+  svg.appendChild(svgEl('rect', {x:'0',y:'0',width:String(S),height:String(S),fill:BG,rx:'8'}));
+
+  var l = PAD, r = S - PAD, t = PAD, b = S - PAD;
+  var cx = H, cy = H;
+
+  // Outer border
+  svg.appendChild(svgEl('rect', {x:String(l),y:String(t),width:String(r-l),height:String(b-t),fill:'none',stroke:STROKE,'stroke-width':'1.5'}));
+
+  // Diamond lines
+  [[cx,t,r,cy],[r,cy,cx,b],[cx,b,l,cy],[l,cy,cx,t]].forEach(function(pts){
+    svg.appendChild(svgEl('line', {x1:String(pts[0]),y1:String(pts[1]),x2:String(pts[2]),y2:String(pts[3]),stroke:STROKE,'stroke-width':'1'}));
+  });
+
+  // Cross lines (dashed)
+  svg.appendChild(svgEl('line', {x1:String(l),y1:String(cy),x2:String(r),y2:String(cy),stroke:STROKE,'stroke-width':'0.5','stroke-dasharray':'2,2'}));
+  svg.appendChild(svgEl('line', {x1:String(cx),y1:String(t),x2:String(cx),y2:String(b),stroke:STROKE,'stroke-width':'0.5','stroke-dasharray':'2,2'}));
+
+  // House centers (matches Rust north_indian.rs)
+  var q = INNER * 0.45;
+  var centers = {
+    1:[cx,cy-q*1.55], 12:[cx+q,cy-q*1.1], 11:[cx+q*1.55,cy-q*0.3],
+    10:[cx+q*1.55,cy+q*0.3], 9:[cx+q,cy+q*1.1], 8:[cx,cy+q*1.55],
+    7:[cx,cy+q*1.55+q*0.55], 6:[cx-q,cy+q*1.1], 5:[cx-q*1.55,cy+q*0.3],
+    4:[cx-q*1.55,cy-q*0.3], 3:[cx-q,cy-q*1.1], 2:[cx-q,cy-q*0.15],
+  };
+
+  // Assign planets to houses
+  var planetsByHouse = {};
+  for(var h = 1; h <= 12; h++) planetsByHouse[h] = [];
+  data.planets.forEach(function(p){
+    var house = houseFromDeg(p.deg, data.ascendant_deg);
+    var abbr = PLANET_ABBR[p.name] || p.name.substring(0,2);
+    if(planetsByHouse[house]) planetsByHouse[house].push(abbr);
+  });
+
+  // Draw sign labels and planets per house
+  for(var h = 1; h <= 12; h++) {
+    var hc = centers[h];
+    var signIdx = (ascSignIdx + h - 1) % 12;
+
+    // Sign label
+    var signText = svgEl('text', {x:String(hc[0]),y:String(hc[1]-13),'text-anchor':'middle','font-size':'10',fill:SIGN_CLR,'font-weight':'500'});
+    signText.textContent = SIGN_ABBR[signIdx];
+    svg.appendChild(signText);
+
+    // Planet abbreviations
+    var pList = planetsByHouse[h];
+    if(pList.length > 0) {
+      var pText = svgEl('text', {x:String(hc[0]),y:String(hc[1]+5),'text-anchor':'middle','font-size':'12','font-weight':'700',fill:PLANET_CLR});
+      pText.textContent = pList.join(' ');
+      svg.appendChild(pText);
+    }
+  }
+
+  // Ascendant marker
+  var ascText = svgEl('text', {x:String(cx),y:String(t+16),'text-anchor':'middle','font-size':'9',fill:ASC_CLR,'font-style':'italic','font-weight':'600'});
+  ascText.textContent = 'Asc';
+  svg.appendChild(ascText);
+
+  // Ayanamsa annotation
+  var ayaText = svgEl('text', {x:String(r-3),y:String(b-4),'text-anchor':'end','font-size':'7.5',fill:DIM});
+  ayaText.textContent = 'Ayan: ' + data.ayanamsa_deg.toFixed(2);
+  svg.appendChild(ayaText);
+
+  return svg;
+}
+</script>
+</body>
+</html>
