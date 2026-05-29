@@ -32,7 +32,7 @@
     "test": "node --test __test__/"
   },
   "devDependencies": {
-    "@napi-rs/cli": "^2.18.0"
+    "@napi-rs/cli": "^3.7.0"
   },
   "files": ["index.js", "index.d.ts", "*.node"]
 }
