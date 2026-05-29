@@ -12,7 +12,7 @@ categories = ["science", "api-bindings"]
 crate-type = ["cdylib"]
 
 [dependencies]
-napi = { version = "2", features = ["serde-json"] }
+napi = { version = "3", features = ["serde-json"] }
 napi-derive = "2"
 serde_json = "1"
 xalen-ephem = { version = "0.1.0", path = "../xalen-ephem" }
