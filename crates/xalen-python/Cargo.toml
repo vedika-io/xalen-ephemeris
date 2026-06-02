@@ -22,16 +22,23 @@ doctest = false
 # (`maturin build --features extension-module`) but OFF for `cargo test`, or the
 # test binary cannot link. Made optional + default-off so the workspace tests
 # cleanly; CI/maturin opt in via `--features extension-module`.
-pyo3 = { version = "0.28" }
-xalen-ephem = { version = "0.5.0", path = "../xalen-ephem" }
-xalen-time = { version = "0.5.0", path = "../xalen-time" }
-xalen-ayanamsa = { version = "0.5.0", path = "../xalen-ayanamsa" }
-xalen-vedic = { version = "0.5.0", path = "../xalen-vedic" }
-xalen-houses = { version = "0.5.0", path = "../xalen-houses" }
-xalen-stars = { version = "0.5.0", path = "../xalen-stars" }
-xalen-western = { version = "0.5.0", path = "../xalen-western" }
-xalen-numerology = { version = "0.5.0", path = "../xalen-numerology" }
-xalen-coords = { version = "0.5.0", path = "../xalen-coords" }
+#
+# `abi3-py38` builds against the CPython stable ABI (PEP 384 / abi3) with a
+# minimum of Python 3.8. The result is a single forward-compatible wheel per
+# platform (tagged `cp38-abi3`) that imports unchanged on CPython 3.8 and every
+# later 3.x — instead of one wheel per interpreter minor version. This binding
+# only uses the stable-ABI subset (PyDict / PyList / PyAny via the Bound API),
+# so abi3 is sound here.
+pyo3 = { version = "0.28", features = ["abi3-py38"] }
+xalen-ephem = { version = "0.6.0", path = "../xalen-ephem" }
+xalen-time = { version = "0.6.0", path = "../xalen-time" }
+xalen-ayanamsa = { version = "0.6.0", path = "../xalen-ayanamsa" }
+xalen-vedic = { version = "0.6.0", path = "../xalen-vedic" }
+xalen-houses = { version = "0.6.0", path = "../xalen-houses" }
+xalen-stars = { version = "0.6.0", path = "../xalen-stars" }
+xalen-western = { version = "0.6.0", path = "../xalen-western" }
+xalen-numerology = { version = "0.6.0", path = "../xalen-numerology" }
+xalen-coords = { version = "0.6.0", path = "../xalen-coords" }
 
 [features]
 # Enable for the published wheel build: `maturin build --features extension-module`.

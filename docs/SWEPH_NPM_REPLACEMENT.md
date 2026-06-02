@@ -5,7 +5,7 @@ Ephemeris C library via native addons. It requires C compilation at install time
 ships 100+ MB of `.se1` ephemeris data files, and uses process-global state that
 is not thread-safe.
 
-`@xalen/ephemeris` is a pure-Rust native addon (via napi-rs) with zero C
+`xalen` is a pure-Rust native addon (via napi-rs) with zero C
 dependencies, no data files, and a thread-safe API. This guide covers the 10
 most-used `sweph` functions and shows the exact XALEN replacement.
 
@@ -13,16 +13,24 @@ most-used `sweph` functions and shows the exact XALEN replacement.
 
 ## Installation
 
+> **Status — forthcoming:** the `xalen` npm package is **not yet published**.
+> The `npm install xalen` command below describes the intended published
+> interface. Until it ships, build the napi-rs addon from this repository
+> (`cd crates/xalen-node && napi build --release`) and `require()` the local
+> build. The prebuilt-binary matrix described here is the planned release target,
+> not a current guarantee.
+
 ```bash
 # Remove sweph
 npm uninstall sweph
 
-# Install XALEN
-npm install @xalen/ephemeris
+# Install XALEN (forthcoming — not yet on npm)
+npm install xalen
 ```
 
-No `node-gyp`, no Python, no C compiler needed. The npm package ships
-prebuilt binaries for Linux x64/arm64, macOS x64/arm64, and Windows x64.
+No `node-gyp`, no Python, no C compiler needed once published: the npm package is
+planned to ship prebuilt binaries for Linux x64/arm64, macOS x64/arm64, and
+Windows x64.
 
 ---
 
@@ -30,7 +38,7 @@ prebuilt binaries for Linux x64/arm64, macOS x64/arm64, and Windows x64.
 
 ```diff
 - const sweph = require('sweph');
-+ const xalen = require('@xalen/ephemeris');
++ const xalen = require('xalen');
 ```
 
 ---
@@ -52,7 +60,7 @@ const distance  = result.distance;
 ### XALEN
 
 ```js
-const xalen = require('@xalen/ephemeris');
+const xalen = require('xalen');
 
 // By name (returns tropical longitude in degrees)
 const longitude = xalen.planetLongitude('Sun', jd);
@@ -337,7 +345,7 @@ sweph.swe_close();
 ### After (XALEN)
 
 ```js
-const xalen = require('@xalen/ephemeris');
+const xalen = require('xalen');
 
 // No init needed -- no ephe path, no sid mode, no close
 
@@ -356,13 +364,15 @@ console.log(`Ayanamsa: ${aya}`);
 
 ### What you gain
 
-- **No native compilation.** `npm install` just works, even on CI without
-  build tools.
+- **No native compilation (once published).** The planned npm release ships
+  prebuilt binaries, so `npm install` is intended to work even on CI without
+  build tools. (Today: build the addon from this repository.)
 - **No data files.** No 100+ MB of `.se1` files to ship or configure paths for.
 - **Thread-safe.** Use in worker threads without fear of global-state
   corruption from `swe_set_sid_mode`.
 - **Smaller footprint.** The XALEN binary is ~2 MB vs ~100 MB for sweph + data.
-- **MIT licensed.** No GPL concerns for commercial products.
+- **Apache-2.0 licensed.** No copyleft, no GPL concerns for commercial products
+  -- unlike Swiss Ephemeris (AGPL-3.0 or paid commercial license).
 - **Vedic features built in.** Nakshatra, Rashi, Panchang, Dasha -- all in the
   same package, no additional libraries needed.
 

@@ -48,17 +48,25 @@ pub struct NadiRule {
     pub planet: Planet,
     /// Sign index 0-11 (0=Aries ... 11=Pisces).
     pub sign: usize,
-    /// Concise indication text. Intentionally EMPTY in this open-source crate —
-    /// the BNN interpretive readings are not bundled (see module docs). The
-    /// life-`domain` field below carries the only classification provided.
-    pub indication: &'static str,
+    /// Concise indication text, or `None` when not bundled.
+    ///
+    /// The BNN interpretive readings are copyrighted and intentionally NOT
+    /// shipped in this open-source crate, so this is `None` for every slot here
+    /// (see module docs). It is `Option<&str>` — not `Some("")` — as a
+    /// deliberate empty-API honesty contract: an absent reading is reported as
+    /// genuinely absent, never as a misleading empty string that looks like
+    /// data. When a caller bundles real readings, a non-empty string surfaces
+    /// as `Some(...)`. The life-`domain` field below carries the only
+    /// classification this crate provides.
+    pub indication: Option<&'static str>,
     /// Life domain this rule addresses.
     pub domain: NadiDomain,
 }
 
 // ---------------------------------------------------------------------------
 // 48 foundational rule slots: Sun, Moon, Jupiter, Saturn x 12 signs
-// (planet + sign + life-domain scaffold; indication text intentionally empty)
+// (planet + sign + life-domain scaffold; indication text intentionally
+// unbundled — surfaced as `None`, see `nadi_indications`)
 // ---------------------------------------------------------------------------
 
 static SUN_RULES: [(&str, NadiDomain); 12] = [
@@ -176,9 +184,9 @@ static SATURN_RULES: [(&str, NadiDomain); 12] = [
 /// Look up Nadi rule slots for a given planet in a given sign.
 ///
 /// Returns foundational rule slots for Sun, Moon, Jupiter, and Saturn. Each slot
-/// carries the planet/sign/life-domain scaffold; the `indication` text is empty
-/// (the BNN interpretive readings are not bundled in this crate — see module docs).
-/// Other planets return an empty vec (future expansion).
+/// carries the planet/sign/life-domain scaffold; the `indication` text is
+/// `None` (the BNN interpretive readings are not bundled in this crate — see
+/// module docs). Other planets return an empty vec (future expansion).
 ///
 /// `sign` is 0-based (0 = Aries ... 11 = Pisces). Values > 11 are wrapped.
 pub fn nadi_indications(planet: Planet, sign: usize) -> Vec<NadiRule> {
@@ -196,12 +204,23 @@ pub fn nadi_indications(planet: Planet, sign: usize) -> Vec<NadiRule> {
             vec![NadiRule {
                 planet,
                 sign: s,
-                indication,
+                // Empty-API honesty: an unbundled (empty) reading becomes
+                // `None`, never `Some("")`. A real reading (non-empty) surfaces
+                // as `Some(text)`.
+                indication: indication_text(indication),
                 domain,
             }]
         }
         None => vec![],
     }
+}
+
+/// Map a raw indication string to `Some(text)` when non-empty, `None` when
+/// empty. Centralises the empty-API honesty contract so every construction path
+/// (current and future) reports an absent reading identically.
+#[inline]
+fn indication_text(raw: &'static str) -> Option<&'static str> {
+    if raw.is_empty() { None } else { Some(raw) }
 }
 
 /// Total number of foundational rule slots in this module (interpretive text
@@ -235,6 +254,29 @@ mod tests {
         assert_eq!(rules[0].domain, NadiDomain::Career);
         assert_eq!(rules[0].planet, Planet::Sun);
         assert_eq!(rules[0].sign, 0);
+    }
+
+    #[test]
+    fn unbundled_indication_is_none_not_empty_string() {
+        // Empty-API honesty: the BNN readings are not bundled, so every slot's
+        // `indication` must be `None` — never `Some("")`, which would falsely
+        // look like (empty) data.
+        for rule in all_rules() {
+            assert_eq!(
+                rule.indication, None,
+                "{:?} sign {} should report None (unbundled), got {:?}",
+                rule.planet, rule.sign, rule.indication
+            );
+        }
+    }
+
+    #[test]
+    fn indication_text_maps_empty_to_none() {
+        assert_eq!(indication_text(""), None);
+        assert_eq!(
+            indication_text("Career rise after 32"),
+            Some("Career rise after 32")
+        );
     }
 
     #[test]

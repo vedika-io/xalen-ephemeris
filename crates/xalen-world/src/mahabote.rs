@@ -1,9 +1,30 @@
-//! Burmese Mahabote (မဟာဘုတ်) astrology system.
+//! Burmese Mahabote (မဟာဘုတ်) — day-sign profile **and** the 7-house square.
 //!
-//! Based on the day of the week of birth. Each of the 7 days is ruled by a
-//! planet, associated with an animal, direction, and element. Wednesday is
-//! uniquely split: AM (Mercury, Tusked Elephant) and PM (Rahu, Tuskless
-//! Elephant), giving 8 "day signs" in practice.
+//! # Two layers
+//!
+//! 1. **Day-sign / ruling-planet profile** ([`mahabote_profile`]): the birth
+//!    weekday and its associated ruling planet, animal, direction, element, and
+//!    favourable/unfavourable day relationships. Each of the 7 weekdays is ruled
+//!    by a planet; Wednesday is uniquely split — AM (Mercury, Tusked Elephant)
+//!    and PM (Rahu, Tuskless Elephant).
+//!
+//! 2. **The Mahabote 7-house square** ([`mahabote_house_square`]): the seven
+//!    houses Binga, Ahtun, Yaza, Adipati, Marana, Thike, Puti, with the seven
+//!    planet-lords arranged around them. This is the deterministic positional
+//!    cast: the birth-weekday lord is seated in Binga (house 1) and the
+//!    remaining lords follow the fixed Burmese weekday-lord sequence clockwise
+//!    around the seven houses (see [`mahabote_house_square`] for the exact rule
+//!    and the convention it implements).
+//!
+//! # Honest scope of the house square
+//!
+//! The **skeleton** — seven named houses in fixed order, the birth-lord seated
+//! in Binga, and the lords laid out in the Burmese weekday sequence — is the
+//! attested deterministic core of Mahabote and is what [`mahabote_house_square`]
+//! computes. House **meanings/interpretation** carry regional and lineage
+//! variation; this module returns the structural placement (which planet sits in
+//! which named house) and the canonical short gloss of each house, not a
+//! lineage-specific predictive reading.
 
 use serde::{Deserialize, Serialize};
 
@@ -92,8 +113,12 @@ impl MahaboteDay {
 // MahaboteProfile
 // ---------------------------------------------------------------------------
 
-/// A Mahabote profile derived from the birth day of the week.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// The Mahabote **day-sign / ruling-planet profile** for a birth weekday.
+///
+/// This is the weekday-ruler profile (planet, animal, direction, element and
+/// favourable/unfavourable days), NOT the cast Mahabote 7-house square. See the
+/// module-level scope note.
+#[derive(Debug, Clone, Serialize)]
 pub struct MahaboteProfile {
     /// Birth day of the week.
     pub birth_day: MahaboteDay,
@@ -138,7 +163,7 @@ impl std::fmt::Display for MahaboteProfile {
 // ---------------------------------------------------------------------------
 
 /// Compatibility result between two Mahabote day signs.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct CompatibilityResult {
     /// Overall compatibility score (0-100).
     pub score: u32,
@@ -268,6 +293,176 @@ fn build_profile(day: MahaboteDay, wednesday_pm: bool) -> MahaboteProfile {
 pub fn mahabote_from_jd(jd: f64) -> MahaboteProfile {
     let weekday = ((jd + 1.5).floor() as i64).rem_euclid(7) as usize;
     mahabote_profile(weekday)
+}
+
+// ---------------------------------------------------------------------------
+// Mahabote 7-house square
+// ---------------------------------------------------------------------------
+
+/// The seven Mahabote houses, in their fixed cyclic order.
+///
+/// House 1 (Binga) seats the birth-weekday lord; the remaining houses follow
+/// clockwise. The English gloss is the canonical short meaning of each house.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum MahaboteHouse {
+    /// House 1 — origin / self.
+    Binga,
+    /// House 2 — support / sustenance.
+    Ahtun,
+    /// House 3 — power / authority (Yaza ← "raza", king).
+    Yaza,
+    /// House 4 — mastery / lordship.
+    Adipati,
+    /// House 5 — decline / mortality.
+    Marana,
+    /// House 6 — foundation / wisdom.
+    Thike,
+    /// House 7 — completion / renewal.
+    Puti,
+}
+
+impl MahaboteHouse {
+    /// The seven houses in fixed cyclic order, indexed 0 (Binga) .. 6 (Puti).
+    pub const ALL: [MahaboteHouse; 7] = [
+        MahaboteHouse::Binga,
+        MahaboteHouse::Ahtun,
+        MahaboteHouse::Yaza,
+        MahaboteHouse::Adipati,
+        MahaboteHouse::Marana,
+        MahaboteHouse::Thike,
+        MahaboteHouse::Puti,
+    ];
+
+    /// Romanized house name.
+    pub fn name(&self) -> &'static str {
+        match self {
+            MahaboteHouse::Binga => "Binga",
+            MahaboteHouse::Ahtun => "Ahtun",
+            MahaboteHouse::Yaza => "Yaza",
+            MahaboteHouse::Adipati => "Adipati",
+            MahaboteHouse::Marana => "Marana",
+            MahaboteHouse::Thike => "Thike",
+            MahaboteHouse::Puti => "Puti",
+        }
+    }
+
+    /// Canonical short meaning of the house.
+    pub fn meaning(&self) -> &'static str {
+        match self {
+            MahaboteHouse::Binga => "origin / self",
+            MahaboteHouse::Ahtun => "support / sustenance",
+            MahaboteHouse::Yaza => "power / authority",
+            MahaboteHouse::Adipati => "mastery / lordship",
+            MahaboteHouse::Marana => "decline / mortality",
+            MahaboteHouse::Thike => "foundation / wisdom",
+            MahaboteHouse::Puti => "completion / renewal",
+        }
+    }
+}
+
+/// One seated house in the Mahabote square: the house and the planet-lord
+/// placed in it.
+#[derive(Debug, Clone, Serialize)]
+pub struct MahaboteSeat {
+    /// The house position (Binga .. Puti).
+    pub house: MahaboteHouse,
+    /// The planet-lord seated in this house.
+    pub planet: &'static str,
+    /// The weekday whose lord this is (its index 0 = Sunday .. 6 = Saturday;
+    /// the Rahu seat carries the Wednesday index with the PM flag set).
+    pub from_weekday: MahaboteDay,
+    /// `true` when this seat is the Wednesday-PM (Rahu) substitution.
+    pub is_rahu: bool,
+}
+
+/// The fully cast Mahabote 7-house square.
+#[derive(Debug, Clone, Serialize)]
+pub struct MahaboteHouseSquare {
+    /// Birth weekday whose lord opens the square in Binga.
+    pub birth_day: MahaboteDay,
+    /// `true` when the birth lord is the Wednesday-PM (Rahu) variant.
+    pub birth_is_rahu: bool,
+    /// The seven seats, in house order Binga (index 0) .. Puti (index 6).
+    pub seats: [MahaboteSeat; 7],
+}
+
+impl MahaboteHouseSquare {
+    /// Look up which house a given planet-lord occupies, by weekday index.
+    pub fn house_of_weekday(&self, day: MahaboteDay) -> MahaboteHouse {
+        self.seats
+            .iter()
+            .find(|s| s.from_weekday == day)
+            .map(|s| s.house)
+            .unwrap_or(MahaboteHouse::Binga)
+    }
+}
+
+/// The Burmese weekday-lord sequence used to lay out the house square.
+///
+/// This is the ordered list of planet-lords by weekday (Sunday → Saturday),
+/// i.e. the heptagram/weekday order Sun, Moon, Mars, Mercury, Jupiter, Venus,
+/// Saturn. The seven planet-lords are laid into the seven houses starting from
+/// the birth-weekday lord; stepping forward in this weekday sequence walks the
+/// houses Binga → Ahtun → … → Puti.
+const WEEKDAY_LORDS: [&str; 7] = [
+    "Sun",     // Sunday
+    "Moon",    // Monday
+    "Mars",    // Tuesday
+    "Mercury", // Wednesday (AM)
+    "Jupiter", // Thursday
+    "Venus",   // Friday
+    "Saturn",  // Saturday
+];
+
+/// Cast the Mahabote 7-house square for a birth weekday.
+///
+/// # Rule (deterministic)
+/// The birth-weekday lord is seated in **Binga** (house 1). The remaining six
+/// lords follow in the fixed Burmese weekday sequence
+/// ([`WEEKDAY_LORDS`]: Sun, Moon, Mars, Mercury, Jupiter, Venus, Saturn) laid
+/// clockwise around the houses Ahtun → Yaza → Adipati → Marana → Thike → Puti.
+/// Concretely the lord whose weekday index is `(birth + h) mod 7` occupies
+/// house `h` (`h = 0` = Binga). The placement is therefore a pure rotation of
+/// the weekday sequence anchored on the birth day — fully determined by the
+/// birth weekday alone.
+///
+/// `weekday` is `0 = Sunday .. 6 = Saturday`. The Wednesday-PM (Rahu) variant
+/// is selected with `wednesday_pm = true`, in which case Binga seats Rahu in
+/// place of Mercury; the rest of the cycle is unchanged (Rahu substitutes for
+/// the Wednesday lord wherever it falls).
+pub fn mahabote_house_square(weekday: usize, wednesday_pm: bool) -> MahaboteHouseSquare {
+    let birth = weekday % 7;
+    let birth_is_rahu = birth == MahaboteDay::Wednesday.index() && wednesday_pm;
+
+    let seats: [MahaboteSeat; 7] = std::array::from_fn(|h| {
+        let lord_weekday = (birth + h) % 7;
+        let is_rahu = lord_weekday == MahaboteDay::Wednesday.index() && wednesday_pm;
+        let planet = if is_rahu {
+            "Rahu"
+        } else {
+            WEEKDAY_LORDS[lord_weekday]
+        };
+        MahaboteSeat {
+            house: MahaboteHouse::ALL[h],
+            planet,
+            from_weekday: MahaboteDay::from_weekday(lord_weekday),
+            is_rahu,
+        }
+    });
+
+    MahaboteHouseSquare {
+        birth_day: MahaboteDay::from_weekday(birth),
+        birth_is_rahu,
+        seats,
+    }
+}
+
+/// Cast the Mahabote 7-house square from a Julian Day number (AM/Mercury
+/// Wednesday). For the Wednesday-PM (Rahu) variant call
+/// [`mahabote_house_square`] with `wednesday_pm = true`.
+pub fn mahabote_house_square_from_jd(jd: f64) -> MahaboteHouseSquare {
+    let weekday = ((jd + 1.5).floor() as i64).rem_euclid(7) as usize;
+    mahabote_house_square(weekday, false)
 }
 
 // ---------------------------------------------------------------------------
@@ -480,5 +675,122 @@ mod tests {
         assert_eq!(p.birth_day, MahaboteDay::Saturday);
         assert_eq!(p.ruling_planet, "Saturn");
         assert_eq!(p.animal, "Naga");
+    }
+
+    // -------------------------------------------------------------------
+    // Mahabote 7-house square
+    // -------------------------------------------------------------------
+
+    #[test]
+    fn square_has_seven_distinct_houses_in_order() {
+        let sq = mahabote_house_square(0, false);
+        assert_eq!(sq.seats.len(), 7);
+        for (h, seat) in sq.seats.iter().enumerate() {
+            assert_eq!(
+                seat.house,
+                MahaboteHouse::ALL[h],
+                "seat {h} must be house {}",
+                MahaboteHouse::ALL[h].name()
+            );
+        }
+        // All seven houses are present exactly once.
+        let mut houses: Vec<_> = sq.seats.iter().map(|s| s.house).collect();
+        houses.sort_by_key(|h| *h as usize);
+        houses.dedup();
+        assert_eq!(houses.len(), 7, "all seven houses must be distinct");
+    }
+
+    #[test]
+    fn birth_lord_seated_in_binga() {
+        // Sunday → Sun in Binga; Saturday → Saturn in Binga.
+        let sun = mahabote_house_square(0, false);
+        assert_eq!(sun.seats[0].house, MahaboteHouse::Binga);
+        assert_eq!(sun.seats[0].planet, "Sun");
+        assert_eq!(
+            sun.house_of_weekday(MahaboteDay::Sunday),
+            MahaboteHouse::Binga
+        );
+
+        let sat = mahabote_house_square(6, false);
+        assert_eq!(sat.seats[0].planet, "Saturn");
+        assert_eq!(sat.birth_day, MahaboteDay::Saturday);
+    }
+
+    /// Worked example: a Wednesday-AM birth seats Mercury in Binga, then the
+    /// weekday sequence rotates: Thursday/Jupiter → Ahtun, Friday/Venus → Yaza,
+    /// Saturday/Saturn → Adipati, Sunday/Sun → Marana, Monday/Moon → Thike,
+    /// Tuesday/Mars → Puti. This is the pure (birth + h) mod 7 rotation.
+    #[test]
+    fn wednesday_am_square_worked_example() {
+        let sq = mahabote_house_square(MahaboteDay::Wednesday.index(), false);
+        let expected = [
+            (MahaboteHouse::Binga, "Mercury"),
+            (MahaboteHouse::Ahtun, "Jupiter"),
+            (MahaboteHouse::Yaza, "Venus"),
+            (MahaboteHouse::Adipati, "Saturn"),
+            (MahaboteHouse::Marana, "Sun"),
+            (MahaboteHouse::Thike, "Moon"),
+            (MahaboteHouse::Puti, "Mars"),
+        ];
+        for (i, (house, planet)) in expected.iter().enumerate() {
+            assert_eq!(sq.seats[i].house, *house, "seat {i} house");
+            assert_eq!(sq.seats[i].planet, *planet, "seat {i} planet");
+        }
+        assert!(!sq.birth_is_rahu);
+    }
+
+    /// Wednesday-PM seats Rahu (not Mercury) in Binga; the rest of the cycle is
+    /// the same rotation, and only the Wednesday seat carries the Rahu flag.
+    #[test]
+    fn wednesday_pm_seats_rahu_in_binga() {
+        let sq = mahabote_house_square(MahaboteDay::Wednesday.index(), true);
+        assert_eq!(sq.seats[0].house, MahaboteHouse::Binga);
+        assert_eq!(sq.seats[0].planet, "Rahu");
+        assert!(sq.seats[0].is_rahu);
+        assert!(sq.birth_is_rahu);
+        // Exactly one Rahu seat in the whole square.
+        let rahu_count = sq.seats.iter().filter(|s| s.is_rahu).count();
+        assert_eq!(rahu_count, 1, "exactly one Rahu seat (the Wednesday lord)");
+        // A non-Wednesday birth with the PM flag set still substitutes Rahu for
+        // the Wednesday lord wherever it lands.
+        let friday = mahabote_house_square(MahaboteDay::Friday.index(), true);
+        let rahu_seat = friday.seats.iter().find(|s| s.is_rahu).unwrap();
+        assert_eq!(rahu_seat.from_weekday, MahaboteDay::Wednesday);
+        assert_eq!(rahu_seat.planet, "Rahu");
+    }
+
+    /// The placement is a deterministic rotation: the lord of weekday
+    /// `(birth + h) mod 7` sits in house `h`, for every birth day.
+    #[test]
+    fn placement_is_birth_anchored_rotation() {
+        for birth in 0..7usize {
+            let sq = mahabote_house_square(birth, false);
+            for h in 0..7usize {
+                let expected_weekday = (birth + h) % 7;
+                assert_eq!(
+                    sq.seats[h].from_weekday,
+                    MahaboteDay::from_weekday(expected_weekday),
+                    "birth {birth}, house {h}: lord must be weekday {expected_weekday}"
+                );
+                assert_eq!(sq.seats[h].planet, WEEKDAY_LORDS[expected_weekday]);
+            }
+        }
+    }
+
+    #[test]
+    fn square_from_jd_matches_weekday() {
+        // 2024-01-01 JD 2460310.5 = Monday → Moon in Binga.
+        let sq = mahabote_house_square_from_jd(2_460_310.5);
+        assert_eq!(sq.birth_day, MahaboteDay::Monday);
+        assert_eq!(sq.seats[0].planet, "Moon");
+        assert_eq!(sq.seats[0].house, MahaboteHouse::Binga);
+    }
+
+    #[test]
+    fn house_names_and_meanings_nonempty() {
+        for house in &MahaboteHouse::ALL {
+            assert!(!house.name().is_empty());
+            assert!(!house.meaning().is_empty());
+        }
     }
 }

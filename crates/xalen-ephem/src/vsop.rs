@@ -28,14 +28,66 @@ fn precess_dynamical_j2000(pos: EclipticPosition, t: f64) -> EclipticPosition {
     xalen_coords::precess_ecliptic_to_of_date(pos, prec, t)
 }
 
+/// Apparent geocentric ecliptic position of the Moon (ecliptic of date).
+///
+/// Builds the apparent place from the mean-of-date Meeus Ch.47 series WITHOUT
+/// the annual aberration term that planets receive (see the call site for why):
+///   1. mean-of-date series longitude/latitude (`geocentric_moon`)
+///   2. + nutation in longitude Δψ (IAU 2000B) → true equinox of date
+///   3. − geocentric light-time (planetary aberration): the Moon is observed
+///      where it was τ = ρ/c ago, so the longitude/latitude it travels during
+///      its own light-time is subtracted. The rate is taken from a central
+///      finite difference of the series (captures the true ±10 % anomalistic
+///      variation of the lunar speed), which is exact to far below the series-
+///      truncation floor.
+///
+/// Validated vs pyswisseph 2.10.03 (AD 1600–2100): residual RMS ≈ 2.82″ (now
+/// limited by the 60-term truncation, not aberration); the prior full-annual-
+/// aberration path was RMS ≈ 19.1″ / max 44″.
+fn apparent_moon(jd_tt: JdTT) -> Result<EclipticPosition, EphemerisError> {
+    let mut pos = crate::moon::geocentric_moon(jd_tt)?;
+
+    // (2) nutation in longitude → true (apparent) equinox of date
+    let t = jd_tt.julian_centuries_from_j2000();
+    pos.longitude += xalen_coords::nutation_2000b(t).delta_psi;
+
+    // (3) geocentric light-time / planetary aberration of the Moon.
+    // τ = ρ / c, with ρ in AU and c in AU/day → τ in days.
+    let tau = pos.distance / LIGHT_SPEED_AU_PER_DAY;
+
+    // Central finite difference of the mean-of-date series for dλ/dt, dβ/dt
+    // (rad/day). h ≈ 0.01 day (~14.4 min) is well inside the series' smoothness
+    // and far from any catastrophic cancellation.
+    const H: f64 = 0.01;
+    let before = crate::moon::geocentric_moon(JdTT(jd_tt.as_f64() - H))?;
+    let after = crate::moon::geocentric_moon(JdTT(jd_tt.as_f64() + H))?;
+    let mut dlon = after.longitude - before.longitude;
+    // unwrap a possible 2π wrap across the sample
+    if dlon > std::f64::consts::PI {
+        dlon -= std::f64::consts::TAU;
+    } else if dlon < -std::f64::consts::PI {
+        dlon += std::f64::consts::TAU;
+    }
+    let dlon_dt = dlon / (2.0 * H);
+    let dlat_dt = (after.latitude - before.latitude) / (2.0 * H);
+
+    pos.longitude -= tau * dlon_dt;
+    pos.latitude -= tau * dlat_dt;
+
+    Ok(pos)
+}
+
 /// VSOP87-based analytical ephemeris provider (Tier 0). Planetary apparent
-/// longitudes sit at the ~1-3" level near the modern era, but the worst physical
-/// body — the Moon, served by a truncated analytical theory — reaches ~74" at
-/// the extremes of the 5M-chart Swiss cross-validation, so
-/// [`accuracy_arcsec`](EphemerisProvider::accuracy_arcsec) reports a physical-
-/// body worst-case of 75" rather than the optimistic planetary-only ~1". The
-/// derived lunar nodes are characterised separately (see ACCURACY.md). See that
-/// method for the full rationale and scope.
+/// longitudes sit at the ~1-3" level near the modern era; the post-fix analytical
+/// Moon validates at RMS ~2.8" / max ~12" vs pyswisseph (AD 1600-2100), no longer
+/// the soft spot (an earlier build's ~74" 5M-chart Moon max was the
+/// annual-aberration bug, since removed — see `apparent_moon`). The worst PHYSICAL
+/// body is now the long-period analytical Pluto (Meeus Ch.37, ~1 arcminute over
+/// its 1885-2099 window), so [`accuracy_arcsec`](EphemerisProvider::accuracy_arcsec)
+/// reports a conservative physical-body worst-case of 75" — bounding Pluto, never
+/// overstating the sub-arcsecond planets/Moon. The derived lunar nodes are
+/// characterised separately (see ACCURACY.md). See that method for the full
+/// rationale and scope.
 pub struct Vsop87Provider;
 
 impl Default for Vsop87Provider {
@@ -156,23 +208,40 @@ impl EphemerisProvider for Vsop87Provider {
             });
         }
 
+        if body == Body::OsculatingApogee {
+            // True (osculating) Black Moon Lilith — derived from the Moon's
+            // instantaneous orbit (see `lilith::true_lilith`). Geometric point:
+            // latitude/distance 0, no aberration.
+            let lon = crate::lilith::osculating_apogee_longitude(jd_tt)?;
+            return Ok(EclipticPosition {
+                longitude: lon,
+                latitude: 0.0,
+                distance: 0.0,
+            });
+        }
+
         if body == Body::Moon {
-            let pos = crate::moon::geocentric_moon(jd_tt)?;
-            // ENGINEERING CHOICE: do NOT add an explicit IAU 2000B
-            // nutation-in-longitude (delta_psi) term here. The truncated
-            // Meeus Ch.47 series omits nutation; this path is kept un-nutated
-            // because it matches the NASA Besselian solar-eclipse circumstances
-            // (2017/2024 within ~30s) and J2000 Horizons, where the ~tens-of-
-            // arcsec series-truncation error happens to roughly cancel the
-            // omitted nutation near those epochs. Do NOT read this as the
-            // analytical Moon being arcsecond-accurate: away from J2000 the
-            // residual vs apparent JPL grows to ~tens of arcsec (measured up to
-            // ~17" at medieval epochs, ~31" worst-case per docs/ACCURACY.md).
-            // For an accurate apparent Moon use the DE440 provider. (The earlier
-            // claim that this series "tracks apparent longitude to ~2.5"" and
-            // that adding delta_psi would "double-count" overstated the accuracy
-            // and was corrected after AD 500-1700 Horizons validation.)
-            return Ok(aberration_correction(pos, jd_tt).normalize());
+            // The Moon must NOT receive the full annual aberration term
+            // (κ = 20.49552″) that `aberration_correction` applies. Annual
+            // aberration is the displacement caused by Earth's HELIOCENTRIC
+            // velocity, and the geocentric Moon shares that velocity almost
+            // exactly — so for a geocentric lunar place it does not apply.
+            // Treating the Moon like a planet here injected up to ~44″ of
+            // spurious longitude error (validated vs pyswisseph 2.10 over
+            // AD 1600–2100: RMS 19.1″, max 44″).
+            //
+            // The correct apparent geocentric Moon =
+            //   mean-of-date series longitude (Meeus Ch.47)
+            //   + nutation-in-longitude (Δψ, IAU 2000B)
+            //   + geocentric light-time / planetary aberration: the Moon is
+            //     seen where it was τ = ρ/c seconds ago, so subtract the small
+            //     amount of longitude/latitude it travels during its own
+            //     light-time (ρ ≈ 0.0026 AU ⇒ τ ≈ 1.3 s ⇒ ~0.66–0.8″).
+            // After this fix the residual vs pyswisseph drops to RMS 2.82″,
+            // which is now dominated by the 60-term Meeus SERIES TRUNCATION
+            // (not aberration); for sub-arcsecond apparent lunar positions use
+            // the DE440 provider.
+            return Ok(apparent_moon(jd_tt)?.normalize());
         }
 
         if body == Body::TrueNode {
@@ -323,12 +392,16 @@ impl EphemerisProvider for Vsop87Provider {
 
     fn accuracy_arcsec(&self) -> f64 {
         // Worst-case apparent-longitude error for the PHYSICAL bodies this
-        // provider serves (Sun, Moon, planets), from the committed 5,000,000-
-        // chart Swiss cross-validation (docs/ACCURACY.md): planets are 2-10", but
-        // the Moon (truncated ELP/Meeus series) is the soft spot at a 5M-chart
-        // MAX of ~74" (the single-epoch 2024 error is only ~17"; 74" is the
-        // worst over 1850-2150). We report 75" so the figure never understates
-        // the worst physical body.
+        // provider serves (Sun, Moon, planets). The Moon used to dominate this
+        // figure (5M-chart MAX ~74"), but that was the annual-aberration bug:
+        // it wrongly applied the full κ=20.49552" term — meant for planets/Sun
+        // that do NOT share Earth's heliocentric velocity — to the geocentric
+        // Moon. With that removed (see `apparent_moon`) the Moon validates at
+        // RMS ~2.8" / max ~12" vs pyswisseph (AD 1600-2100), so the worst
+        // physical body is now the long-period analytical Pluto (Meeus Ch.37,
+        // ~1 arcminute over its 1885-2099 window). We retain a conservative 75"
+        // so the figure never understates the worst physical body (Pluto), and
+        // never overstates a precision the analytical models do not achieve.
         //
         // SCOPE: this is the physical-body ephemeris figure. The derived lunar
         // NODES are auxiliary points whose deviation vs Swiss (mean node ~19",

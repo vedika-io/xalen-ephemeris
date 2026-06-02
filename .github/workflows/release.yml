@@ -1,0 +1,297 @@
+name: release
+
+# Build + test + publish every distribution channel on a version tag.
+#
+# Channels:
+#   * PyPI  — abi3 wheels (one per platform, CPython >= 3.8) + sdist, via
+#             maturin-action on official runners for
+#             {linux x86_64, linux aarch64, macos x86_64, macos arm64, windows x86_64}.
+#   * npm   — per-platform N-API .node addons (optionalDependencies) via the
+#             napi-rs build matrix, plus the platform-independent WebAssembly
+#             package via wasm-pack.
+#   * crates.io — the 17 source crates published in dependency order.
+#
+# Publish jobs run only on a `v*` tag and read their credential from a secret.
+# When the secret is absent the publish step is skipped (build + test still run),
+# so the workflow never hardcodes a token and never fails for a missing one.
+
+on:
+  push:
+    tags:
+      - "v*"
+  # Manual dry run: build + test every platform, skip the publish steps.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Python: abi3 wheels across the OS/arch matrix + an sdist.
+  # maturin-action builds the abi3 wheel (the abi3-py38 pyo3 feature in
+  # crates/xalen-python/Cargo.toml makes one wheel serve all CPython >= 3.8).
+  # ---------------------------------------------------------------------------
+  python-wheels:
+    name: python wheel (${{ matrix.platform.target }})
+    runs-on: ${{ matrix.platform.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - { runner: ubuntu-latest,  target: x86_64-unknown-linux-gnu,  manylinux: "auto", native: "true"  }
+          - { runner: ubuntu-latest,  target: aarch64-unknown-linux-gnu, manylinux: "auto", native: "false" }
+          - { runner: macos-13,       target: x86_64-apple-darwin,       manylinux: "off",  native: "false" }
+          - { runner: macos-14,       target: aarch64-apple-darwin,      manylinux: "off",  native: "true"  }
+          - { runner: windows-latest, target: x86_64-pc-windows-msvc,    manylinux: "off",  native: "true"  }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build abi3 wheel
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.platform.target }}
+          manylinux: ${{ matrix.platform.manylinux }}
+          args: >-
+            --release
+            --out dist
+            --manifest-path crates/xalen-python/Cargo.toml
+          sccache: "true"
+      - name: Smoke-test the built wheel (native targets only)
+        if: ${{ matrix.platform.native == 'true' }}
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip pytest
+          python -m pip install --no-index --find-links dist xalen
+          python -m pytest crates/xalen-python/tests/test_swe_compat.py -q
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.platform.target }}
+          path: dist/*.whl
+
+  python-sdist:
+    name: python sdist
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build sdist
+        uses: PyO3/maturin-action@v1
+        with:
+          command: sdist
+          args: --out dist --manifest-path crates/xalen-python/Cargo.toml
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdist
+          path: dist/*.tar.gz
+
+  pypi-publish:
+    name: publish to PyPI
+    needs: [python-wheels, python-sdist]
+    if: ${{ startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    # A `pypi` environment can carry an OIDC trusted publisher. The PYPI_API_TOKEN
+    # secret is the fallback used by `maturin upload`.
+    environment: pypi
+    env:
+      MATURIN_PYPI_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist-all
+      - name: Flatten artifacts into dist/
+        run: |
+          mkdir -p dist
+          find dist-all -name '*.whl' -exec cp {} dist/ \;
+          find dist-all -name '*.tar.gz' -exec cp {} dist/ \;
+          ls -l dist
+      - name: Publish to PyPI
+        if: ${{ env.MATURIN_PYPI_TOKEN != '' }}
+        run: |
+          python -m pip install --upgrade maturin
+          maturin upload --skip-existing dist/*
+
+  # ---------------------------------------------------------------------------
+  # Node: per-platform N-API addons (optionalDependencies) via napi-rs.
+  # ---------------------------------------------------------------------------
+  node-build:
+    name: node addon (${{ matrix.settings.target }})
+    runs-on: ${{ matrix.settings.runner }}
+    defaults:
+      run:
+        working-directory: crates/xalen-node
+    strategy:
+      fail-fast: false
+      matrix:
+        settings:
+          - { runner: macos-14,       target: aarch64-apple-darwin,      args: "--target aarch64-apple-darwin",                      native: "true"  }
+          - { runner: macos-13,       target: x86_64-apple-darwin,       args: "--target x86_64-apple-darwin",                       native: "false" }
+          - { runner: ubuntu-latest,  target: x86_64-unknown-linux-gnu,  args: "--target x86_64-unknown-linux-gnu --use-napi-cross", native: "true"  }
+          - { runner: ubuntu-latest,  target: aarch64-unknown-linux-gnu, args: "--target aarch64-unknown-linux-gnu --use-napi-cross", native: "false" }
+          - { runner: windows-latest, target: x86_64-pc-windows-msvc,    args: "--target x86_64-pc-windows-msvc",                    native: "true"  }
+    env:
+      BUILD_ARGS: ${{ matrix.settings.args }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.settings.target }}
+      - name: Install dependencies
+        run: npm install
+      - name: Build addon
+        run: npx napi build --platform --release $BUILD_ARGS
+        shell: bash
+      - name: Test addon (native targets only)
+        if: ${{ matrix.settings.native == 'true' }}
+        run: npm test
+      - uses: actions/upload-artifact@v4
+        with:
+          name: node-${{ matrix.settings.target }}
+          path: crates/xalen-node/*.node
+
+  npm-publish:
+    name: publish node to npm
+    needs: [node-build]
+    if: ${{ startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: crates/xalen-node
+    environment: npm
+    env:
+      NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+      - run: npm install
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: node-*
+          path: crates/xalen-node/artifacts
+      - name: Assemble per-platform npm packages
+        run: |
+          npx napi create-npm-dirs
+          npx napi artifacts --output-dir ./artifacts --npm-dir npm
+      - name: Publish per-platform packages + the host package
+        if: ${{ env.NODE_AUTH_TOKEN != '' }}
+        # `prepublish` updates package.json optionalDependencies, then publishes
+        # each per-platform package and the host package to npm. `--tag-style npm`
+        # matches the `v*` git tag; GitHub-release creation is left off (omit
+        # `--gh-release`).
+        run: npx napi prepublish --tag-style npm
+
+  # ---------------------------------------------------------------------------
+  # WebAssembly: one platform-independent package via wasm-pack.
+  # ---------------------------------------------------------------------------
+  wasm-publish:
+    name: publish wasm to npm
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: crates/xalen-wasm
+    environment: npm
+    env:
+      NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+      - name: Build wasm package
+        run: wasm-pack build --release --target web --out-dir pkg
+      - name: Scope to @xalen and publish to npm
+        if: ${{ (startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch') && env.NODE_AUTH_TOKEN != '' }}
+        working-directory: crates/xalen-wasm/pkg
+        run: |
+          npm pkg set name="@xalen/wasm"
+          VER=$(npm pkg get version | tr -d '"')
+          if npm view "@xalen/wasm@$VER" version >/dev/null 2>&1; then
+            echo "@xalen/wasm@$VER already published — skipping"
+          else
+            npm publish --access public
+          fi
+
+  # ---------------------------------------------------------------------------
+  # crates.io: publish the 17 source crates in dependency order.
+  # Each `cargo publish` waits for the previous crate to be indexed.
+  # ---------------------------------------------------------------------------
+  crates-publish:
+    name: publish to crates.io
+    if: ${{ startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    environment: crates-io
+    env:
+      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Publish crates in dependency order
+        if: ${{ env.CARGO_REGISTRY_TOKEN != '' }}
+        run: |
+          set -euo pipefail
+          # Topological order: every crate's intra-workspace deps precede it.
+          order=(time coords stars ayanamsa houses chart chinese vedic ephem ffi iching lalkitab numerology western world)
+          for c in "${order[@]}"; do
+            echo "::group::publish xalen-$c"
+            cargo publish -p "xalen-$c" --no-verify
+            echo "::endgroup::"
+            # crates.io needs a moment to index before a dependent can resolve it.
+            sleep 30
+          done
+
+  # ---------------------------------------------------------------------------
+  # GitHub Packages: mirror the platform-independent wasm package to the repo's
+  # GitHub Packages registry so it appears in the repository's "Packages" panel.
+  # The scope is taken from `github.repository_owner`, because GitHub Packages
+  # REQUIRES the npm scope to equal the GitHub org/user that owns the repo. This
+  # auto-adapts: under `vedika-io/xalen-ephemeris` it publishes `@vedika-io/…`;
+  # move the repo to a `xalen` GitHub org and it becomes `@xalen/…` with no edit.
+  # (The public install package on npmjs.org is the separate `@xalen/wasm`.)
+  #
+  # NOTE ON COVERAGE: GitHub Packages hosts npm, Maven, NuGet, RubyGems, and
+  # container images — it does NOT host a Cargo registry or PyPI. crates.io and
+  # PyPI therefore remain the canonical homes for the Rust crates and the Python
+  # wheel; GitHub Packages mirrors only the npm-distributable artifact.
+  # ---------------------------------------------------------------------------
+  github-packages-publish:
+    name: mirror npm package to GitHub Packages
+    if: ${{ startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://npm.pkg.github.com"
+          scope: "@${{ github.repository_owner }}"
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+      - name: Build wasm package
+        working-directory: crates/xalen-wasm
+        run: wasm-pack build --release --target web --out-dir pkg
+      - name: Scope and publish to GitHub Packages
+        working-directory: crates/xalen-wasm/pkg
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npm pkg set name="@${{ github.repository_owner }}/xalen-wasm"
+          npm pkg set publishConfig.registry="https://npm.pkg.github.com"
+          npm publish

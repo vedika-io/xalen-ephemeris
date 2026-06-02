@@ -16,17 +16,18 @@ pub enum Ayanamsa {
     Raman,
     /// True Chitrapaksha — Spica fixed at exactly 180 deg sidereal.  SE ID 27.
     /// Computed from Spica's apparent ecliptic longitude of date (J2000 catalog
-    /// position, proper motion, IAU 2006 precession, IAU 2000B nutation, and
-    /// annual aberration via a self-contained Meeus solar-longitude series — no
-    /// planetary-engine dependency cycle) minus 180 deg. Cross-validated against
-    /// Swiss SE_SIDM_TRUE_CITRA (pyswisseph get_ayanamsa_ex, with-nutation):
-    /// 0.015 arcsec at the J2000 anchor, <= 1.6 arcsec across 1900-2100. The
-    /// small residual is the planar-precession-addition limit (~1.5 arcsec/century
-    /// slope through zero at J2000), not a missing term. See README / ACCURACY.md.
+    /// position, proper motion, rigorous IAU 2006/P03 precession that couples
+    /// longitude AND latitude, IAU 2000B nutation, and annual aberration via a
+    /// self-contained Meeus solar-longitude series — no planetary-engine
+    /// dependency cycle) minus 180 deg. Cross-validated against Swiss
+    /// SE_SIDM_TRUE_CITRA (pyswisseph get_ayanamsa_ex, with-nutation): 0.038 arcsec
+    /// across the 1900-2100 oracle epochs (and 0.11 arcsec over 200 randomly
+    /// sampled dates in that span). See README / ACCURACY.md.
     TrueChitra,
-    /// True Revati — Zeta Piscium at 29 deg 50' Pisces.  SE ID 28.
-    /// NOTE: linear approximation calibrated to Swiss Ephemeris at J2000 (unlike
-    /// TrueChitra above, which is a full dynamic apparent-place reduction).
+    /// True Revati — Zeta Piscium anchored at 29 deg 50' Pisces.  SE ID 28.
+    /// Dynamic fixed-direction reduction (J2000 reference direction precessed via
+    /// IAU 2006/P03 + IAU 2000B nutation); matches Swiss SE_SIDM_TRUE_REVATI to
+    /// <= 0.24" across 1900-2100.
     TrueRevati,
     /// Surya Siddhanta — mean Sun ingress into Aries at 499 CE Ujjain.  SE ID 21.
     SuryaSiddhanta,
@@ -427,60 +428,128 @@ const B1950_JD: f64 = 2_433_282.42345905;
 
 // ── Precession rate ──────────────────────────────────────────────────
 //
-// Swiss Ephemeris default precession model is Vondrak 2011
-// (SEMOD_PREC_VONDRAK_2011, id=9).
 // General precession in longitude at J2000.0:
 //   pA = 5028.796195 arcsec/Julian century = 50.28796195 arcsec/yr
-// Source: Vondrák, Capitaine, Wallace 2011, A&A 534, A22.
+// (IAU 2006 J2000 linear term; numerically identical at J2000 to the Vondrak
+// 2011 rate Swiss uses by default).
 //
-// SE uses the FULL precession model (not a linear rate), but for our
-// linear approximation this rate matches SE output to <0.1" over +-200yr.
+// We do NOT use a single linear rate for the precession of the equinox.
+// Instead every non-dynamic system accumulates the FULL IAU 2006 general
+// precession in longitude polynomial via [`xalen_coords::general_precession_longitude`]
+// (referenced to the system epoch t0), then adds the IAU 2000B nutation in
+// longitude Δψ — which is exactly what Swiss `swe_get_ayanamsa_ex(jd, 0)`
+// (the WITH-nutation apparent ayanamsa) returns. Cross-validated against
+// pyswisseph 2.10.03 to < 1 arcsec across 1900–2100 for every SE id with a
+// fixed epoch (see `tests/swiss_ayanamsa_oracle.rs`). The single-rate linear
+// extrapolation that lived here previously accumulated 250–510" of error at
+// the deep (1 CE / 499 CE / 564 CE) epochs and a uniform ~17" nutation error
+// everywhere; both are now gone.
 
-/// General precession in longitude, arcsec per Julian year (Vondrak 2011 at J2000).
+/// General precession in longitude, arcsec per Julian year (IAU 2006 J2000 rate).
+/// Retained only for the linear systems without an SE id and the `Custom` model.
 const PRECESSION_ARCSEC_PER_YEAR: f64 = 50.28796195;
 
-// ── Linear helper ──────────────────────────────────────────────────
+// ── Shared helpers ──────────────────────────────────────────────────
 
-/// Compute ayanamsa via linear extrapolation from a J2000 reference value.
-/// `value_j2000` is in degrees, `rate_arcsec_per_year` is the precession rate.
-fn linear_ayanamsa(t: f64, value_j2000: f64, rate_arcsec_per_year: f64) -> f64 {
-    let years = t * 100.0;
-    (value_j2000 + rate_arcsec_per_year * years / 3600.0).to_radians()
+/// IAU 2000B nutation in longitude (Δψ) at TT epoch `t` (Julian centuries from
+/// J2000), in radians. Swiss `swe_get_ayanamsa_ex(jd, 0)` returns the apparent
+/// (with-nutation) ayanamsa, so every system must add this term. Identical to the
+/// term `true_chitra` already applies via `spica_apparent_longitude`.
+fn delta_psi(t: f64) -> f64 {
+    xalen_coords::nutation_2000b(t).delta_psi
 }
 
-/// Compute ayanamsa from epoch-based reference data (JD epoch + value at epoch).
+/// Compute ayanamsa via a linear-in-time user model from a J2000 reference value,
+/// PLUS the IAU 2000B nutation in longitude. `value_j2000` is in degrees,
+/// `rate_arcsec_per_year` is the precession rate. Used only for the systems with
+/// no SE id and for `Ayanamsa::Custom`-style anchoring; the nutation term makes it
+/// track the Swiss WITH-nutation convention to arcsec.
+fn linear_ayanamsa(t: f64, value_j2000: f64, rate_arcsec_per_year: f64) -> f64 {
+    let years = t * 100.0;
+    let mean = (value_j2000 + rate_arcsec_per_year * years / 3600.0).to_radians();
+    mean + delta_psi(t)
+}
+
+/// Compute an epoch-anchored ayanamsa exactly the way Swiss Ephemeris does for a
+/// system with a fixed `{t0, ayan_t0}` reference: take `value_at_epoch` (degrees)
+/// at Julian Day `epoch_jd`, accumulate the FULL IAU 2006 general precession in
+/// longitude from t0 to the target date, then add the IAU 2000B nutation Δψ
+/// (Swiss returns the apparent / with-nutation value for flags = 0).
 ///
-/// This replicates Swiss Ephemeris logic: start with `value_at_epoch` (degrees) at
-/// Julian Day `epoch_jd`, then apply Vondrak 2011 general precession to reach `jd_tt`.
-/// Source: sweph.c `swi_get_ayanamsa_ex()` — for non-star-based ayanamsas SE applies
-/// precession from t0 to the target date.
+///   ayanamsa(t) = ayan_t0 + [p_A(t) − p_A(t0)] + Δψ(t)
+///
+/// where p_A is `xalen_coords::general_precession_longitude` (IAU 2006). This
+/// replaces the previous single-rate `rate · Δyears` term, which drifted by
+/// hundreds of arcsec at deep epochs. Cross-validated < 1" vs pyswisseph 2.10.03
+/// for every SE id across 1900–2100.
 fn epoch_based_ayanamsa(jd_tt: f64, epoch_jd: f64, value_at_epoch: f64) -> f64 {
-    let dt_years = (jd_tt - epoch_jd) / 365.25;
-    (value_at_epoch + PRECESSION_ARCSEC_PER_YEAR / 3600.0 * dt_years).to_radians()
+    let t = (jd_tt - J2000_JD) / 36525.0;
+    let t0 = (epoch_jd - J2000_JD) / 36525.0;
+    let precession = xalen_coords::general_precession_longitude(t)
+        - xalen_coords::general_precession_longitude(t0);
+    value_at_epoch.to_radians() + precession + delta_psi(t)
+}
+
+/// Apparent (with-nutation) ecliptic longitude of a FIXED celestial direction
+/// (a galactic reference point or a distant catalogue star treated as fixed),
+/// in radians, at TT epoch `t` Julian centuries from J2000.
+///
+/// Swiss computes the galactic and several "true star" sidereal frames by
+/// rotating a fixed J2000 reference direction to the equinox/ecliptic of date and
+/// adding nutation. We do the same with the SOFA-validated IAU 2006/P03 rotation
+/// (`xalen_coords::precess_ecliptic_to_of_date` + `precession_matrix_p03_nobias`):
+///
+///   1. take the reference point's J2000 ecliptic (longitude, latitude);
+///   2. rigorously precess it to the mean ecliptic of date (this couples
+///      longitude AND latitude — the planar `general_precession_longitude`
+///      scalar cannot, which is why a pure-longitude model leaves a
+///      ~1.5"/century residual for off-ecliptic points);
+///   3. add Δψ for the true (apparent) ecliptic of date.
+///
+/// `lon_j2000_deg` is the J2000 ecliptic longitude of the reference direction (it
+/// equals the Swiss mean — no-nutation — ayanamsa at J2000 by construction, since
+/// the system anchors that direction at sidereal 0° and precession is zero at
+/// J2000). `lat_j2000_deg` is the reference direction's J2000 ecliptic latitude,
+/// which controls the latitude-coupled part of its precession.
+fn fixed_point_apparent_longitude(lon_j2000_deg: f64, lat_j2000_deg: f64, t: f64) -> f64 {
+    let pos = xalen_coords::EclipticPosition {
+        longitude: lon_j2000_deg.to_radians(),
+        latitude: lat_j2000_deg.to_radians(),
+        distance: 1.0,
+    };
+    let prec = xalen_coords::precession_matrix_p03_nobias(t);
+    let of_date = xalen_coords::precess_ecliptic_to_of_date(pos, prec, t);
+    (of_date.longitude + delta_psi(t)).rem_euclid(std::f64::consts::TAU)
+}
+
+/// Ayanamsa of a fixed-direction sidereal frame (galactic point or fixed star),
+/// in radians. The reference direction is anchored at sidereal longitude 0° at
+/// every epoch, so the ayanamsa is simply its apparent ecliptic longitude of date.
+/// See [`fixed_point_apparent_longitude`] for the reduction and accuracy notes.
+fn fixed_point_ayanamsa(lon_j2000_deg: f64, lat_j2000_deg: f64, t: f64) -> f64 {
+    fixed_point_apparent_longitude(lon_j2000_deg, lat_j2000_deg, t)
 }
 
 // ── Classic / Indian implementations ───────────────────────────────
 
 fn lahiri(t: f64) -> f64 {
-    // Standard Lahiri (Chitrapaksha), matching the Swiss Ephemeris
-    // SE_SIDM_LAHIRI value (SE ID 1). This is a LINEAR approximation anchored to
-    // the Swiss J2000 value — NOT a bit-for-bit reconciliation against the Indian
-    // Astronomical Ephemeris tables (no IAE reference data is bundled; external
-    // agreement is ~2" vs Swiss across the modern era, not arcsec-vs-IAE).
+    // Standard Lahiri (Chitrapaksha) — SE ID 1.
+    // sweph.h: {2435553.5, 23.25, FALSE, SEMOD_PREC_NEWCOMB}; SE then applies an
+    // internal `get_aya_correction()` (Newcomb-vs-modern offset, ≈ −16.7" at this
+    // epoch). We fold that correction into the epoch value (23.25 − 0.00464207,
+    // the same constant Swiss uses for the closely-related ICRC variant, SE ID 46),
+    // then accumulate the FULL IAU 2006 general precession from t0 plus Δψ.
     //
-    // We anchor directly at J2000.0, where the Swiss Ephemeris value is known
-    // exactly (23.85306° = 23°51'11"), rather than linearly precessing the
-    // sweph.h 1956 epoch value with a single rate. SE computes Lahiri from the
-    // 1956 Calendar Reform Committee epoch using the FULL IAU 1976 precession
-    // plus an internal nutation correction; a single-rate linear extrapolation
-    // from that far epoch accumulates a ~14.6" error at J2000. Anchoring at
-    // J2000 with the verified SE value and the mean Lahiri precession rate
-    // (50.27"/yr, = 1°23'47" over the 1900->2000 span) is exact at J2000 and
-    // within ~2" across the modern era. Verified 2026-05-28 against sweph.h
-    // and Jagannath Hora / astro-seek tables.
-    const LAHIRI_J2000_DEG: f64 = 23.85306;
-    const LAHIRI_RATE_ARCSEC_PER_YEAR: f64 = 50.27;
-    linear_ayanamsa(t, LAHIRI_J2000_DEG, LAHIRI_RATE_ARCSEC_PER_YEAR)
+    // The previous J2000-anchored constant (23.85306°) was WRONG by ~14.5": the
+    // true Swiss mean value at J2000 is 23.857092°. Anchoring from the 1956
+    // epoch with accumulated IAU 2006 precession + nutation now tracks Swiss
+    // SE_SIDM_LAHIRI to ≤ 0.74" across 1900–2100 (cross-validated, pyswisseph
+    // 2.10.03). NOTE: this is agreement with SWISS, not a bit-for-bit
+    // reconciliation against the Indian Astronomical Ephemeris tables (those are
+    // not bundled).
+    const T0: f64 = 2_435_553.5;
+    const AYAN_T0: f64 = 23.25 - 0.00464207;
+    epoch_based_ayanamsa(J2000_JD + t * 36525.0, T0, AYAN_T0)
 }
 
 fn lahiri_icrc(t: f64) -> f64 {
@@ -535,47 +604,67 @@ fn true_chitra(t: f64) -> f64 {
     //     ayanamsa(t) = λ_apparent(Spica, t) − 180 deg
     //
     // We compute λ_apparent from first principles via spica_apparent_longitude():
-    //   J2000 ecliptic longitude (5-decimal Hipparcos-derived catalog value)
-    //   + proper motion in ecliptic longitude
-    //   + IAU 2006 general precession in longitude
+    //   J2000 ecliptic (longitude, latitude) (5-decimal Hipparcos-derived catalog)
+    //   + proper motion in ecliptic longitude and latitude
+    //   + rigorous IAU 2006/P03 precession (Cartesian rotation, latitude-coupled)
     //   + IAU 2000B nutation in longitude (Δψ)
     //   + annual aberration in longitude (the full apparent-place reduction).
     //
     // This matches Swiss SE_SIDM_TRUE_CITRA (the WITH-nutation, full apparent
-    // place that `swe_get_ayanamsa_ex(jd, 0)` returns) to sub-arcsecond at the
-    // J2000 anchor and to ~1.5" across 1900–2100; see the cross-validation test
-    // `true_chitra_matches_swiss_within_tolerance` for the measured residuals
+    // place that `swe_get_ayanamsa_ex(jd, 0)` returns) to 0.038" across the
+    // 1900–2100 oracle epochs; see the cross-validation test
+    // `true_chitra_matches_swiss_within_1_arcsec` for the measured residuals
     // against pyswisseph's SE_SIDM_TRUE_CITRA reference table.
     spica_apparent_longitude(t) - 180.0_f64.to_radians()
 }
 
 /// Spica's apparent ecliptic longitude of date, in radians.
 ///
-/// Full apparent-place reduction: J2000 catalog longitude + proper motion +
-/// IAU 2006 general precession + IAU 2000B nutation (Δψ) + annual aberration.
-/// This is the quantity Swiss Ephemeris anchors at exactly 180° sidereal for
-/// SE_SIDM_TRUE_CITRA.
+/// Full apparent-place reduction: J2000 catalog (longitude, latitude) + proper
+/// motion + rigorous IAU 2006/P03 precession + IAU 2000B nutation (Δψ) + annual
+/// aberration. This is the quantity Swiss Ephemeris anchors at exactly 180°
+/// sidereal for SE_SIDM_TRUE_CITRA.
+///
+/// The precession step uses the SAME rigorous Cartesian rotation
+/// ([`xalen_coords::precess_ecliptic_to_of_date`] with
+/// [`xalen_coords::precession_matrix_p03_nobias`]) that the galactic and other
+/// "true star" sidereal frames use, NOT the scalar
+/// `general_precession_longitude` polynomial. Spica lies ~2.05° off the ecliptic,
+/// so the precession of its longitude is latitude-coupled; the scalar
+/// pure-longitude term cannot represent that coupling and left a
+/// ~1.5″/century-slope residual (1.514″ at the 1900/2100 span endpoints,
+/// passing through zero at the J2000 anchor). The Cartesian rotation couples
+/// longitude and latitude consistently and removes that residual: cross-validated
+/// against Swiss SE_SIDM_TRUE_CITRA (pyswisseph 2.10.03 `get_ayanamsa_ex(jd, 0)`)
+/// to 0.038″ across the 1900–2100 oracle epochs and 0.11″ across 200 randomly
+/// sampled dates within that span.
 fn spica_apparent_longitude(t: f64) -> f64 {
     let spica =
         xalen_stars::find_by_name("Spica").expect("Spica must exist in the fixed-star catalog");
 
-    // J2000.0 mean ecliptic longitude + proper motion (linear in time).
-    // pm_lon is in milliarcsec/yr; t is Julian centuries → years = t * 100.
+    // J2000.0 mean ecliptic (longitude, latitude) + linear proper motion.
+    // pm components are in milliarcsec/yr; t is Julian centuries → years = t·100.
     let years = t * 100.0;
-    let mean_j2000 = spica.longitude_j2000.to_radians();
-    let proper_motion = (spica.pm_lon_mas_per_year * years / 3_600_000.0).to_radians();
-
-    // IAU 2006 general precession in ecliptic longitude (polynomial, radians).
-    let precession = xalen_coords::general_precession_longitude(t);
-
-    // IAU 2000B nutation in longitude (Δψ, radians) — apparent place includes it.
-    let delta_psi = xalen_coords::nutation_2000b(t).delta_psi;
-
-    // Star's geometric (pre-aberration) ecliptic longitude & latitude of date.
-    let geometric_lon =
-        (mean_j2000 + proper_motion + precession + delta_psi).rem_euclid(std::f64::consts::TAU);
-    let latitude =
+    let lon_j2000 =
+        (spica.longitude_j2000 + spica.pm_lon_mas_per_year * years / 3_600_000.0).to_radians();
+    let lat_j2000 =
         (spica.latitude_j2000 + spica.pm_lat_mas_per_year * years / 3_600_000.0).to_radians();
+
+    // Rigorous IAU 2006/P03 precession of the J2000 ecliptic position to the
+    // MEAN ecliptic of date (couples longitude AND latitude — see doc comment).
+    let pos_j2000 = xalen_coords::EclipticPosition {
+        longitude: lon_j2000,
+        latitude: lat_j2000,
+        distance: 1.0,
+    };
+    let prec = xalen_coords::precession_matrix_p03_nobias(t);
+    let of_date = xalen_coords::precess_ecliptic_to_of_date(pos_j2000, prec, t);
+
+    // IAU 2000B nutation in longitude (Δψ) — apparent place is referred to the
+    // TRUE ecliptic of date.
+    let delta_psi = xalen_coords::nutation_2000b(t).delta_psi;
+    let geometric_lon = (of_date.longitude + delta_psi).rem_euclid(std::f64::consts::TAU);
+    let latitude = of_date.latitude;
 
     // Annual aberration in longitude. The full term needs the Sun's geometric
     // (true) ecliptic longitude of date; we compute it from a self-contained
@@ -613,10 +702,18 @@ fn sun_geometric_longitude(t: f64) -> f64 {
 }
 
 fn true_revati(t: f64) -> f64 {
-    // True Revati — Zeta Piscium at 29 deg 50' Pisces.  SE ID 28.
-    // sweph.h: {0, 0, FALSE, 0} — computed dynamically from star position.
-    // Linear approx calibrated at J2000.
-    linear_ayanamsa(t, 22.383, PRECESSION_ARCSEC_PER_YEAR)
+    // True Revati — Zeta Piscium anchored at sidereal 29°50' Pisces (359.8333°).
+    // SE ID 28. sweph.h: {0, 0, FALSE, 0} — Swiss computes this DYNAMICALLY from
+    // ζ Psc's apparent place of date. We reproduce it as a fixed-direction frame:
+    // the reference direction's J2000 ecliptic longitude (= the Swiss mean
+    // ayanamsa at J2000, 20.045165°) precessed rigorously (IAU 2006/P03 rotation)
+    // and corrected for nutation. The ecliptic latitude (−15.525°) is ζ Psc's
+    // J2000 ecliptic latitude, which drives the latitude-coupled part of its
+    // precession. Cross-validated ≤ 0.24" vs Swiss SE_SIDM_TRUE_REVATI across
+    // 1900–2100 (pyswisseph 2.10.03). (Previous linear approx diverged ~8430".)
+    const LON_J2000_DEG: f64 = 20.045_164_650;
+    const LAT_J2000_DEG: f64 = -15.525;
+    fixed_point_ayanamsa(LON_J2000_DEG, LAT_J2000_DEG, t)
 }
 
 fn surya_siddhanta(t: f64) -> f64 {
@@ -724,45 +821,60 @@ fn aldebaran_15_tau(t: f64) -> f64 {
 // ── Galactic-reference systems ─────────────────────────────────────
 
 fn galactic_center_0_sag(t: f64) -> f64 {
-    // Galactic Center at 0 deg Sagittarius — SE ID 17.
-    // sweph.h: {0, 0, FALSE, 0} — computed dynamically from GC position.
-    // Linear approx at J2000 (~25.1 from SE swetest output).
-    linear_ayanamsa(t, 25.1, PRECESSION_ARCSEC_PER_YEAR)
+    // Galactic Center at 0° Sagittarius — SE ID 17.
+    // sweph.h: {0, 0, FALSE, 0} — Swiss computes this DYNAMICALLY by rotating the
+    // galactic-centre direction to the ecliptic of date. Fixed-direction reduction
+    // (see [`fixed_point_ayanamsa`]): GC J2000 ecliptic longitude 26.846046°
+    // (= Swiss mean at J2000), latitude 0.280°. Cross-validated ≤ 0.08" vs Swiss
+    // SE_SIDM_GALCENT_0SAG across 1900–2100. (Previous hand-typed linear anchor
+    // diverged ~6305".)
+    fixed_point_ayanamsa(26.846_045_806, 0.280, t)
 }
 
 fn galactic_center_brand(t: f64) -> f64 {
     // R. Gil Brand — GC at golden section 0 Sco / 0 Aqu.  SE ID 30.
-    // sweph.h: {0, 0, FALSE, 0} — computed dynamically.
-    // Linear approx at J2000 (~25.04 from SE swetest output).
-    linear_ayanamsa(t, 25.04, PRECESSION_ARCSEC_PER_YEAR)
+    // Fixed-direction reduction: J2000 ecliptic longitude 22.469105° (= Swiss mean
+    // at J2000), latitude 0.270°. Cross-validated ≤ 0.08" vs Swiss
+    // SE_SIDM_GALCENT_RGILBRAND across 1900–2100. (Previous linear approx ~9269".)
+    fixed_point_ayanamsa(22.469_104_789, 0.270, t)
 }
 
 fn galactic_center_cochrane(t: f64) -> f64 {
-    // Galactic Center at 0 Capricorn (Cochrane) — SE ID 40.
-    // sweph.h: {0, 0, FALSE, 0} — computed dynamically.
-    // Linear approx at J2000 (~25.36 from SE swetest output).
-    linear_ayanamsa(t, 25.36, PRECESSION_ARCSEC_PER_YEAR)
+    // Galactic Center at 0° Capricorn (Cochrane) — SE ID 40.
+    // Swiss places this ayanamsa near 356.85° (the J2000 anchor is the GC direction
+    // offset by a full sign from SE ID 17), NOT 25.36° — the old constant was 28.5°
+    // wrong. Fixed-direction reduction: J2000 ecliptic longitude 356.846046°
+    // (= Swiss mean at J2000), latitude 0.240°. Cross-validated ≤ 0.08" vs Swiss
+    // SE_SIDM_GALCENT_COCHRANE across 1900–2100. (Previous linear approx ~102664"
+    // = 28.5°.)
+    fixed_point_ayanamsa(356.846_045_806, 0.240, t)
 }
 
 fn galactic_equator_iau1958(t: f64) -> f64 {
     // Galactic Equator IAU 1958 — SE ID 31.
-    // sweph.h: {0, 0, FALSE, 0} — computed dynamically.
-    // Linear approx at J2000 (~25.15 from SE swetest output).
-    linear_ayanamsa(t, 25.15, PRECESSION_ARCSEC_PER_YEAR)
+    // Swiss places this near 30.02° at J2000, NOT 25.15°. Fixed-direction reduction:
+    // J2000 ecliptic longitude 30.023172° (= Swiss mean at J2000), latitude
+    // −34.910° (the ascending node of the galactic equator on the ecliptic sits
+    // well off the ecliptic, so its precession is strongly latitude-coupled).
+    // Cross-validated ≤ 0.08" vs Swiss SE_SIDM_GALEQU_IAU1958 across 1900–2100.
+    // (Previous linear approx diverged ~17575".)
+    fixed_point_ayanamsa(30.023_172_469, -34.910, t)
 }
 
 fn galactic_equator_true(t: f64) -> f64 {
     // Galactic Equator True (Liu/Zhu/Zhang 2010) — SE ID 32.
-    // sweph.h: {0, 0, FALSE, 0} — computed dynamically.
-    // Linear approx at J2000 (~25.0 from SE swetest output).
-    linear_ayanamsa(t, 25.0, PRECESSION_ARCSEC_PER_YEAR)
+    // Fixed-direction reduction: J2000 ecliptic longitude 30.076092° (= Swiss mean
+    // at J2000), latitude −34.920°. Cross-validated ≤ 0.08" vs Swiss
+    // SE_SIDM_GALEQU_TRUE across 1900–2100. (Previous linear approx ~18305".)
+    fixed_point_ayanamsa(30.076_092_180, -34.920, t)
 }
 
 fn galactic_equator_mula(t: f64) -> f64 {
     // Galactic Equator at mid-Mula — SE ID 33.
-    // sweph.h: {0, 0, FALSE, 0} — computed dynamically.
-    // Linear approx at J2000 (~25.2 from SE swetest output).
-    linear_ayanamsa(t, 25.2, PRECESSION_ARCSEC_PER_YEAR)
+    // Fixed-direction reduction: J2000 ecliptic longitude 23.409426° (= Swiss mean
+    // at J2000), latitude −33.000°. Cross-validated ≤ 0.06" vs Swiss
+    // SE_SIDM_GALEQU_MULA across 1900–2100. (Previous linear approx ~6462".)
+    fixed_point_ayanamsa(23.409_425_513, -33.000, t)
 }
 
 fn galactic_align_mardyks(t: f64) -> f64 {
@@ -785,16 +897,42 @@ fn galactic_equatorial_fiorenza(t: f64) -> f64 {
 
 fn gal_center_mula_wilhelm(t: f64) -> f64 {
     // Dhruva / GC / Middle of Mula (Ernst Wilhelm) — SE ID 36.
-    // sweph.h: {0, 0, FALSE, 0} — computed dynamically.
-    // Linear approx at J2000 (~25.06 from SE swetest output).
-    linear_ayanamsa(t, 25.06, PRECESSION_ARCSEC_PER_YEAR)
+    // sweph.h: {0, 0, FALSE, 0} — computed dynamically by Swiss. This is the ONE
+    // SE-mapped system the self-contained model does NOT bring under 1": it tracks
+    // Swiss SE_SIDM_GALCENT_MULA_WILHELM to ≤ 1.42" across the 1900–2100 oracle
+    // epochs (vs the previous linear approx's ~18277" divergence).
+    //
+    // DOCUMENTED, NON-FIXABLE-IN-PURE-RUST RESIDUAL (measured against pyswisseph
+    // 2.10.03, not assumed). Swiss's internal Wilhelm reduction has two properties
+    // that are mutually exclusive for a single fixed celestial direction:
+    //   * a no-nutation precession rate of ~52.5"/yr (≈ 2.2"/yr ABOVE general
+    //     precession) — a fixed direction only reaches that rate near the ecliptic
+    //     pole; and
+    //   * a moderate-latitude annual aberration whose intra-year amplitude is
+    //     ~±23" (calibrated against the with/without-nutation Swiss difference) —
+    //     which corresponds to an ecliptic latitude of only a few degrees.
+    // No single fixed (lon, lat) satisfies both, so the rigid-direction reduction
+    // cannot match the curvature of Swiss's value. The (lon, lat) below is the
+    // best Jan-1-anchored fixed-direction fit (the −79.155° latitude reproduces
+    // the steep rate; it is a fit parameter, NOT a real celestial latitude). The
+    // oracle tolerance for SE id 36 is set to 2" with this note, not loosened to
+    // hide a fixable error. Closing it below 1" requires Swiss's exact internal
+    // Wilhelm star/aberration model, which is not derivable from pyswisseph
+    // outputs alone.
+    fixed_point_ayanamsa(20.039_233_112, -79.155, t)
 }
 
 fn true_mula_chandra_hari(t: f64) -> f64 {
-    // True Mula — Chandra Hari.  SE ID 35.
-    // sweph.h: {0, 0, FALSE, 0} — computed dynamically.
-    // Linear approx at J2000 (~25.0 from SE swetest output).
-    linear_ayanamsa(t, 25.0, PRECESSION_ARCSEC_PER_YEAR)
+    // True Mula — Chandra Hari — Lambda Scorpii anchored at sidereal 0° Sagittarius
+    // (240°).  SE ID 35. sweph.h: {0, 0, FALSE, 0} — Swiss computes this
+    // DYNAMICALLY from λ Sco's apparent place. Fixed-direction reduction (see
+    // [`fixed_point_ayanamsa`]): J2000 ecliptic longitude 24.579973° (= Swiss mean
+    // at J2000), latitude 1.265° (λ Sco J2000 ecliptic latitude). Cross-validated
+    // ≤ 0.11" vs Swiss SE_SIDM_TRUE_MULA across 1900–2100. (Previous linear approx
+    // diverged ~1526".)
+    const LON_J2000_DEG: f64 = 24.579_972_884;
+    const LAT_J2000_DEG: f64 = 1.265;
+    fixed_point_ayanamsa(LON_J2000_DEG, LAT_J2000_DEG, t)
 }
 
 // ── Babylonian / Hellenistic ───────────────────────────────────────
@@ -886,10 +1024,15 @@ fn ss_revati(t: f64) -> f64 {
 }
 
 fn true_pushya(t: f64) -> f64 {
-    // True Pushya: Delta Cancri at 16 deg Cancer — SE ID 29.
-    // sweph.h: {0, 0, FALSE, 0} — computed dynamically from star position.
-    // Linear approx at J2000 (~24.1 from SE swetest output).
-    linear_ayanamsa(t, 24.1, PRECESSION_ARCSEC_PER_YEAR)
+    // True Pushya — Delta Cancri anchored at sidereal 16° Cancer (106°).  SE ID 29.
+    // sweph.h: {0, 0, FALSE, 0} — Swiss computes this DYNAMICALLY from δ Cnc's
+    // apparent place. Fixed-direction reduction (see [`fixed_point_ayanamsa`]):
+    // J2000 ecliptic longitude 22.727092° (= Swiss mean at J2000), latitude
+    // −5.725° (δ Cnc J2000 ecliptic latitude). Cross-validated ≤ 0.13" vs Swiss
+    // SE_SIDM_TRUE_PUSHYA across 1900–2100. (Previous linear approx diverged ~4956".)
+    const LON_J2000_DEG: f64 = 22.727_091_551;
+    const LAT_J2000_DEG: f64 = -5.725;
+    fixed_point_ayanamsa(LON_J2000_DEG, LAT_J2000_DEG, t)
 }
 
 fn citra_at_spica_180(t: f64) -> f64 {
@@ -947,9 +1090,16 @@ fn b1950_ayanamsa(t: f64) -> f64 {
 
 fn true_sheoran(t: f64) -> f64 {
     // True Sheoran — Sunil Sheoran, "The Science of Time" (2017).  SE ID 39.
-    // sweph.h: {0, 0, FALSE, 0} — computed dynamically from star position.
-    // Linear approx at J2000 (~24.0 from SE swetest output).
-    linear_ayanamsa(t, 24.0, PRECESSION_ARCSEC_PER_YEAR)
+    // sweph.h: {0, 0, FALSE, 0} — Swiss computes this dynamically with its own
+    // internal reduction (it does NOT reduce to a clean fixed star anchor — the
+    // direct ζ Psc apparent-place model leaves an ~8" slope). We approximate it as
+    // a fixed-direction frame anchored at the Swiss mean J2000 value (25.234449°)
+    // with the best-fit ecliptic latitude (−5.865°), rigorously precessed +
+    // nutated. Cross-validated ≤ 0.13" vs Swiss SE_SIDM_TRUE_SHEORAN across
+    // 1900–2100. (Previous linear approx diverged ~4462".)
+    const LON_J2000_DEG: f64 = 25.234_449_334;
+    const LAT_J2000_DEG: f64 = -5.865;
+    fixed_point_ayanamsa(LON_J2000_DEG, LAT_J2000_DEG, t)
 }
 
 // ── Public conversion utilities ────────────────────────────────────
@@ -1102,14 +1252,19 @@ mod tests {
 
     #[test]
     fn all_named_ayanamsas_reasonable_at_j2000() {
-        // Every ayanamsa at J2000 should be between -5 and 35 degrees.
-        // J2000/J1900/B1950 can be near zero; Djwhal Khul can be ~28;
-        // Galactic Alignment (Mardyks) is ~30.
+        // Every ayanamsa at J2000 should be in the broad sidereal band. Most land
+        // in 0–35°; J2000/J1900/B1950 are near zero; Djwhal Khul ~28; Galactic
+        // Alignment (Mardyks) ~30; Galactic Equator IAU1958/True ~30. The lone
+        // wrap-around is GalacticCenterCochrane, which Swiss places near 356.85°
+        // (0° Capricorn anchor), so we normalize to a signed band before the check.
         for sys in Ayanamsa::all_named() {
-            let aya = sys.compute_deg(J2000_JD_TEST);
+            let mut aya = sys.compute_deg(J2000_JD_TEST);
+            if aya > 180.0 {
+                aya -= 360.0; // Cochrane ~356.85° -> ~ -3.15°
+            }
             assert!(
                 aya > -5.0 && aya < 35.0,
-                "{sys} at J2000 should be -5 to 35 deg, got {aya} deg"
+                "{sys} at J2000 should be -5 to 35 deg (signed), got {aya} deg"
             );
         }
     }
@@ -1177,28 +1332,50 @@ mod tests {
     }
 
     #[test]
-    fn galactic_systems_cluster() {
+    fn galactic_systems_match_swiss_relationships() {
+        // The galactic systems do NOT all cluster within 2° — that was an artifact
+        // of the old hand-typed J2000 constants. With the corrected Swiss-matching
+        // values:
+        //   * GalacticCenter0Sag and GalacticCenterCochrane differ by EXACTLY 30°
+        //     (0° Sagittarius vs 0° Capricorn anchor) — Cochrane wraps to ~356.85°.
+        //   * The galactic-CENTRE systems (0Sag, Brand) sit ~22–27°.
+        //   * The galactic-EQUATOR systems (IAU1958, True) sit ~30°.
         let gc_sag = Ayanamsa::GalacticCenter0Sag.compute_deg(J2000_JD_TEST);
-        let gc_brand = Ayanamsa::GalacticCenterBrand.compute_deg(J2000_JD_TEST);
         let gc_cochrane = Ayanamsa::GalacticCenterCochrane.compute_deg(J2000_JD_TEST);
+        let gc_brand = Ayanamsa::GalacticCenterBrand.compute_deg(J2000_JD_TEST);
         let gc_eq = Ayanamsa::GalacticEquatorIAU1958.compute_deg(J2000_JD_TEST);
-        let all = [gc_sag, gc_brand, gc_cochrane, gc_eq];
-        for &a in &all {
-            for &b in &all {
-                assert!(
-                    (a - b).abs() < 2.0,
-                    "Galactic variants should cluster: {a} vs {b}"
-                );
-            }
-        }
+
+        // 0Sag vs Cochrane: exactly 30° apart (handle the 360° wrap).
+        let sep = ((gc_sag - gc_cochrane).rem_euclid(360.0) - 30.0).abs();
+        assert!(
+            sep < 0.05,
+            "GC 0Sag ({gc_sag}) and Cochrane ({gc_cochrane}) must differ by 30°, off by {sep}°"
+        );
+        // GC-centre systems cluster within a few degrees of each other.
+        assert!(
+            (gc_sag - gc_brand).abs() < 5.0,
+            "GC-centre systems should be within 5°: 0Sag {gc_sag} vs Brand {gc_brand}"
+        );
+        // Galactic-equator system sits near 30°, distinctly above the centre ones.
+        assert!(
+            (gc_eq - 30.0).abs() < 1.0,
+            "Galactic Equator IAU1958 should be ~30°, got {gc_eq}"
+        );
     }
 
     #[test]
-    fn j2000_is_zero_at_j2000() {
+    fn j2000_is_nutation_only_at_j2000() {
+        // J2000 (SE id 18) has zero MEAN ayanamsa at J2000, but the apparent
+        // (with-nutation) value Swiss returns is the nutation in longitude alone:
+        // Δψ(J2000) ≈ −13.93" ≈ −0.003870°. Our implementation includes Δψ, so the
+        // value is small-but-nonzero and must match the Swiss apparent value, NOT 0.
         let aya = Ayanamsa::J2000.compute_deg(J2000_JD_TEST);
+        const SWISS_J2000_AT_J2000_DEG: f64 = -0.003869869;
+        let diff_arcsec = (aya - SWISS_J2000_AT_J2000_DEG).abs() * 3600.0;
         assert!(
-            aya.abs() < 0.001,
-            "J2000 ayanamsa at J2000 should be ~0, got {aya}"
+            diff_arcsec < 1.0,
+            "J2000 apparent ayanamsa at J2000 should be Δψ ≈ {SWISS_J2000_AT_J2000_DEG}°, \
+             got {aya}° (diff {diff_arcsec:.3}\")"
         );
     }
 
@@ -1339,26 +1516,29 @@ mod tests {
         }
     }
 
-    /// Verify all epoch-based SE ayanamsas produce values consistent with
-    /// Swiss Ephemeris {t0, ayan_t0} reference data (sweph.h).
+    /// Verify all epoch-based SE ayanamsas produce values consistent with the
+    /// Swiss Ephemeris {t0, ayan_t0} reference data (sweph.h) at J2000.
     ///
-    /// For each ayanamsa with a known SE reference point, we compute our
-    /// value at J2000 and compare against the expected value derived from
-    /// the SE parameters using Vondrak 2011 general precession.
-    ///
-    /// Tolerance: 1 arcsec for epoch-based, 60 arcsec for star-based/dynamic.
+    /// This is a SELF-CONSISTENCY check against the same model `epoch_based_ayanamsa`
+    /// implements (`ayan_t0 + [p_A(0) − p_A(t0)] + Δψ(0)`, IAU 2006 precession +
+    /// IAU 2000B nutation). The authoritative EXTERNAL cross-validation against
+    /// live pyswisseph values across 1900–2100 lives in
+    /// `tests/swiss_ayanamsa_oracle.rs`.
     #[test]
     fn se_reference_values_at_j2000() {
         // SE constants (sweph.h)
         const J2000: f64 = 2_451_545.0;
         const J1900: f64 = 2_415_020.0;
         const B1950: f64 = 2_433_282.42345905;
-        const RATE: f64 = 50.28796195; // arcsec/yr Vondrak 2011
 
-        // Expected J2000 value computed from SE {t0, ayan_t0} + Vondrak precession.
+        // Expected J2000 value computed from SE {t0, ayan_t0} via the SAME model
+        // the implementation uses: accumulated IAU 2006 general precession from t0
+        // plus IAU 2000B nutation in longitude at J2000.
         fn se_j2000(t0: f64, ayan_t0: f64) -> f64 {
-            let dt = (J2000 - t0) / 365.25;
-            ayan_t0 + RATE / 3600.0 * dt
+            let t0c = (t0 - J2000) / 36525.0;
+            let precession = xalen_coords::general_precession_longitude(0.0)
+                - xalen_coords::general_precession_longitude(t0c);
+            (ayan_t0.to_radians() + precession + delta_psi(0.0)).to_degrees()
         }
 
         // (Ayanamsa variant, SE t0, SE ayan_t0, tolerance in arcsec)
@@ -1367,13 +1547,10 @@ mod tests {
         let checks: &[(Ayanamsa, f64, f64, f64)] = &[
             // SE ID 0: Fagan-Bradley
             (Ayanamsa::FaganBradley, 2433282.42346, 24.042044444, 1.0),
-            // SE ID 1: Lahiri — SELF-CONSISTENCY check, not an external
-            // validation: the expected value (23.85306°) is the SAME Swiss-
-            // anchored J2000 constant `lahiri()` returns, so the diff is
-            // identically ~0. It confirms the anchor only. Real external
-            // agreement is ~2" vs Swiss across the modern era (see ACCURACY.md);
-            // there is NO arcsec-level Indian Astronomical Ephemeris check.
-            (Ayanamsa::Lahiri, J2000, 23.85306, 1.0),
+            // SE ID 1: Lahiri — uses the same {t0, ayan_t0} the implementation now
+            // anchors from (1956 CRC epoch with the get_aya_correction folded in).
+            // The authoritative external check vs live Swiss is in the oracle test.
+            (Ayanamsa::Lahiri, 2435553.5, 23.25 - 0.00464207, 1.0),
             // SE ID 2: De Luce
             (Ayanamsa::DeLuce, 1721057.5, 0.0, 1.0),
             // SE ID 3: Raman
@@ -1602,50 +1779,54 @@ mod tests {
         //     [print(jd, swe.get_ayanamsa_ex(jd, 0)[1]) for jd in \
         //       (2415020.5,2433282.5,2451545.0,2469807.5,2488069.5)]"
         //
-        // Measured residuals (ours − Swiss), arcsec:
-        //   1900 −1.513   1950 −0.774   2000 −0.015   2050 +0.710   2100 +1.470
-        // i.e. sub-arcsecond at the J2000 anchor and ≤1.6" across 1900–2100.
-        // The small ~1.5"/century slope is the residual of adding the planar
-        // IAU 2006 general precession to Spica's ecliptic longitude (vs the
-        // full latitude-coupled precession rotation Swiss applies) plus the
-        // proper-motion model; it is documented, not curve-fitted away.
+        // Measured residuals (ours − Swiss), arcsec, with the rigorous IAU
+        // 2006/P03 Cartesian Spica precession (couples Spica's ~2.05° ecliptic
+        // latitude):
+        //   1900 −0.037   1950 −0.035   2000 −0.013   2050 −0.024   2100 −0.001
+        // i.e. ≤ 0.04" across the whole 1900–2100 span. The prior scalar
+        // pure-longitude precession left a ~1.5"/century slope (−1.513"/+1.470"
+        // at 1900/2100) because it could not couple Spica's ecliptic latitude;
+        // the Cartesian rotation removes it.
         let swiss = [
-            (2_415_020.5_f64, 22.449_597_25_f64), // 1900-01-01 TT
-            (2_433_282.5, 23.141_359_13),         // 1950-01-01 TT
-            (2_451_545.0, 23.836_145_08),         // 2000-01-01 TT (J2000)
-            (2_469_807.5, 24.542_129_66),         // 2050-01-01 TT
-            (2_488_069.5, 25.236_806_50),         // 2100-01-01 TT
+            (2_415_020.5_f64, 22.449_597_249_f64), // 1900-01-01 TT
+            (2_433_282.5, 23.141_359_125),         // 1950-01-01 TT
+            (2_451_545.0, 23.836_145_079),         // 2000-01-01 TT (J2000)
+            (2_469_807.5, 24.542_129_663),         // 2050-01-01 TT
+            (2_488_069.5, 25.236_806_501),         // 2100-01-01 TT
         ];
         // Tolerance reflects the MEASURED agreement, not an aspiration: the
-        // anchor is sub-0.1", the 1900–2100 span stays under 2".
-        const TOL_ANCHOR_ARCSEC: f64 = 0.1;
-        const TOL_SPAN_ARCSEC: f64 = 2.0;
+        // measured worst case is 0.037", so a single 0.5" tolerance across the
+        // whole span has comfortable margin while still catching a regression to
+        // the old scalar model (which exceeded 1.4" off the J2000 anchor).
+        const TOL_ARCSEC: f64 = 0.5;
         for (jd, swiss_deg) in swiss {
             let ours = Ayanamsa::TrueChitra.compute_deg(jd);
             let resid_arcsec = (ours - swiss_deg).abs() * 3600.0;
-            let tol = if (jd - 2_451_545.0).abs() < 0.5 {
-                TOL_ANCHOR_ARCSEC
-            } else {
-                TOL_SPAN_ARCSEC
-            };
             assert!(
-                resid_arcsec < tol,
+                resid_arcsec < TOL_ARCSEC,
                 "True Chitra at jd={jd} = {ours:.10}° vs Swiss {swiss_deg:.10}°: \
-                 residual {resid_arcsec:.4}\" exceeds {tol}\" tolerance"
+                 residual {resid_arcsec:.4}\" exceeds {TOL_ARCSEC}\" tolerance"
             );
         }
     }
 
-    /// Verify the precession constant used matches Vondrak 2011.
+    /// Verify the J1900 reference ayanamsa at J2000 matches the live Swiss value.
     #[test]
-    fn precession_rate_is_vondrak_2011() {
-        // J1900 ayanamsa at J2000 should be exactly 100 years of Vondrak precession
-        let expected = 50.28796195 * 100.0 / 3600.0; // degrees
+    fn j1900_matches_swiss_apparent_at_j2000() {
+        // J1900 (SE id 19) anchors zero ayanamsa at J1900.0. At J2000 the
+        // WITH-nutation Swiss value (swe.get_ayanamsa_ex(2451545.0, 0)) is
+        // 1.392711130° — one century of IAU 2006 general precession in longitude
+        // (≈ 1.39656°) PLUS the J2000 nutation in longitude Δψ ≈ −13.93" ≈ −0.00387°.
+        // This is the value our implementation must reproduce (NOT the bare linear
+        // 50.28796195"/yr × 100 yr, which omits both the higher-order precession
+        // terms and nutation).
+        const SWISS_J1900_AT_J2000_DEG: f64 = 1.392711130;
         let actual = Ayanamsa::J1900.compute_deg(J2000_JD_TEST);
-        let diff_arcsec = (actual - expected).abs() * 3600.0;
+        let diff_arcsec = (actual - SWISS_J1900_AT_J2000_DEG).abs() * 3600.0;
         assert!(
-            diff_arcsec < 0.01,
-            "J1900 at J2000 should reflect Vondrak rate: expected {expected:.9}, got {actual:.9}, diff {diff_arcsec:.4}\""
+            diff_arcsec < 1.0,
+            "J1900 at J2000 should match Swiss apparent value {SWISS_J1900_AT_J2000_DEG:.9}°, \
+             got {actual:.9}°, diff {diff_arcsec:.4}\""
         );
     }
 }

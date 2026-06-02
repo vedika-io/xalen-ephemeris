@@ -7,6 +7,7 @@ Part of the [XALEN Ephemeris](https://github.com/vedika-io/xalen-ephemeris) suit
 - `Almanac` facade: chains ephemeris providers with automatic fallback, converting UT1 to TT internally via a configurable delta-T model.
 - Geocentric and heliocentric ecliptic positions for the Sun, Moon, and Mercury through Pluto via the `EphemerisProvider` trait (`Vsop87Provider` ships by default).
 - Optional JPL DE440 binary-kernel reader (`De440Provider`, `De440Reader`, Chebyshev evaluation) for the highest-accuracy tier.
+- Optional `kernel-autodownload` feature (off by default): `De440Provider::from_auto_cache()` fetches and caches the public NASA NAIF `de440s.bsp` kernel automatically on first use, giving a sub-arcsecond apparent Moon (and all kernel bodies) with no manual file handling. Without the feature the crate stays offline; the analytical Moon is RMS ~2.9″ / max ~12″ vs `pyswisseph` over AD 1600–2100.
 - Tropical and sidereal longitude helpers — `sidereal_longitude_deg` subtracts any ayanamsa for Vedic work.
 - Lunar nodes: mean and true (osculating) Rahu, with Ketu derived as the opposite point (`true_node` module).
 - Solar and lunar eclipse detection and classification (`eclipse` module).

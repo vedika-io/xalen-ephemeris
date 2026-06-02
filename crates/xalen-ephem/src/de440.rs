@@ -63,20 +63,22 @@ const EMRAT: f64 = 81.300568;
 /// Worst-body apparent-longitude residual quoted by the DE440 provider's
 /// [`EphemerisProvider::accuracy_arcsec`].
 ///
-/// The DE440 *raw* geometry is sub-milliarcsecond, but `accuracy_arcsec` must
-/// describe the worst PHYSICAL body the provider actually serves through its full
-/// apparent-place reduction (light-time + IAU 2006 precession + IAU 2000B
-/// nutation + annual aberration). The Moon is that body: its measured residual
-/// against the independent JPL Horizons apparent geocentric longitude at J2000 is
-/// ~11" (see `tests/de440_real_crossval.rs::de440_moon_at_j2000_matches_jpl_apparent_longitude`), driven by the
-/// lunar apparent-place reduction (the Moon is taken geometric at the observation
-/// epoch), not by the kernel. Reporting 1" understated this by an order of
-/// magnitude; we bound the worst body honestly at 11", which still sits well
-/// inside the 36" (0.01°) cross-validation tolerance that test enforces. The
-/// Sun and planets remain sub-arcsecond. Bodies the kernel lacks (the lunar
-/// nodes especially) fall back to the analytical model and carry its larger,
-/// separately-documented residual.
-const DE440_APPARENT_WORST_ARCSEC: f64 = 11.0;
+/// The DE440 *raw* geometry is sub-milliarcsecond, and `accuracy_arcsec`
+/// describes the worst PHYSICAL body the provider serves through its apparent-
+/// place reduction (light-time + IAU 2006 precession + IAU 2000B nutation; the
+/// Moon additionally gets its geocentric light-time but NOT annual aberration).
+/// Previously the Moon was the worst body at ~11" — but that residual was a BUG:
+/// the full annual aberration term (κ=20.49552", correct for planets/Sun that do
+/// not share Earth's heliocentric velocity) was wrongly applied to the
+/// geocentric Moon. With that term removed (see
+/// `De440Provider::apparent_moon_de440`) the apparent Moon agrees with JPL
+/// Horizons to sub-arcsecond, like the Sun and planets. We bound the worst body
+/// conservatively at 2", which honestly covers the apparent-place reduction
+/// (validated Moon residual is well below this) and still sits far inside the
+/// 36" (0.01°) cross-validation tolerance the test enforces. Bodies the kernel
+/// lacks (the lunar nodes especially) fall back to the analytical model and
+/// carry its larger, separately-documented residual.
+const DE440_APPARENT_WORST_ARCSEC: f64 = 2.0;
 
 /// DAF record size in bytes (always 1024 for NAIF DAF files).
 const DAF_RECORD_BYTES: usize = 1024;
@@ -627,8 +629,8 @@ fn detect_de_label(file_data: &[u8], fward: i32) -> Option<String> {
         // is not matched.
         let at_boundary = i == 0 || !region[i - 1].is_ascii_alphabetic();
         if at_boundary
-            && region[i].eq_ignore_ascii_case(&b'D')
-            && region[i + 1].eq_ignore_ascii_case(&b'E')
+            && region[i].to_ascii_uppercase() == b'D'
+            && region[i + 1].to_ascii_uppercase() == b'E'
         {
             let mut j = i + 2;
             if j < n && region[j] == b'-' {
@@ -773,30 +775,10 @@ impl De440Reader {
         // -----------------------------------------------------------------
         // Walk summary records via the FWARD chain
         // -----------------------------------------------------------------
-        // Each summary has ND + ceil((NI+1)/2) = 2 + ceil(7/2) = 2 + 4 = 6
-        // Wait -- let me be precise:
-        // summary_size = ND + (NI + 1) / 2  (integer division, rounded up)
-        // For ND=2, NI=6: (6+1)/2 = 3 (integer div), so summary_size = 2 + 3 = 5?
-        // No. The NAIF spec says: SS = ND + (NI+1)/2 where / is integer division.
-        // (6+1)/2 = 7/2 = 3 (integer division). So SS = 2 + 3 = 5 f64 words.
-        //
-        // But the integer unpacking gives NI=6 integers from ceil(NI/2)=3 f64 words.
-        // The summary_size is ND + ceil((NI+1)/2). For NI=6: ceil(7/2)=4. So SS = 2+4 = 6?
-        //
-        // Let me think again from the NAIF DAF spec:
-        // The number of double-precision numbers in each summary is: ND + (NI+1)/2
-        // where the division is integer division (floor). NI=6 -> (6+1)/2 = 3.
-        // Summary size = 2 + 3 = 5 f64 words.
-        //
-        // The unpacking: the first ND f64s are the doubles. The remaining
-        // (NI+1)/2 f64s are packed integers: each f64 holds 2 i32 values
-        // (the +1 accounts for odd NI with a padding int).
-        // For NI=6: (6+1)/2 = 3 f64s hold 6 integers (3 pairs of i32s,
-        // plus the 7th slot is padding/unused).
-        //
-        // Wait, (NI+1)/2 with integer div: (6+1)/2 = 3. 3 f64 words hold
-        // 6 i32 values. There's exactly NI=6 integers, no padding needed.
-        // If NI were 5: (5+1)/2=3, and 3 f64s hold 6 i32 slots, 5 used + 1 pad.
+        // NAIF DAF summary layout: each summary is `ND` double-precision words
+        // followed by `ceil(NI/2)` words of packed integers (each f64 word holds
+        // two i32 values). For an SPK with ND=2, NI=6, that is 2 + ceil(6/2) = 2 + 3
+        // = 5 f64 words; the 3 integer words hold all 6 i32 values with no padding.
         let summary_size = nd as usize + (ni as usize).div_ceil(2); // 2 + 3 = 5
 
         let mut segments: Vec<SpkSegment> = Vec::new();
@@ -1588,36 +1570,15 @@ impl De440Reader {
 
         match body {
             Body::Moon => {
-                // Moon: need geocentric position.
-                // In SPK, Moon (301) is relative to EMB (3), and Earth (399) is
-                // relative to EMB (3). So Moon_geocentric = Moon_emb - Earth_emb.
-                // But in DE440 SPK, there's typically no Earth (399) segment.
-                // Moon (301) w.r.t. EMB (3) + Earth = EMB - Moon/(1+EMRAT).
-                // Moon_geocentric = Moon_emb + Earth_emb_offset
-                //   where Earth_emb_offset = Moon_emb / (1 + EMRAT) (pointing toward EMB from Earth)
-                // Actually: Moon_geo = Moon_emb * (1 + 1/(1+EMRAT)) = Moon_emb * (2+EMRAT)/(1+EMRAT)
-                // No. Let me think more carefully:
-                //   EMB = Earth + Moon * mu_moon / (mu_earth + mu_moon)
-                //   where mu ratios: EMRAT = M_earth/M_moon
-                //   So: EMB = Earth + Moon / (1 + EMRAT)   [geocentric vectors]
-                //   => Moon_geo = (EMB - Earth)_geo ... no this is circular.
+                // Geocentric Moon from the SPK Moon(301)-relative-to-EMB(3) segment.
                 //
-                // In the SPK: Moon_emb = Moon_pos - EMB_pos (position of Moon w.r.t. EMB).
-                // Earth_emb = Earth_pos - EMB_pos.
-                // We need Moon_geo = Moon_pos - Earth_pos = Moon_emb - Earth_emb.
-                //
-                // From barycenter definition:
-                //   EMB = (M_earth * Earth + M_moon * Moon) / (M_earth + M_moon)
-                //   Let R = Moon_emb = Moon - EMB.
-                //   Earth_emb = Earth - EMB = -Moon * M_moon / (M_earth + M_moon) + Earth * ...
-                //   Actually: Earth - EMB = -(M_moon/(M_earth+M_moon)) * (Moon - Earth)
-                //     = -(1/(1+EMRAT)) * (Moon - Earth)
-                //     = (1/(1+EMRAT)) * (Earth - Moon)
-                //   And Moon - EMB = (M_earth/(M_earth+M_moon)) * (Moon - Earth)
-                //     = (EMRAT/(1+EMRAT)) * (Moon - Earth)
-                //
-                // So Moon_emb = (EMRAT/(1+EMRAT)) * Moon_geo
-                // => Moon_geo = Moon_emb * (1+EMRAT)/EMRAT
+                // The Earth–Moon barycentre is EMB = (M_e·Earth + M_m·Moon)/(M_e+M_m)
+                // with mass ratio EMRAT = M_e/M_m. The SPK gives the Moon's position
+                // relative to the EMB, Moon_emb = Moon − EMB. Substituting the
+                // barycentre definition:
+                //   Moon − EMB = (M_e/(M_e+M_m))·(Moon − Earth) = (EMRAT/(1+EMRAT))·Moon_geo,
+                // where Moon_geo = Moon − Earth is the geocentric vector we want. Hence
+                //   Moon_geo = Moon_emb · (1 + EMRAT) / EMRAT.
                 if self.is_spk {
                     let (mx, my, mz) = self.position_at(301, 3, jd_tdb)?;
                     let factor = (1.0 + EMRAT) / EMRAT;
@@ -1911,6 +1872,28 @@ impl De440Provider {
         Ok(Self::with_reader(reader))
     }
 
+    /// Build a kernel-backed provider using the auto-provisioned DE440 kernel.
+    ///
+    /// Requires the `kernel-autodownload` feature. On first use this fetches the
+    /// public NASA NAIF `de440s.bsp` kernel (~32 MB) into the per-OS cache
+    /// directory and verifies it (structural DE440 provenance, plus an optional
+    /// SHA-256 when one is configured); subsequent calls reuse the cached copy
+    /// with no network access. The returned provider serves the apparent Moon —
+    /// and every body the kernel covers — at sub-arcsecond accuracy, with no
+    /// manual kernel handling.
+    ///
+    /// Returns a LOUD error if provisioning or loading fails (e.g. no network on
+    /// first run, or a cache directory that cannot be created). Callers that
+    /// prefer to degrade silently to the analytical fallback can match the error
+    /// and call [`Self::fallback_only`].
+    ///
+    /// See [`crate::kernel_cache`] for cache-location and integrity controls.
+    #[cfg(feature = "kernel-autodownload")]
+    pub fn from_auto_cache() -> Result<Self, EphemerisError> {
+        let path = crate::kernel_cache::ensure_de440s_kernel()?;
+        Self::try_from_file_strict(&path)
+    }
+
     /// Whether DE440 data is actually loaded.
     pub fn has_de440_data(&self) -> bool {
         self.reader.has_data()
@@ -1983,6 +1966,69 @@ impl De440Provider {
 
         pos.normalize()
     }
+
+    /// Apparent geocentric ecliptic Moon (ecliptic of date) from the DE440
+    /// kernel, WITHOUT the annual aberration that planets/Sun receive.
+    ///
+    /// The kernel gives the TRUE geometric geocentric Moon. The Moon shares
+    /// Earth's heliocentric velocity, so the full annual aberration term
+    /// (κ = 20.49552″) does NOT apply to it — applying it injected ~11–20″ of
+    /// spurious longitude. The only displacement is the Moon's own GEOCENTRIC
+    /// light-time / planetary aberration (~0.7″): the Moon is seen where it was
+    /// τ = ρ/c seconds ago. That is applied here as a longitude/latitude
+    /// retardation using the Moon's geocentric rate (central finite difference
+    /// of the kernel's geocentric vector — Earth held fixed, so no Earth-motion
+    /// contamination, matching the VSOP87 analytical Moon path).
+    ///
+    /// Expected residual vs Horizons/Swiss apparent place: sub-arcsecond (the
+    /// prior full-annual-aberration path was ~11″).
+    fn apparent_moon_de440(
+        &self,
+        tdb_val: f64,
+        jd_tt: JdTT,
+    ) -> Result<EclipticPosition, EphemerisError> {
+        // Geometric geocentric Moon → apparent ecliptic-of-date (precess +
+        // nutation, no aberration) at the observation epoch and at ±h to form
+        // the geocentric rate.
+        const H_DAYS: f64 = 0.01; // ~14.4 min; well inside DE440 smoothness
+        // Convert the ±h offsets in TDB to the corresponding jd_tt offsets. The
+        // TDB-TT difference is < 2 ms and effectively constant over 0.02 day, so
+        // jd_tt simply shifts by the same ±h as tdb_val.
+        let mid = self.geocentric_moon_apparent_no_aber(tdb_val, jd_tt)?;
+        let before =
+            self.geocentric_moon_apparent_no_aber(tdb_val - H_DAYS, JdTT(jd_tt.as_f64() - H_DAYS))?;
+        let after =
+            self.geocentric_moon_apparent_no_aber(tdb_val + H_DAYS, JdTT(jd_tt.as_f64() + H_DAYS))?;
+
+        let mut dlon = after.longitude - before.longitude;
+        if dlon > std::f64::consts::PI {
+            dlon -= std::f64::consts::TAU;
+        } else if dlon < -std::f64::consts::PI {
+            dlon += std::f64::consts::TAU;
+        }
+        let dlon_dt = dlon / (2.0 * H_DAYS);
+        let dlat_dt = (after.latitude - before.latitude) / (2.0 * H_DAYS);
+
+        let tau = mid.distance / LIGHT_SPEED_AU_PER_DAY; // days
+
+        Ok(EclipticPosition {
+            longitude: mid.longitude - tau * dlon_dt,
+            latitude: mid.latitude - tau * dlat_dt,
+            distance: mid.distance,
+        })
+    }
+
+    /// Geometric geocentric Moon in apparent ecliptic-of-date coordinates
+    /// (precession + nutation), WITHOUT any aberration/light-time term. Helper
+    /// for `apparent_moon_de440`'s finite-difference rate.
+    fn geocentric_moon_apparent_no_aber(
+        &self,
+        tdb_val: f64,
+        jd_tt: JdTT,
+    ) -> Result<EclipticPosition, EphemerisError> {
+        let cart = self.reader.geocentric_position_au(Body::Moon, tdb_val)?;
+        Ok(self.cartesian_to_ecliptic_of_date(&cart, jd_tt))
+    }
 }
 
 impl EphemerisProvider for De440Provider {
@@ -2031,6 +2077,25 @@ impl EphemerisProvider for De440Provider {
                 && tdb_val <= self.reader.header().jd_end
                 && De440Target::from_body(body).is_some()
             {
+                // The Moon is handled separately: it must NOT receive the full
+                // annual aberration (κ = 20.49552″) that planets/Sun get, because
+                // the geocentric Moon shares Earth's heliocentric velocity. It
+                // gets only its small GEOCENTRIC light-time / planetary aberration
+                // (~0.7″). See `apparent_moon_de440`. On a genuine coverage gap
+                // (e.g. the ±h finite-difference samples straddle the kernel
+                // boundary) drop to the analytical fallback — which also applies
+                // the correct Moon reduction — rather than to the planet path
+                // below (that would wrongly re-apply annual aberration).
+                if body == Body::Moon {
+                    match self.apparent_moon_de440(tdb_val, jd_tt) {
+                        Ok(pos) => return Ok(pos.normalize()),
+                        Err(EphemerisError::BodyNotAvailable(_))
+                        | Err(EphemerisError::EpochOutOfRange(_)) => {
+                            return self.fallback.geocentric_ecliptic(body, jd_tt);
+                        }
+                        Err(e) => return Err(e),
+                    }
+                }
                 match self.reader.geocentric_position_au(body, tdb_val) {
                     Ok(cart0) => {
                         // Apparent place = light-time retardation + precession +
@@ -4094,11 +4159,14 @@ mod tests {
         let _ = std::fs::remove_file(&path);
     }
 
-    /// P1-15: the analytical provider's single `accuracy_arcsec` figure must not
-    /// be better (smaller) than the worst PHYSICAL body it serves. Two bounds are
-    /// enforced: (a) the live single-epoch Moon error (~17" at 2024), and (b) the
-    /// committed 5,000,000-chart Swiss MAX for the Moon (74"), which is the worst
-    /// physical-body residual across 1850-2150. The figure must bound BOTH.
+    /// The analytical provider's single `accuracy_arcsec` figure must not be
+    /// better (smaller) than the worst PHYSICAL body it serves. After the Moon
+    /// annual-aberration fix (the full κ=20.49552" term wrongly applied to the
+    /// geocentric Moon was removed) the Moon validates at RMS ~2.8" / max ~12"
+    /// vs pyswisseph (AD 1600-2100) — so the worst physical body is now the
+    /// long-period analytical Pluto (Meeus Ch.37, ~1 arcminute over 1885-2099),
+    /// NOT the Moon. The reported figure must bound (a) the live Moon error and
+    /// (b) that worst-physical-body (Pluto) residual.
     ///
     /// SCOPE: the derived lunar nodes (mean ~19", true ~111" vs Swiss) are NOT
     /// part of this physical-body figure by design — that deviation reflects
@@ -4129,22 +4197,25 @@ mod tests {
         }
         let moon_err_arcsec = d * 3600.0;
 
-        // Sanity: the Moon error really is in the ~17" regime, not zero.
+        // Post-fix the annual-aberration bug is gone: the live Moon error is now
+        // small (sub-arcsec at this epoch; <=~12" worst over 1600-2100 vs
+        // pyswisseph). It must NOT regress back to the old ~17-44" buggy regime.
         assert!(
-            moon_err_arcsec > 5.0,
-            "expected a measurable Moon error (~17\"), got {moon_err_arcsec}\""
+            moon_err_arcsec < 13.0,
+            "post-fix Moon should be accurate (sub-arcsec here, <=~12\" worst), got {moon_err_arcsec}\""
         );
-        // (a) bound the live single-epoch Moon error.
+        // (a) the reported figure must bound the live Moon error.
         assert!(
             claimed >= moon_err_arcsec,
             "claimed accuracy {claimed}\" must bound the live Moon error {moon_err_arcsec}\""
         );
-        // (b) bound the committed 5M-chart Moon MAX (74"), the worst physical body.
-        const MOON_5M_MAX_ARCSEC: f64 = 74.0;
+        // (b) and must bound the worst PHYSICAL body — now the long-period
+        // analytical Pluto (~1 arcminute over its 1885-2099 window), not the Moon.
+        const WORST_PHYSICAL_BODY_ARCSEC: f64 = 60.0; // Pluto ~1 arcmin
         assert!(
-            claimed >= MOON_5M_MAX_ARCSEC,
-            "claimed accuracy {claimed}\" must bound the 5M-chart Moon max \
-             {MOON_5M_MAX_ARCSEC}\" — the single figure must reflect the WORST physical body"
+            claimed >= WORST_PHYSICAL_BODY_ARCSEC,
+            "claimed accuracy {claimed}\" must bound the worst physical body \
+             (analytical Pluto ~{WORST_PHYSICAL_BODY_ARCSEC}\")"
         );
     }
 }

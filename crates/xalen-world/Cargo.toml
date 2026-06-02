@@ -10,6 +10,13 @@ categories = ["science", "mathematics"]
 
 [dependencies]
 serde.workspace = true
+# Reused for the Saju Ipchun (Li Chun) solar-year boundary and the Daeun
+# solar-term distance — Korean Saju shares the Chinese solar-term machinery
+# (only the stem/branch names differ). See `xalen_chinese::li_chun_jd`,
+# `solar_longitude_approx`. Pulling the published implementation keeps Saju and
+# BaZi astronomically consistent rather than re-deriving (and drifting from) the
+# same ephemeris approximation.
+xalen-chinese = { version = "0.6.0", path = "../xalen-chinese" }
 
 [lints]
 workspace = true

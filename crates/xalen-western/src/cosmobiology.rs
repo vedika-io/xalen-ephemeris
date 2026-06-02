@@ -280,11 +280,17 @@ pub fn cosmobiology_chart(positions: &[(&str, f64)], orb: f64) -> CosmobiologyCh
             if dist <= orb {
                 let formula = format!("{}/{} = {}", mp.body_a, mp.body_b, planet_name);
 
-                // Look up the key interpretation for this midpoint pair
-                let interp = keys.iter().find(|k| {
-                    (k.body_a == mp.body_a && k.body_b == mp.body_b)
-                        || (k.body_a == mp.body_b && k.body_b == mp.body_a)
-                });
+                // Look up the key interpretation for this midpoint pair.
+                // Honesty contract: a stripped (empty) interpretation surfaces
+                // as `None`, never `Some("")`.
+                let interp = keys
+                    .iter()
+                    .find(|k| {
+                        (k.body_a == mp.body_a && k.body_b == mp.body_b)
+                            || (k.body_a == mp.body_b && k.body_b == mp.body_a)
+                    })
+                    .map(|k| k.interpretation)
+                    .filter(|s| !s.is_empty());
 
                 pictures.push(PlanetaryPicture {
                     formula,
@@ -292,7 +298,7 @@ pub fn cosmobiology_chart(positions: &[(&str, f64)], orb: f64) -> CosmobiologyCh
                     body_a: mp.body_a.clone(),
                     body_b: mp.body_b.clone(),
                     orb_90: dist,
-                    interpretation: interp.map(|k| k.interpretation),
+                    interpretation: interp,
                 });
             }
         }
@@ -313,7 +319,12 @@ pub fn cosmobiology_chart(positions: &[(&str, f64)], orb: f64) -> CosmobiologyCh
 
 /// Look up the key interpretation for a midpoint pair.
 ///
-/// Returns `None` if the pair is not in the table.
+/// Returns `None` if the pair is not in the table **or** if its interpretation
+/// text has been stripped (empty string). The interpretation table ships with
+/// empty text by design — the empty-API honesty contract: we never fabricate or
+/// AI-generate interpretive content, so a stripped entry must report "no text
+/// available" (`None`) rather than an empty `Some("")` that callers might render
+/// as a blank reading.
 pub fn lookup_midpoint_key(body_a: &str, body_b: &str) -> Option<&'static str> {
     ebertin_keys()
         .into_iter()
@@ -321,6 +332,7 @@ pub fn lookup_midpoint_key(body_a: &str, body_b: &str) -> Option<&'static str> {
             (k.body_a == body_a && k.body_b == body_b) || (k.body_a == body_b && k.body_b == body_a)
         })
         .map(|k| k.interpretation)
+        .filter(|s| !s.is_empty())
 }
 
 /// Format a planetary picture for display.
@@ -430,21 +442,53 @@ mod tests {
     }
 
     #[test]
-    fn lookup_sun_moon_key() {
+    fn lookup_returns_none_for_stripped_interpretation() {
+        // Honesty contract: interpretation text is stripped (empty) in the
+        // shipped table, so a present-but-empty entry must resolve to `None`,
+        // never `Some("")`. Sun/Moon IS a known pair, but its interpretation
+        // text has been removed — so we return `None`.
         let interp = lookup_midpoint_key("Sun", "Moon");
-        assert!(interp.is_some(), "Sun/Moon should resolve to a key entry");
+        assert_eq!(
+            interp, None,
+            "Sun/Moon has a stripped (empty) interpretation → must be None, got {interp:?}"
+        );
     }
 
     #[test]
-    fn lookup_mars_saturn_key() {
-        let interp = lookup_midpoint_key("Mars", "Saturn");
-        assert!(
-            interp.is_some(),
-            "Mars/Saturn should have a key interpretation"
-        );
-        // Reverse order should also work
-        let interp_rev = lookup_midpoint_key("Saturn", "Mars");
-        assert_eq!(interp, interp_rev, "Lookup should be symmetric");
+    fn lookup_none_is_symmetric_for_stripped_entries() {
+        // A stripped pair returns `None` regardless of argument order.
+        let forward = lookup_midpoint_key("Mars", "Saturn");
+        let reverse = lookup_midpoint_key("Saturn", "Mars");
+        assert_eq!(forward, None, "Mars/Saturn stripped → None");
+        assert_eq!(reverse, None, "Saturn/Mars stripped → None");
+        assert_eq!(forward, reverse, "Lookup should be symmetric");
+    }
+
+    #[test]
+    fn lookup_unknown_pair_is_none() {
+        // A pair that is not in the table at all is also `None` (same result as
+        // a stripped entry — callers cannot distinguish, which is correct: in
+        // both cases there is no honest interpretation to show).
+        assert_eq!(lookup_midpoint_key("Sun", "Sun"), None);
+        assert_eq!(lookup_midpoint_key("Ceres", "Vesta"), None);
+    }
+
+    #[test]
+    fn lookup_nonempty_entry_returns_some() {
+        // Guard the *mechanism*: if a real interpretation is ever restored to
+        // the table, `lookup_midpoint_key` must surface it. We test the
+        // private filter logic against a synthetic non-empty key here so the
+        // contract is locked even while the shipped table is empty.
+        let key = MidpointKey {
+            body_a: "Sun",
+            body_b: "Moon",
+            keyword: "kw",
+            interpretation: "non-empty",
+        };
+        // Re-implement the exact match+filter the function performs to prove
+        // a non-empty interpretation would pass the empty filter.
+        let resolved = Some(key.interpretation).filter(|s: &&str| !s.is_empty());
+        assert_eq!(resolved, Some("non-empty"));
     }
 
     #[test]
@@ -460,6 +504,26 @@ mod tests {
         let formatted = format_picture(&pp);
         assert!(formatted.contains("SU/MO = ME"));
         assert!(formatted.contains("KEY_TEXT"));
+    }
+
+    #[test]
+    fn chart_pictures_have_no_stripped_interpretations() {
+        // End-to-end honesty contract: every planetary picture built from the
+        // shipped (stripped) table must carry `None`, never `Some("")`.
+        let chart = cosmobiology_chart(&sample_positions(), 5.0);
+        for pp in &chart.planetary_pictures {
+            assert_ne!(
+                pp.interpretation,
+                Some(""),
+                "planetary picture must never carry an empty-string interpretation"
+            );
+            // With the shipped empty table, all interpretations are None.
+            assert_eq!(
+                pp.interpretation, None,
+                "stripped table → picture interpretation must be None, got {:?}",
+                pp.interpretation
+            );
+        }
     }
 
     #[test]

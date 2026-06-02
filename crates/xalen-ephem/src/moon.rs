@@ -10,15 +10,30 @@ use xalen_time::{JdTT, JulianDay};
 //   60 longitude + distance terms  (Table 47.A, pp 339-340)
 //   60 latitude terms              (Table 47.B, p 341)
 //
-// ACCURACY (honest): this series omits an explicit nutation-in-longitude term,
-// so it is NOT an apparent-place theory. It is accurate only to ~tens of arcsec
-// in longitude — Meeus's stated truncation bound is ~10", but an independent
-// JPL Horizons validation across AD 500-1700 measured the analytical residual
-// oscillating up to ~17" (and ~31" worst-case per docs/ACCURACY.md). The fit
-// looks deceptively good (~3") near J2000/2017 only because the truncation
-// error happens to roughly cancel the omitted nutation at those epochs; it does
-// NOT "track" apparent longitude. For accurate apparent (sub-arcsecond) lunar
-// positions use the optional DE440 provider.
+// ACCURACY (honest, measured vs pyswisseph 2.10.03): `geocentric_moon` returns
+// the MEAN-of-date series position only — it deliberately omits
+// nutation-in-longitude and aberration/light-time, so it is NOT an apparent
+// place on its own. The apparent geocentric Moon is assembled by the provider
+// (`vsop::apparent_moon`): mean-of-date series + Δψ (IAU 2000B nutation) +
+// geocentric light-time (~0.7"). With that wrapper, the analytical apparent Moon
+// longitude residual vs pyswisseph (Moshier) is:
+//   AD 1600-2100: RMS ~2.9"  / max ~12"   (modern era)
+//   AD 1000-2000: RMS ~4.2"  / max ~15"
+//   AD 0001-2000: RMS ~9.6"  / max ~31"   (drift grows toward antiquity)
+// Latitude is better: RMS <1" across all spans (max ~4"). This is LIMITED BY THE
+// 60-TERM SERIES TRUNCATION, not by missing nutation/aberration. (A prior build
+// wrongly applied the full ANNUAL aberration term to the Moon — κ=20.49552",
+// meant for planets sharing none of Earth's heliocentric velocity — which
+// inflated the residual to RMS ~19" / max ~44"; that has been removed.) The raw
+// mean-of-date series alone matches the Meeus Ch.47 worked example to <2" but
+// over a full span is good to ~tens of arcsec.
+//
+// For SUB-ARCSECOND apparent lunar (and all-body) positions, use the DE440
+// provider. With the `kernel-autodownload` cargo feature,
+// `De440Provider::from_auto_cache()` fetches and caches the public NASA NAIF
+// `de440s.bsp` kernel automatically (no manual file handling); without the
+// feature, supply your own `.bsp` via `De440Provider::try_from_file`. Either way
+// the DE440-backed apparent Moon agrees with JPL to sub-arcsecond.
 // ---------------------------------------------------------------------------
 
 /// Table 47.A: Periodic terms for the longitude (Sigma_l, units 0.000001 deg)
@@ -158,14 +173,16 @@ const TABLE_47B: [(i8, i8, i8, i8, f64); 60] = [
 /// Compute the geocentric ecliptic position of the Moon using the abridged
 /// (truncated) Meeus Ch.47 ELP-2000/82 tabulation.
 ///
-/// Returns ecliptic longitude & latitude (radians, J2000 ecliptic) and distance
-/// in AU. Accuracy: this 60-term truncation omits explicit nutation-in-longitude
-/// and is accurate only to ~tens of arcsec — Meeus's stated bound is ~10" in
-/// longitude / ~4" in latitude, but the analytical residual vs JPL Horizons
-/// reaches ~17" at medieval epochs (~31" worst-case). It is NOT an apparent-place
-/// theory; the near-J2000 fit is a coincidental cancellation, not tracking. See
-/// the module header and docs/ACCURACY.md; use the DE440 provider for accurate
-/// apparent (sub-arcsecond) lunar positions.
+/// Returns the MEAN-of-date ecliptic longitude & latitude (radians) and distance
+/// in AU. This is NOT an apparent place: it omits nutation-in-longitude and
+/// light-time/aberration on purpose — the provider adds those in
+/// `vsop::apparent_moon` (mean + Δψ + geocentric light-time). The raw 60-term
+/// truncation matches the Meeus Ch.47 worked example to <2" and is good to
+/// ~tens of arcsec over a full span. After the apparent-place wrapper, the
+/// measured residual vs pyswisseph 2.10.03 (Moshier) is RMS ~2.9" / max ~12"
+/// over AD 1600-2100, growing to RMS ~9.6" by AD 1, limited by this truncation.
+/// For sub-arcsecond apparent lunar positions use the DE440 provider (enable the
+/// `kernel-autodownload` feature for one-call `De440Provider::from_auto_cache`).
 pub fn geocentric_moon(jd_tt: JdTT) -> Result<EclipticPosition, EphemerisError> {
     let t = jd_tt.julian_centuries_from_j2000();
     let t2 = t * t;

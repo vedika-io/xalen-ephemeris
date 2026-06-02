@@ -46,23 +46,39 @@ pub struct CatalogStar {
 
 /// IAU 2006 J2000 general-precession linear rate (50.28796″/yr); see
 /// `lib.rs::PRECESSION_DEG_PER_YEAR` for the provenance note.
+///
+/// Retained for the precession-rate regression test below; the actual
+/// precession is now the rigorous IAU 2006/P03 rotation (see
+/// `crate::precessed_ecliptic_of_date`), not this scalar.
+#[allow(dead_code)]
 const PRECESSION_DEG_PER_YEAR: f64 = 50.28796 / 3600.0;
 
 impl CatalogStar {
-    /// Ecliptic longitude at a given decimal year, accounting for precession
-    /// and proper motion.
+    /// Ecliptic longitude (degrees, `[0, 360)`) at a given decimal year,
+    /// rigorously precessed from J2000 with the IAU 2006/P03 rotation plus
+    /// proper motion. See `crate::precessed_ecliptic_of_date` for the method
+    /// and its Swiss-validated accuracy. (The previous planar `longitude +=
+    /// rate·dt` model held ecliptic latitude FIXED, misplacing high-latitude
+    /// stars by up to ~0.06°/1000 yr vs Swiss for Vega.)
     pub fn longitude_at_epoch(&self, year: f64) -> f64 {
-        let dt = year - 2000.0;
-        let precession = PRECESSION_DEG_PER_YEAR * dt;
-        let pm = self.pm_lon_mas_per_year * dt / 3_600_000.0;
-        (self.longitude_j2000 + precession + pm).rem_euclid(360.0)
+        self.ecliptic_at_epoch(year).0
     }
 
-    /// Ecliptic latitude at a given decimal year, accounting for proper motion.
+    /// Ecliptic latitude (degrees, signed) at a given decimal year, now
+    /// precession-coupled (not proper-motion-only).
     pub fn latitude_at_epoch(&self, year: f64) -> f64 {
-        let dt = year - 2000.0;
-        let pm = self.pm_lat_mas_per_year * dt / 3_600_000.0;
-        self.latitude_j2000 + pm
+        self.ecliptic_at_epoch(year).1
+    }
+
+    /// Both ecliptic coordinates at once (degrees): `(longitude, latitude)`.
+    pub fn ecliptic_at_epoch(&self, year: f64) -> (f64, f64) {
+        crate::precessed_ecliptic_of_date(
+            self.longitude_j2000,
+            self.latitude_j2000,
+            self.pm_lon_mas_per_year,
+            self.pm_lat_mas_per_year,
+            year,
+        )
     }
 
     /// Ecliptic longitude at a given Julian Date.
@@ -356,6 +372,11 @@ Vega,279.234,38.783,0.03,201.0,287.5,285.45,61.73
 
     #[test]
     fn precession_applied() {
+        // On-ecliptic (lat = 0), zero-pm star: the rigorous IAU 2006/P03
+        // rotation's longitude advance is within ~0.0003 deg of the
+        // leading-order linear rate over a century, but it is the full rotation,
+        // not the planar formula. (For off-ecliptic stars the two diverge much
+        // more — that divergence is the bug the rotation fixes.)
         let csv = "name,ra_deg,dec_deg,magnitude,pm_ra,pm_dec,ecl_lon,ecl_lat\n\
                    TestStar,0.0,0.0,5.0,0.0,0.0,100.0,0.0\n";
         let stars = load_catalog_from_str(csv).unwrap();
@@ -364,7 +385,7 @@ Vega,279.234,38.783,0.03,201.0,287.5,285.45,61.73
         let expected = 100.0 + PRECESSION_DEG_PER_YEAR * 100.0;
         assert!(
             (lon_2100 - expected).abs() < 0.001,
-            "100yr precession: expected {expected}, got {lon_2100}"
+            "100yr precession: expected ~{expected}, got {lon_2100}"
         );
     }
 

@@ -29,6 +29,19 @@ impl Almanac {
         self
     }
 
+    /// Convert a UT1 Julian Day to TT using this almanac's ΔT model. Shared by
+    /// the alternative-output accessors (`output.rs`) and return finders so they
+    /// use the identical ΔT the geocentric path uses.
+    pub(crate) fn to_tt(&self, jd_ut1: JdUT1) -> JdTT {
+        jd_ut1.to_tt(&self.delta_t_model)
+    }
+
+    /// Borrow the provider chain (for output/frame accessors that need the same
+    /// coverage-aware fall-through as the geocentric paths).
+    pub(crate) fn providers_slice(&self) -> &[Arc<dyn EphemerisProvider>] {
+        &self.providers
+    }
+
     /// Compute geocentric ecliptic position, converting UT1 to TT internally.
     pub fn geocentric_ecliptic(
         &self,
@@ -180,10 +193,18 @@ impl Almanac {
     ) -> Result<f64, EphemerisError> {
         let topo = self.topocentric_ecliptic(body, jd_ut1, lat_deg, lon_deg, elevation_m)?;
         let jd_tt = jd_ut1.to_tt(&self.delta_t_model);
-        let eps = mean_obliquity(jd_tt.julian_centuries_from_j2000());
+        // `topo` is on the TRUE equinox of date (apparent ecliptic-of-date), so the
+        // ecliptic→equatorial rotation must use the TRUE obliquity (mean + Δε) and
+        // the meridian sidereal time must be APPARENT (GAST = GMST + Δψ·cos ε_true),
+        // keeping RA and sidereal time on the same equinox. This mirrors the
+        // sibling altitude path above (and topocentric::topocentric_ecliptic); the
+        // earlier mean-obliquity + bare-GMST form left a Δε-/equation-of-equinoxes-
+        // sized (~tens-of-arcsec) inconsistency that biased rise/set/transit times.
+        let t = jd_tt.julian_centuries_from_j2000();
+        let eps = mean_obliquity(t) + nutation_2000b(t).delta_epsilon; // true obliquity of date
         let eq = ecliptic_to_equatorial(&topo, eps);
-        let lst = crate::topocentric::gmst_deg(jd_ut1.as_f64()) + lon_deg;
-        let ha = lst - eq.right_ascension.to_degrees();
+        let last_deg = xalen_coords::gast_deg(jd_ut1.as_f64(), t) + lon_deg;
+        let ha = last_deg - eq.right_ascension.to_degrees();
         // Wrap to (−180, 180].
         let mut h = ha.rem_euclid(360.0);
         if h > 180.0 {

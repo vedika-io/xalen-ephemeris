@@ -891,15 +891,17 @@ fn de440_moon_at_j2000_matches_jpl_apparent_longitude() {
         vsop_moon, vsop_err
     );
 
-    // The DE440 path computes the full apparent place (precession + IAU 2000B
-    // nutation + annual aberration; the Moon is taken geometric at the
-    // observation epoch — retarding its Earth-relative vector would inject
-    // Earth's motion). It must agree with the JPL apparent longitude to inside
-    // 0.01° (36"). Measured residual at J2000 is ~11" — within tolerance, but
-    // larger than the truncated-ELP VSOP path (~3") at this single epoch, so the
-    // DE440 lunar apparent-place reduction carries a small residual still worth
-    // investigating (see the diagnostic branch below). We assert correctness vs
-    // the independent JPL value, NOT that DE440 beats VSOP here.
+    // The DE440 path computes the apparent Moon as: geometric geocentric vector
+    // (taken at the observation epoch — retarding its Earth-relative vector would
+    // inject Earth's motion) + IAU 2006 precession + IAU 2000B nutation +
+    // GEOCENTRIC light-time (~0.7"), and deliberately NOT the full annual
+    // aberration (κ=20.49552") that planets/Sun receive — the geocentric Moon
+    // shares Earth's heliocentric velocity. (A prior build applied annual
+    // aberration to the Moon, which inflated the J2000 residual to ~11"; that bug
+    // is removed.) The DE440 apparent Moon now agrees with the JPL apparent
+    // longitude to sub-arcsecond — far inside the 0.01° (36") tolerance — and is
+    // closer than the truncated-ELP VSOP path (~1-3"). We assert correctness vs
+    // the independent JPL value.
     assert!(
         de440_err < 0.01,
         "Moon at J2000 via DE440: error = {:.5} deg (expected < 0.01 deg from JPL ref {:.4} deg)",
@@ -947,19 +949,21 @@ fn de440_provider_reports_correct_metadata() {
         provider.name()
     );
 
-    // The quoted figure must describe the WORST physical body the DE440 provider
-    // serves through its apparent-place reduction — the Moon, whose measured
-    // residual vs JPL Horizons is ~11" (see
-    // `de440_moon_at_j2000_matches_jpl_apparent_longitude`). It is NOT a
-    // 1" figure (raw geometry is sub-mas, but the lunar apparent-place reduction
-    // is not). Bound it below the 36" (0.01°) cross-validation tolerance and at or
-    // above the measured Moon residual so the API claim cannot be tighter than the
-    // worst body actually achieves.
+    // The quoted figure conservatively bounds the apparent-place reduction the
+    // DE440 provider serves. The Moon used to be the worst body at ~11", but that
+    // was the annual-aberration bug (the Moon was wrongly given the κ=20.49552"
+    // term meant for planets); with it removed the apparent Moon is sub-arcsecond
+    // like the Sun and planets (see
+    // `de440_moon_at_j2000_matches_jpl_apparent_longitude`). It is NOT a sub-mas
+    // figure (that is the RAW geometry; the apparent-place reduction is slightly
+    // larger), so the API claim sits at a conservative 2" — above the measured
+    // worst body, below the 36" (0.01°) cross-validation tolerance.
     let acc = provider.accuracy_arcsec();
     assert!(
-        (11.0..=36.0).contains(&acc),
-        "DE440 apparent-place accuracy must bound the worst body (Moon ~11\") and \
-         stay within the 36\" cross-validation tolerance, got {acc} arcsec"
+        (1.0..=36.0).contains(&acc),
+        "DE440 apparent-place accuracy must bound the worst body (sub-arcsec after \
+         the Moon annual-aberration fix) and stay within the 36\" cross-validation \
+         tolerance, got {acc} arcsec"
     );
 
     let (start, end) = provider.coverage();

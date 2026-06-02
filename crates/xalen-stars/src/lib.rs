@@ -1,4 +1,6 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::sync::LazyLock;
 
 pub mod catalog;
 #[rustfmt::skip]
@@ -7,12 +9,78 @@ pub mod catalog_generated;
 pub use catalog_generated::{GENERATED_CATALOG, GENERATED_STAR_COUNT};
 
 /// General precession in longitude — IAU 2006 J2000 linear rate
-/// (5028.796195″/century → 50.28796″/yr). The fixed-star catalog applies this
-/// as a LINEAR term from J2000, NOT the full IAU 2006 precession polynomial
-/// (that is reserved for the planetary engine). Previously this was Newcomb's
-/// 1900-epoch 50.2564″/yr; the v0.4 P1 CHANGELOG claimed this correction but the
-/// commit had no xalen-stars diff — it is applied here.
+/// (5028.796195″/century → 50.28796″/yr).
+///
+/// HISTORICAL NOTE / now used only for documentation and the legacy
+/// regression guards: the catalog NO LONGER precesses stars by adding this
+/// scalar to ecliptic longitude while holding latitude fixed. That planar
+/// approximation FROZE ecliptic latitude, so it misplaced high-ecliptic-latitude
+/// stars — for Vega (+61.7°) by ~0.06°/1000 yr vs Swiss, almost all of it in the
+/// latitude it refused to move; for low-latitude stars the longitude term was
+/// nearly right but latitude still drifted. Positions are now precessed with the
+/// SOFA-validated IAU 2006/P03 rotation via [`precessed_ecliptic_of_date`] (see
+/// that function), which couples longitude and latitude and matches Swiss to
+/// < 0.1′. The rate is kept as a named constant because it remains the
+/// leading-order longitude term and the precession-rate regression tests assert
+/// against it. (Only referenced from `#[cfg(test)]` now, hence the allow.)
+#[allow(dead_code)]
 const PRECESSION_DEG_PER_YEAR: f64 = 50.28796 / 3600.0;
+
+/// Julian Date of the J2000.0 epoch (2000-01-01 12:00 TT).
+const J2000_JD: f64 = 2_451_545.0;
+
+/// Rigorously precess a J2000.0 ecliptic star position (with proper motion) to
+/// the **mean ecliptic of date** for a given decimal `year`.
+///
+/// Pipeline (matches `xalen-ayanamsa`'s `fixed_point_apparent_longitude` and the
+/// VSOP/asteroid/Chiron position paths):
+///
+/// 1. Apply proper motion linearly in the J2000 ecliptic frame (mas/yr → deg).
+/// 2. Build the IAU 2006/P03 precession rotation WITHOUT frame bias
+///    ([`xalen_coords::precession_matrix_p03_nobias`]) — the catalogue equinox
+///    is the dynamical mean equinox of J2000, so the bias must NOT be applied.
+/// 3. Rotate the J2000 ecliptic direction to the ecliptic of date through the
+///    rigorous Cartesian pipeline ([`xalen_coords::precess_ecliptic_to_of_date`]),
+///    which couples longitude AND latitude (the missing coupling was the old
+///    planar bug).
+///
+/// The Julian-century argument `t` is taken as `(year − 2000)/100`, consistent
+/// with this module's `year ↔ jd` convention (`year = 2000 + (jd − 2451545)/365.25`),
+/// so `*_at_epoch` and `*_at_jd` round-trip exactly. The returned longitude is
+/// wrapped to `[0, 360)`; latitude is signed.
+///
+/// Validated against `pyswisseph` `swe.fixstar2` (mean ecliptic of date,
+/// `FLG_SWIEPH | FLG_NONUT | FLG_NOABERR | FLG_NOGDEFL`) at 1000 CE and 3000 CE
+/// for Polaris, Aldebaran, Spica, Antares, Regulus, Sirius and Pollux: worst
+/// total separation 0.074′ (≈4.4″), all under 0.1′. See the
+/// `precession_*_multi_epoch_*` tests.
+fn precessed_ecliptic_of_date(
+    longitude_j2000_deg: f64,
+    latitude_j2000_deg: f64,
+    pm_lon_mas_per_year: f64,
+    pm_lat_mas_per_year: f64,
+    year: f64,
+) -> (f64, f64) {
+    let dt = year - 2000.0;
+    // Step 1: proper motion in the J2000 ecliptic frame (mas/yr → deg).
+    let lon_pm = longitude_j2000_deg + pm_lon_mas_per_year * dt / 3_600_000.0;
+    let lat_pm = latitude_j2000_deg + pm_lat_mas_per_year * dt / 3_600_000.0;
+
+    // Step 2+3: rigorous IAU 2006/P03 rotation to the ecliptic of date.
+    let t = dt / 100.0; // Julian centuries from J2000 (year convention).
+    let pos = xalen_coords::EclipticPosition {
+        longitude: lon_pm.to_radians(),
+        latitude: lat_pm.to_radians(),
+        distance: 1.0,
+    };
+    let prec = xalen_coords::precession_matrix_p03_nobias(t);
+    let of_date = xalen_coords::precess_ecliptic_to_of_date(pos, prec, t);
+
+    (
+        of_date.longitude.to_degrees().rem_euclid(360.0),
+        of_date.latitude.to_degrees(),
+    )
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FixedStar {
@@ -29,21 +97,37 @@ pub struct FixedStar {
 }
 
 impl FixedStar {
+    /// Ecliptic longitude (degrees, `[0, 360)`) at a given decimal `year`,
+    /// rigorously precessed from J2000 with the IAU 2006/P03 rotation plus
+    /// proper motion. See [`precessed_ecliptic_of_date`] for the method and its
+    /// Swiss-validated accuracy (the previous planar `longitude += rate·dt`
+    /// model held ecliptic latitude FIXED, misplacing high-latitude stars by
+    /// up to ~0.06°/1000 yr vs Swiss for Vega).
     pub fn longitude_at_epoch(&self, year: f64) -> f64 {
-        let dt = year - 2000.0;
-        let precession = PRECESSION_DEG_PER_YEAR * dt;
-        let pm = self.pm_lon_mas_per_year * dt / 3_600_000.0; // mas to degrees
-        (self.longitude_j2000 + precession + pm).rem_euclid(360.0)
+        self.ecliptic_at_epoch(year).0
     }
 
+    /// Ecliptic latitude (degrees, signed) at a given decimal `year`. Now
+    /// precession-coupled (not proper-motion-only): the rigorous rotation
+    /// changes latitude with epoch, matching Swiss Ephemeris.
     pub fn latitude_at_epoch(&self, year: f64) -> f64 {
-        let dt = year - 2000.0;
-        let pm = self.pm_lat_mas_per_year * dt / 3_600_000.0;
-        self.latitude_j2000 + pm
+        self.ecliptic_at_epoch(year).1
+    }
+
+    /// Both ecliptic coordinates at once (degrees): `(longitude, latitude)`.
+    /// Computing them together avoids precessing the same star twice.
+    pub fn ecliptic_at_epoch(&self, year: f64) -> (f64, f64) {
+        precessed_ecliptic_of_date(
+            self.longitude_j2000,
+            self.latitude_j2000,
+            self.pm_lon_mas_per_year,
+            self.pm_lat_mas_per_year,
+            year,
+        )
     }
 
     pub fn longitude_at_jd(&self, jd: f64) -> f64 {
-        let year = 2000.0 + (jd - 2_451_545.0) / 365.25;
+        let year = 2000.0 + (jd - J2000_JD) / 365.25;
         self.longitude_at_epoch(year)
     }
 }
@@ -77,24 +161,33 @@ pub struct GeneratedStar {
 }
 
 impl GeneratedStar {
-    /// Ecliptic longitude at a given decimal year (precession + proper motion).
+    /// Ecliptic longitude (degrees, `[0, 360)`) at a given decimal year,
+    /// rigorously precessed from J2000 with the IAU 2006/P03 rotation plus
+    /// proper motion. See [`precessed_ecliptic_of_date`].
     pub fn longitude_at_epoch(&self, year: f64) -> f64 {
-        let dt = year - 2000.0;
-        let precession = PRECESSION_DEG_PER_YEAR * dt;
-        let pm = self.pm_lon_mas_per_year * dt / 3_600_000.0;
-        (self.longitude_j2000 + precession + pm).rem_euclid(360.0)
+        self.ecliptic_at_epoch(year).0
     }
 
-    /// Ecliptic latitude at a given decimal year (proper motion only).
+    /// Ecliptic latitude (degrees, signed) at a given decimal year, now
+    /// precession-coupled (not proper-motion-only).
     pub fn latitude_at_epoch(&self, year: f64) -> f64 {
-        let dt = year - 2000.0;
-        let pm = self.pm_lat_mas_per_year * dt / 3_600_000.0;
-        self.latitude_j2000 + pm
+        self.ecliptic_at_epoch(year).1
+    }
+
+    /// Both ecliptic coordinates at once (degrees): `(longitude, latitude)`.
+    pub fn ecliptic_at_epoch(&self, year: f64) -> (f64, f64) {
+        precessed_ecliptic_of_date(
+            self.longitude_j2000,
+            self.latitude_j2000,
+            self.pm_lon_mas_per_year,
+            self.pm_lat_mas_per_year,
+            year,
+        )
     }
 
     /// Ecliptic longitude at a given Julian Date.
     pub fn longitude_at_jd(&self, jd: f64) -> f64 {
-        let year = 2000.0 + (jd - 2_451_545.0) / 365.25;
+        let year = 2000.0 + (jd - J2000_JD) / 365.25;
         self.longitude_at_epoch(year)
     }
 }
@@ -112,12 +205,136 @@ pub fn find_generated_by_hip(hip: u32) -> Option<&'static GeneratedStar> {
 }
 
 /// Find a generated star by traditional name (case-insensitive). Only the
-/// ~100 IAU-joined stars carry a name.
+/// IAU-joined stars carry a name.
 pub fn find_generated_by_name(name: &str) -> Option<&'static GeneratedStar> {
     GENERATED_CATALOG
         .iter()
         .find(|s| s.name.is_some_and(|n| n.eq_ignore_ascii_case(name)))
 }
+
+/// Curated traditional name → Hipparcos (HIP) identifier, for the handful of
+/// curated names whose spelling differs from the IAU-WGSN name in
+/// `catalog_generated.rs` (so an exact-name join would miss).
+///
+/// This is the runtime counterpart to `tools/gen-star-catalog/gen_catalog.py`'s
+/// `CURATED_TO_IAU` / `CURATED_TO_HIP` maps: it lets [`find_generated_for_curated`]
+/// resolve these names to their validated Hipparcos row **by HIP number** even
+/// if the generated catalog was produced without the alias join. Each HIP is the
+/// documented identification of the curated star, sourced as follows:
+///
+/// | Curated name      | Star                | IAU-WGSN name    | HIP   |
+/// |-------------------|---------------------|------------------|-------|
+/// | `Zuben Elgenubi`  | α² Librae           | Zubenelgenubi    | 72622 |
+/// | `Zuben Eschamali` | β Librae            | Zubeneschamali   | 74785 |
+/// | `Bharani 41`      | 41 Arietis          | Bharani          | 13209 |
+/// | `Lambda Orionis`  | λ Orionis           | Meissa           | 26207 |
+/// | `Hyadum II`       | δ¹ Tauri            | Secunda Hyadum   | 20455 |
+/// | `Al Jabhah`       | η Leonis (HR 4031)  | *(none — WGSN)*  | 49583 |
+///
+/// η Leonis has no IAU-WGSN proper name (WGSN named ζ Leonis "Adhafera" and
+/// γ¹ Leonis "Algieba"; η Leonis is a distinct, unnamed star), so "Al Jabhah" is
+/// a traditional designation resolved by HIP only. The position, magnitude and
+/// proper motion still come entirely from the Hipparcos record for that HIP.
+const CURATED_NAME_HIP: &[(&str, u32)] = &[
+    ("zuben elgenubi", 72622),
+    ("zuben eschamali", 74785),
+    ("bharani 41", 13209),
+    ("lambda orionis", 26207),
+    ("hyadum ii", 20455),
+    ("al jabhah", 49583),
+];
+
+/// Resolve a curated catalog entry to its validated Hipparcos-derived row.
+///
+/// Tries an exact (case-insensitive) name join first — this succeeds for the
+/// ~100 names whose curated spelling matches the generated catalog (and, after
+/// regeneration with the alias map, for the aliased names too). For the handful
+/// of curated names whose spelling differs from the IAU-WGSN name, it falls back
+/// to a HIP-number lookup via [`CURATED_NAME_HIP`], so the reconciliation is
+/// correct regardless of how the generated catalog was produced. Returns `None`
+/// only for genuine clusters (Pleiades, Praesepe) with no single HIP star.
+fn find_generated_for_curated(name: &str) -> Option<&'static GeneratedStar> {
+    if let Some(s) = find_generated_by_name(name) {
+        return Some(s);
+    }
+    let lower = name.to_ascii_lowercase();
+    CURATED_NAME_HIP
+        .iter()
+        .find(|(n, _)| *n == lower.as_str())
+        .and_then(|&(_, hip)| find_generated_by_hip(hip))
+}
+
+impl GeneratedStar {
+    /// Adapt a named HIP-derived star into the legacy [`FixedStar`] shape.
+    ///
+    /// Used to back the public [`find_by_name`] lookup with the validated
+    /// Hipparcos catalog (sub-arcsecond vs Swiss) while preserving the
+    /// `FixedStar` API that downstream callers depend on. The `name` argument
+    /// supplies the canonical `'static` name string (the generated catalog's
+    /// own `name` is also `'static`, but the curated spelling is authoritative
+    /// for the public surface). Position, latitude, magnitude, nature,
+    /// constellation and the ecliptic proper-motion components are taken from
+    /// the validated generated record.
+    fn to_fixed_star(&self, name: &'static str) -> FixedStar {
+        FixedStar {
+            name,
+            constellation: self.constellation,
+            longitude_j2000: self.longitude_j2000,
+            latitude_j2000: self.latitude_j2000,
+            magnitude: self.magnitude,
+            nature: self.nature,
+            pm_lon_mas_per_year: self.pm_lon_mas_per_year,
+            pm_lat_mas_per_year: self.pm_lat_mas_per_year,
+        }
+    }
+}
+
+/// The public fixed-star catalog, reconciled against the validated Hipparcos
+/// catalog.
+///
+/// For every curated [`CATALOG`] entry whose traditional name resolves to a
+/// named star in the sub-arcsecond-accurate [`GENERATED_CATALOG`], the position,
+/// latitude, magnitude, nature and ecliptic proper-motion components are
+/// REPLACED by the validated Hipparcos-derived values; only the canonical name
+/// (a `'static str`) is carried over from the curated entry. The name join is
+/// resolved by [`find_generated_for_curated`], which tries an exact name match
+/// and then a documented HIP-number alias ([`CURATED_NAME_HIP`]) for the handful
+/// of curated names whose spelling differs from the IAU-WGSN name (e.g.
+/// "Bharani 41" → Bharani/HIP 13209, "Lambda Orionis" → Meissa/HIP 26207).
+///
+/// The ONLY curated entries kept verbatim as a fallback are the two open
+/// clusters — Pleiades and Praesepe — which have no single Hipparcos star.
+///
+/// This is the data the public [`find_by_name`] / [`find_conjunctions`] /
+/// [`nakshatra_yogatara`] surface reads. The raw curated [`CATALOG`] previously
+/// backed those lookups directly and carried gross J2000 longitude errors
+/// (Polaris ~60°, Deneb ~30°, Dubhe ~31°); see the `swiss_star_oracle.rs`
+/// integration test for the Swiss-Ephemeris ground truth this reconciliation
+/// now matches.
+static RECONCILED_CATALOG: LazyLock<Vec<FixedStar>> = LazyLock::new(|| {
+    CATALOG
+        .iter()
+        .map(|curated| {
+            match find_generated_for_curated(curated.name) {
+                // Validated HIP data exists for this name — prefer it.
+                Some(g) => g.to_fixed_star(curated.name),
+                // No HIP match (an open cluster) — keep the curated entry.
+                None => curated.clone(),
+            }
+        })
+        .collect()
+});
+
+/// Case-insensitive name → index map into [`RECONCILED_CATALOG`].
+static NAME_INDEX: LazyLock<HashMap<String, usize>> = LazyLock::new(|| {
+    let mut idx = HashMap::with_capacity(RECONCILED_CATALOG.len());
+    for (i, star) in RECONCILED_CATALOG.iter().enumerate() {
+        // First spelling wins; the catalog has no duplicate names (asserted by
+        // the `no_duplicate_names` test).
+        idx.entry(star.name.to_ascii_lowercase()).or_insert(i);
+    }
+    idx
+});
 
 /// Find conjunctions in the **expanded** HIP catalog (all stars Vmag ≤ 6.5).
 ///
@@ -148,12 +365,16 @@ pub fn find_conjunctions(planet_lon_deg: f64, orb_deg: f64) -> Vec<(&'static Fix
     find_conjunctions_at_epoch(planet_lon_deg, orb_deg, 2000.0)
 }
 
+/// Conjunctions against the astrologically-named set, using validated
+/// Hipparcos-derived positions (the reconciled catalog; see
+/// [`RECONCILED_CATALOG`]). For breadth across all 8,870 HIP stars, use
+/// [`find_conjunctions_expanded`].
 pub fn find_conjunctions_at_epoch(
     planet_lon_deg: f64,
     orb_deg: f64,
     year: f64,
 ) -> Vec<(&'static FixedStar, f64)> {
-    CATALOG
+    RECONCILED_CATALOG
         .iter()
         .filter_map(|star| {
             let star_lon = star.longitude_at_epoch(year);
@@ -168,8 +389,18 @@ pub fn find_conjunctions_at_epoch(
         .collect()
 }
 
+/// Find a fixed star by traditional name (case-insensitive).
+///
+/// Returns positions backed by the validated Hipparcos [`GENERATED_CATALOG`]
+/// (sub-arcsecond vs Swiss Ephemeris) for every named star — including the
+/// curated names whose spelling differs from the IAU-WGSN name, resolved via
+/// [`find_generated_for_curated`]. The only names that fall back to the curated
+/// [`CATALOG`] coordinates are the two open clusters (Pleiades, Praesepe), which
+/// have no single Hipparcos star. See [`RECONCILED_CATALOG`] for the rules.
 pub fn find_by_name(name: &str) -> Option<&'static FixedStar> {
-    CATALOG.iter().find(|s| s.name.eq_ignore_ascii_case(name))
+    NAME_INDEX
+        .get(&name.to_ascii_lowercase())
+        .map(|&i| &RECONCILED_CATALOG[i])
 }
 
 /// Maps a nakshatra index (0 = Ashwini, 26 = Revati) to its primary
@@ -1458,43 +1689,305 @@ mod tests {
     #[test]
     fn proper_motion_arcturus_significant_over_1000yr() {
         let arc = find_by_name("Arcturus").unwrap();
+        // Arcturus's ECLIPTIC longitude proper motion is ~-281 mas/yr. (Its
+        // famous ~1100 mas/yr figure is the EQUATORIAL pmRA*cos(dec); the
+        // curated catalog used to mislabel that equatorial value as ecliptic.
+        // The validated Hipparcos-derived ecliptic component now backs this
+        // lookup — cross-checked against Swiss `fixstar2` at FLG_J2000.)
         assert!(
-            arc.pm_lon_mas_per_year.abs() > 1000.0,
-            "Arcturus should have very large proper motion"
+            arc.pm_lon_mas_per_year.abs() > 250.0,
+            "Arcturus ecliptic pm_lon should be ~281 mas/yr, got {}",
+            arc.pm_lon_mas_per_year
         );
 
         let lon_2000 = arc.longitude_at_epoch(2000.0);
         let lon_3000 = arc.longitude_at_epoch(3000.0);
         let diff = (lon_3000 - lon_2000).rem_euclid(360.0);
-        // Precession +13.96, pm_lon -1093.4*1000/3.6e6 = -0.304 deg. Net ~13.66
+        // Precession +13.969, pm_lon -281.237*1000/3.6e6 = -0.078 deg. Net ~13.89
         assert!(
             diff > 13.0 && diff < 15.0,
-            "Arcturus 1000yr lon shift should be ~13.66 deg, got {diff}"
+            "Arcturus 1000yr lon shift should be ~13.89 deg, got {diff}"
         );
     }
 
     #[test]
-    fn proper_motion_zero_stars_match_pure_precession() {
-        // Polaris has pm = 0.0, so should match pure precession exactly
-        let pol = find_by_name("Polaris").unwrap();
-        let lon_2100 = pol.longitude_at_epoch(2100.0);
-        let expected = (pol.longitude_j2000 + PRECESSION_DEG_PER_YEAR * 100.0).rem_euclid(360.0);
+    fn proper_motion_zero_stars_track_pure_rotation_precession() {
+        // Praesepe (the Beehive cluster, M44) has no single Hipparcos star, so
+        // it is kept as a curated-catalog fallback with pm = 0.0 — its motion
+        // is therefore pure precession, no proper motion.
+        //
+        // The longitude advance is CLOSE to the planar scalar
+        // (PRECESSION_DEG_PER_YEAR · dt) but NOT identical: the rigorous IAU
+        // 2006/P03 rotation couples latitude into longitude, so over a century
+        // it differs from the planar value by ~0.0005° (≈2″) for this
+        // low-latitude (+1.5°) cluster. We assert the rotation result is in the
+        // right neighbourhood of the leading-order rate yet provably distinct
+        // from the old planar model (which is the whole point of the fix).
+        let star = find_by_name("Praesepe").unwrap();
+        assert_eq!(
+            star.pm_lon_mas_per_year, 0.0,
+            "Praesepe is a cluster fallback with zero proper motion"
+        );
+        assert_eq!(star.pm_lat_mas_per_year, 0.0);
+
+        let lon_2100 = star.longitude_at_epoch(2100.0);
+        let planar = (star.longitude_j2000 + PRECESSION_DEG_PER_YEAR * 100.0).rem_euclid(360.0);
+        // Within ~0.01° of the leading-order linear rate …
         assert!(
-            (lon_2100 - expected).abs() < 1e-10,
-            "Zero-pm star should match pure precession"
+            (lon_2100 - planar).abs() < 0.01,
+            "rotation longitude {lon_2100} should be within ~0.01 deg of the \
+             leading-order planar rate {planar}"
+        );
+        // … but NOT bit-identical: the latitude coupling makes them differ.
+        assert!(
+            (lon_2100 - planar).abs() > 1e-6,
+            "rigorous rotation MUST differ from the old planar model (got \
+             identical {lon_2100} vs {planar}) — the planar bug is back"
+        );
+        // Latitude is no longer frozen: precession changes it even with zero pm.
+        let lat_2100 = star.latitude_at_epoch(2100.0);
+        assert!(
+            (lat_2100 - star.latitude_j2000).abs() > 1e-4,
+            "precession should move ecliptic latitude (zero-pm star): \
+             {lat_2100} vs J2000 {}",
+            star.latitude_j2000
         );
     }
 
     #[test]
-    fn latitude_proper_motion_works() {
+    fn latitude_changes_with_precession_and_proper_motion() {
         let sirius = find_by_name("Sirius").unwrap();
         let lat_2000 = sirius.latitude_at_epoch(2000.0);
         let lat_3000 = sirius.latitude_at_epoch(3000.0);
         let diff = lat_3000 - lat_2000;
-        // -1223.1 mas/yr * 1000 yr / 3_600_000 = -0.3398 deg
+        // Sirius ecliptic pm_lat = -1271.994 mas/yr → -0.35333 deg PM-only over
+        // 1000 yr. But the rigorous IAU 2006/P03 rotation also precesses
+        // latitude (the planar model wrongly held it fixed), and that coupling
+        // partly cancels the proper motion here: the net Δlat is ~-0.2327 deg.
+        // pyswisseph `swe.fixstar2` (mean ecliptic of date) gives Sirius lat
+        // -39.6052 (2000 CE) → -39.8385 (3000 CE), Δ = -0.2333 deg — our
+        // -0.2327 matches to <0.04′.
         assert!(
-            (diff - (-0.3398)).abs() < 0.01,
-            "Sirius lat shift over 1000yr should be ~-0.34 deg, got {diff}"
+            (diff - (-0.23271)).abs() < 0.01,
+            "Sirius lat shift over 1000yr should be ~-0.2327 deg (precession + \
+             proper motion), got {diff}"
+        );
+        // The point of the fix: latitude is NOT proper-motion-only any more.
+        let pm_only = sirius.pm_lat_mas_per_year * 1000.0 / 3_600_000.0; // ≈ -0.35333
+        assert!(
+            (diff - pm_only).abs() > 0.05,
+            "latitude must now include the precession coupling, not just pm: \
+             net {diff} vs pm-only {pm_only}"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // Multi-epoch star precession vs pyswisseph (the regression this fix closes)
+    // -----------------------------------------------------------------------
+    //
+    // Reference longitudes/latitudes below are LIVE `pyswisseph` 2.10.3.2
+    // (`libswe` 2.10.03) `swe.fixstar2` output for the MEAN ecliptic of date,
+    // flags `FLG_SWIEPH | FLG_NONUT | FLG_NOABERR | FLG_NOGDEFL`, at the
+    // Gregorian-noon Julian Dates JD(1000-01-01 12:00) = 2086303.0 and
+    // JD(3000-01-01 12:00) = 2816788.0. Swiss applies proper motion, so the
+    // catalog's ecliptic PM components participate — exactly what our pipeline
+    // also does. Regenerate with the snippet in `tests/swiss_star_oracle.rs`,
+    // substituting those JDs and the date flags above.
+    //
+    // The OLD planar model (longitude += rate·dt, latitude frozen) misplaces
+    // high-ecliptic-latitude stars because it never moves their latitude
+    // (e.g. Vega, ~0.06°/1000 yr error vs Swiss). The IAU 2006/P03 rotation
+    // couples longitude and latitude and matches Swiss to < 0.1′ across the
+    // stars below.
+    struct EpochOracle {
+        name: &'static str,
+        year: f64,
+        swiss_lon: f64,
+        swiss_lat: f64,
+    }
+
+    // Polaris, Aldebaran, Spica, Antares, Regulus, Sirius, Pollux at 1000 & 3000 CE.
+    const EPOCH_ORACLE: &[EpochOracle] = &[
+        EpochOracle {
+            name: "Polaris",
+            year: 1000.0,
+            swiss_lon: 74.610263,
+            swiss_lat: 65.981708,
+        },
+        EpochOracle {
+            name: "Polaris",
+            year: 3000.0,
+            swiss_lon: 102.611184,
+            swiss_lat: 66.218680,
+        },
+        EpochOracle {
+            name: "Aldebaran",
+            year: 1000.0,
+            swiss_lon: 55.837618,
+            swiss_lat: -5.538059,
+        },
+        EpochOracle {
+            name: "Aldebaran",
+            year: 3000.0,
+            swiss_lon: 83.801123,
+            swiss_lat: -5.395195,
+        },
+        EpochOracle {
+            name: "Spica",
+            year: 1000.0,
+            swiss_lon: 189.915486,
+            swiss_lat: -1.983434,
+        },
+        EpochOracle {
+            name: "Spica",
+            year: 3000.0,
+            swiss_lon: 217.828814,
+            swiss_lat: -2.134218,
+        },
+        EpochOracle {
+            name: "Antares",
+            year: 1000.0,
+            swiss_lon: 235.829777,
+            swiss_lat: -4.437693,
+        },
+        EpochOracle {
+            name: "Antares",
+            year: 3000.0,
+            swiss_lon: 263.756925,
+            swiss_lat: -4.703289,
+        },
+        EpochOracle {
+            name: "Regulus",
+            year: 1000.0,
+            swiss_lon: 135.955486,
+            swiss_lat: 0.427207,
+        },
+        EpochOracle {
+            name: "Regulus",
+            year: 3000.0,
+            swiss_lon: 163.764189,
+            swiss_lat: 0.492036,
+        },
+        EpochOracle {
+            name: "Sirius",
+            year: 1000.0,
+            swiss_lon: 90.325449,
+            swiss_lat: -39.378372,
+        },
+        EpochOracle {
+            name: "Sirius",
+            year: 3000.0,
+            swiss_lon: 117.888987,
+            swiss_lat: -39.838647,
+        },
+        EpochOracle {
+            name: "Pollux",
+            year: 1000.0,
+            swiss_lon: 99.441148,
+            swiss_lat: 6.609573,
+        },
+        EpochOracle {
+            name: "Pollux",
+            year: 3000.0,
+            swiss_lon: 127.052579,
+            swiss_lat: 6.752322,
+        },
+    ];
+
+    /// Signed shortest longitude separation (handles the 0/360 wrap), degrees.
+    fn lon_delta(a: f64, b: f64) -> f64 {
+        ((a - b + 180.0).rem_euclid(360.0)) - 180.0
+    }
+
+    #[test]
+    fn precession_multi_epoch_matches_pyswisseph() {
+        // 1 arcmin = 1/60 deg. The task target is < 1'; we measure < 0.1'.
+        const TOL_ARCMIN: f64 = 1.0;
+        let mut worst = 0.0_f64;
+        let mut failures: Vec<String> = Vec::new();
+
+        for o in EPOCH_ORACLE {
+            let star = find_by_name(o.name).expect("oracle star in catalog");
+            let (lon, lat) = star.ecliptic_at_epoch(o.year);
+            // Great-circle-ish separation: scale the longitude error by cos(lat).
+            let dlon = lon_delta(lon, o.swiss_lon) * lat.to_radians().cos();
+            let dlat = lat - o.swiss_lat;
+            let sep_arcmin = (dlon * dlon + dlat * dlat).sqrt() * 60.0;
+            worst = worst.max(sep_arcmin);
+            if sep_arcmin > TOL_ARCMIN {
+                failures.push(format!(
+                    "{:<9} {:.0}: model {:.5}/{:.5} vs Swiss {:.5}/{:.5} = {:.3}'",
+                    o.name, o.year, lon, lat, o.swiss_lon, o.swiss_lat, sep_arcmin
+                ));
+            }
+        }
+
+        assert!(
+            failures.is_empty(),
+            "{} star/epoch pairs disagree with pyswisseph by > {TOL_ARCMIN}' \
+             (worst {worst:.3}'):\n  {}",
+            failures.len(),
+            failures.join("\n  ")
+        );
+    }
+
+    #[test]
+    fn rotation_beats_planar_model_for_high_latitude_vega() {
+        // Documents WHY the rotation was needed and proves it is strictly
+        // better than the discarded planar model. Vega sits at ecliptic
+        // latitude ~+61.7°, the regime where the planar model (longitude +=
+        // rate·dt, with latitude FROZEN) is worst: by holding latitude fixed it
+        // misplaces the star. The dominant symptom is a latitude error — over
+        // 1000 yr Vega's true ecliptic latitude moves ~0.048° by precession,
+        // which the planar model entirely misses.
+        //
+        // LIVE pyswisseph `swe.fixstar2` (mean ecliptic of date) for Vega at
+        // JD(3000-01-01 12:00) = 2816788.0: lon 299.36177, lat 61.68486.
+        const SWISS_VEGA_3000_LON: f64 = 299.36177;
+        const SWISS_VEGA_3000_LAT: f64 = 61.68486;
+
+        let vega = find_by_name("Vega").expect("Vega in catalog");
+        let (rot_lon, rot_lat) = vega.ecliptic_at_epoch(3000.0);
+
+        // Planar model: longitude advanced by the linear rate, latitude frozen.
+        let planar_lon =
+            (vega.longitude_j2000 + PRECESSION_DEG_PER_YEAR * 1000.0).rem_euclid(360.0);
+        let planar_lat = vega.latitude_j2000;
+
+        let sep = |l1: f64, b1: f64, l2: f64, b2: f64| {
+            let dlon = lon_delta(l1, l2) * ((b1 + b2) / 2.0).to_radians().cos();
+            ((dlon * dlon) + (b1 - b2) * (b1 - b2)).sqrt()
+        };
+        let rot_err = sep(rot_lon, rot_lat, SWISS_VEGA_3000_LON, SWISS_VEGA_3000_LAT);
+        let planar_err = sep(
+            planar_lon,
+            planar_lat,
+            SWISS_VEGA_3000_LON,
+            SWISS_VEGA_3000_LAT,
+        );
+
+        // The rigorous rotation matches Swiss to < 1′; the planar model is off
+        // by an order of magnitude more (mostly its frozen latitude).
+        assert!(
+            rot_err < 1.0 / 60.0,
+            "rotation should match Swiss to < 1' for Vega, got {:.4}' \
+             (rot {rot_lon:.5}/{rot_lat:.5} vs Swiss {SWISS_VEGA_3000_LON}/{SWISS_VEGA_3000_LAT})",
+            rot_err * 60.0,
+        );
+        assert!(
+            planar_err > 5.0 * rot_err,
+            "the planar (frozen-latitude) model must be markedly worse than the \
+             rotation: planar {:.4}' vs rotation {:.4}'",
+            planar_err * 60.0,
+            rot_err * 60.0,
+        );
+
+        // Latitude must move with precession (the planar model never moved it).
+        assert!(
+            (rot_lat - vega.latitude_j2000).abs() > 1e-3,
+            "Vega ecliptic latitude must move with precession: {rot_lat} vs \
+             J2000 {}",
+            vega.latitude_j2000
         );
     }
 
@@ -1693,6 +2186,92 @@ mod tests {
         assert!(find_generated_by_name("vega").is_some());
         assert!(find_generated_by_name("VEGA").is_some());
         assert!(find_generated_by_name("definitely-not-a-star").is_none());
+    }
+
+    #[test]
+    fn formerly_fallback_names_resolve_to_generated_catalog() {
+        // These six curated names use a traditional spelling that differs from
+        // the IAU-WGSN name in the generated catalog (or, for Al Jabhah, have no
+        // WGSN name at all). The exact-name reconciliation used to MISS them, so
+        // `find_by_name` returned the coarse curated coordinates instead of the
+        // validated Hipparcos row. After the alias fix every one resolves to its
+        // generated row. (curated name, expected HIP).
+        let cases = [
+            ("Zuben Elgenubi", 72622_u32),
+            ("Zuben Eschamali", 74785),
+            ("Bharani 41", 13209),
+            ("Lambda Orionis", 26207),
+            ("Hyadum II", 20455),
+            ("Al Jabhah", 49583),
+        ];
+        for (name, hip) in cases {
+            let g = find_generated_by_hip(hip)
+                .unwrap_or_else(|| panic!("HIP {hip} missing from generated catalog"));
+            let star =
+                find_by_name(name).unwrap_or_else(|| panic!("{name} not found via find_by_name"));
+            // The public lookup must now return the validated Hipparcos position,
+            // not the curated fallback. Compare against the generated HIP row.
+            assert!(
+                (star.longitude_j2000 - g.longitude_j2000).abs() < 1e-6,
+                "{name} longitude {} should equal generated HIP {hip} longitude {}",
+                star.longitude_j2000,
+                g.longitude_j2000
+            );
+            assert!(
+                (star.latitude_j2000 - g.latitude_j2000).abs() < 1e-6,
+                "{name} latitude {} should equal generated HIP {hip} latitude {}",
+                star.latitude_j2000,
+                g.latitude_j2000
+            );
+            // Proper motion must be the real measured Hipparcos PM, not the
+            // zeroed curated value — these stars carried pm = 0.0 when falling
+            // back. (Every one of the six has a nonzero ecliptic PM.)
+            assert!(
+                star.pm_lon_mas_per_year.abs() + star.pm_lat_mas_per_year.abs() > 1.0,
+                "{name} should carry real Hipparcos proper motion, got pm_lon={} pm_lat={}",
+                star.pm_lon_mas_per_year,
+                star.pm_lat_mas_per_year
+            );
+        }
+    }
+
+    #[test]
+    fn bharani_41_resolves_to_validated_longitude_not_curated() {
+        // Sharpest single proof of the alias bug: the curated "Bharani 41" entry
+        // carried longitude 41.08 deg (off by ~7.1 deg / 25600 arcsec vs Swiss).
+        // 41 Arietis (HIP 13209) is actually at ~48.2 deg J2000 ecliptic. After
+        // the alias fix, find_by_name returns the validated ~48.2 deg.
+        let bharani = find_by_name("Bharani 41").expect("Bharani 41 present");
+        assert!(
+            (bharani.longitude_j2000 - 48.2).abs() < 0.5,
+            "Bharani 41 longitude should be ~48.2 deg (HIP 13209), got {} \
+             (the old curated fallback was the wrong 41.08)",
+            bharani.longitude_j2000
+        );
+        // And it must NOT be the stale curated 41.08.
+        assert!(
+            (bharani.longitude_j2000 - 41.08).abs() > 1.0,
+            "Bharani 41 must no longer return the wrong curated 41.08, got {}",
+            bharani.longitude_j2000
+        );
+    }
+
+    #[test]
+    fn only_clusters_remain_unreconciled() {
+        // Every curated name must now resolve to a validated generated row,
+        // EXCEPT the two open clusters (Pleiades, Praesepe) which have no single
+        // Hipparcos star. This guards against a future curated name silently
+        // regressing to the coarse fallback.
+        let unreconciled: Vec<&str> = CATALOG
+            .iter()
+            .filter(|c| find_generated_for_curated(c.name).is_none())
+            .map(|c| c.name)
+            .collect();
+        assert_eq!(
+            unreconciled,
+            vec!["Pleiades", "Praesepe"],
+            "only the two open clusters should fall back to curated coordinates"
+        );
     }
 
     #[test]

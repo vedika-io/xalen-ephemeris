@@ -27,6 +27,10 @@ pub mod muhurta;
 pub mod nadi;
 pub mod nakshatra;
 pub mod panchang;
+/// Panchang TRANSITION/END times — when the current tithi, nakshatra, yoga, and
+/// karana begin and end (root-finding to ~second precision over a caller-supplied
+/// Sun/Moon ephemeris closure).
+pub mod panchang_transitions;
 /// Prashna (horary) astrology techniques.
 pub mod prashna;
 /// Pushkara Navamsa and Pushkara Bhaga (auspicious degrees/navamsas).

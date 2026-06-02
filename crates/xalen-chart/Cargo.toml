@@ -9,8 +9,8 @@ keywords = ["astrology", "chart", "svg", "vedic", "horoscope"]
 categories = ["visualization", "science"]
 
 [dependencies]
-xalen-coords = { version = "0.5.0", path = "../xalen-coords" }
-xalen-houses = { version = "0.5.0", path = "../xalen-houses" }
+xalen-coords = { version = "0.6.0", path = "../xalen-coords" }
+xalen-houses = { version = "0.6.0", path = "../xalen-houses" }
 serde.workspace = true
 
 [lints]

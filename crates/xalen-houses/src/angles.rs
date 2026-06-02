@@ -84,11 +84,12 @@ pub fn local_sidereal_time(gmst_hours: f64, longitude_deg: f64) -> f64 {
 }
 
 /// Compute Greenwich Mean Sidereal Time in hours for a given UT1 epoch.
+///
+/// Thin re-export of the canonical [`xalen_coords::gmst_hours`] — the single
+/// source of truth for sidereal time across the workspace. Kept here under its
+/// historical name so existing `xalen_houses::gmst` callers keep compiling.
 pub fn gmst(jd_ut1: f64) -> f64 {
-    let t = (jd_ut1 - 2_451_545.0) / 36525.0;
-    let gmst_sec = 280.46061837 + 360.98564736629 * (jd_ut1 - 2_451_545.0) + 0.000387933 * t * t
-        - t * t * t / 38710000.0;
-    (gmst_sec / 15.0).rem_euclid(24.0)
+    xalen_coords::gmst_hours(jd_ut1)
 }
 
 #[cfg(test)]

@@ -18,14 +18,14 @@ fn main() {
     for e in &solar {
         let (y, m, d, h) = jd_to_calendar(e.jd_maximum, CalendarSystem::default());
         println!(
-            "  {:04}-{:02}-{:02} {:02.0}:{:02.0} UT  {:?}  mag={:.3}",
+            "  {:04}-{:02}-{:02} {:02.0}:{:02.0} UT  {:?}  coverage~{:.3} (diameter-ratio proxy, not magnitude)",
             y,
             m,
             d,
             h.floor(),
             (h.fract() * 60.0).floor(),
             e.eclipse_type,
-            e.magnitude
+            e.coverage_proxy
         );
     }
 

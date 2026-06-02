@@ -1,6 +1,15 @@
 use crate::nakshatra::Nakshatra;
 use serde::{Deserialize, Serialize};
 
+// Transition/end-time computation lives in a sibling module to keep this file
+// within the per-file size budget. Re-exported here so callers can reach the
+// most-consumed panchang output (`when does the current tithi end?`) directly
+// off the `panchang` namespace alongside the instantaneous `compute_panchang`.
+pub use crate::panchang_transitions::{
+    ElementInterval, PanchangTransitions, compute_panchang_transitions, karana_transition,
+    nakshatra_transition, tithi_transition, yoga_transition,
+};
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 /// The five limbs of the Hindu calendar for a given moment.
 pub struct Panchang {

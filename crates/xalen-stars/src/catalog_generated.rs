@@ -8,7 +8,8 @@
 // Filter: Vmag <= 6.5  ->  8870 stars.
 // Epoch: positions propagated J1991.25 -> J2000.0 (8.75 yr) using pmRA/pmDE,
 //        then RA/Dec -> ecliptic at the IAU 2006 J2000 mean obliquity (23.4392794444 deg).
-// Curated traditional names joined via the IAU-CSN authority (name->HIP): 100 matched.
+// Curated traditional names joined to HIP: 106 matched (6 via
+// curated-spelling alias / explicit HIP designation; the rest by exact IAU-CSN name).
 //
 // Every coordinate, magnitude, and proper-motion value below is derived from a
 // real hip_main.dat record. No value is invented or interpolated.
@@ -893,7 +894,7 @@ pub static GENERATED_CATALOG: &[GeneratedStar] = &[
     GeneratedStar { hip: 13178, name: None, constellation: "", longitude_j2000: 59.071372, latitude_j2000: 38.646082, magnitude: 6.25, nature: "", pm_lon_mas_per_year: -1.662, pm_lat_mas_per_year: -1.124 },
     GeneratedStar { hip: 13197, name: None, constellation: "", longitude_j2000: 30.676285, latitude_j2000: -38.726031, magnitude: 6.14, nature: "", pm_lon_mas_per_year: -121.162, pm_lat_mas_per_year: -100.021 },
     GeneratedStar { hip: 13202, name: None, constellation: "", longitude_j2000: 28.984096, latitude_j2000: -41.851901, magnitude: 5.39, nature: "", pm_lon_mas_per_year: 69.176, pm_lat_mas_per_year: 2.061 },
-    GeneratedStar { hip: 13209, name: None, constellation: "", longitude_j2000: 48.203530, latitude_j2000: 10.449702, magnitude: 3.61, nature: "", pm_lon_mas_per_year: 28.187, pm_lat_mas_per_year: -130.810 },
+    GeneratedStar { hip: 13209, name: Some("Bharani 41"), constellation: "Aries", longitude_j2000: 48.203530, latitude_j2000: 10.449702, magnitude: 3.61, nature: "Venus", pm_lon_mas_per_year: 28.187, pm_lat_mas_per_year: -130.810 },
     GeneratedStar { hip: 13225, name: None, constellation: "", longitude_j2000: 24.342434, latitude_j2000: -49.056056, magnitude: 5.92, nature: "", pm_lon_mas_per_year: 84.152, pm_lat_mas_per_year: -4.902 },
     GeneratedStar { hip: 13244, name: None, constellation: "", longitude_j2000: 310.217570, latitude_j2000: -72.921445, magnitude: 4.76, nature: "", pm_lon_mas_per_year: -82.869, pm_lat_mas_per_year: 36.043 },
     GeneratedStar { hip: 13254, name: None, constellation: "", longitude_j2000: 51.835710, latitude_j2000: 20.943210, magnitude: 4.22, nature: "", pm_lon_mas_per_year: 162.438, pm_lat_mas_per_year: -164.740 },
@@ -1423,7 +1424,7 @@ pub static GENERATED_CATALOG: &[GeneratedStar] = &[
     GeneratedStar { hip: 20400, name: None, constellation: "", longitude_j2000: 66.087147, latitude_j2000: -7.352543, magnitude: 5.72, nature: "", pm_lon_mas_per_year: 109.799, pm_lat_mas_per_year: -40.059 },
     GeneratedStar { hip: 20417, name: None, constellation: "", longitude_j2000: 67.279609, latitude_j2000: -0.713494, magnitude: 5.91, nature: "", pm_lon_mas_per_year: -2.134, pm_lat_mas_per_year: -0.699 },
     GeneratedStar { hip: 20430, name: None, constellation: "", longitude_j2000: 68.116305, latitude_j2000: 4.021376, magnitude: 5.38, nature: "", pm_lon_mas_per_year: 17.195, pm_lat_mas_per_year: -20.986 },
-    GeneratedStar { hip: 20455, name: None, constellation: "", longitude_j2000: 66.870723, latitude_j2000: -3.969499, magnitude: 3.77, nature: "", pm_lon_mas_per_year: 101.812, pm_lat_mas_per_year: -46.107 },
+    GeneratedStar { hip: 20455, name: Some("Hyadum II"), constellation: "Taurus", longitude_j2000: 66.870723, latitude_j2000: -3.969499, magnitude: 3.77, nature: "Saturn-Mercury", pm_lon_mas_per_year: 101.812, pm_lat_mas_per_year: -46.107 },
     GeneratedStar { hip: 20456, name: None, constellation: "", longitude_j2000: 74.825894, latitude_j2000: 37.448305, magnitude: 6.18, nature: "", pm_lon_mas_per_year: 32.845, pm_lat_mas_per_year: -50.581 },
     GeneratedStar { hip: 20465, name: None, constellation: "", longitude_j2000: 57.819497, latitude_j2000: -45.661707, magnitude: 5.81, nature: "", pm_lon_mas_per_year: 22.028, pm_lat_mas_per_year: -19.783 },
     GeneratedStar { hip: 20467, name: None, constellation: "", longitude_j2000: 53.409720, latitude_j2000: -55.949105, magnitude: 6.38, nature: "", pm_lon_mas_per_year: 2.577, pm_lat_mas_per_year: 10.296 },
@@ -1921,7 +1922,7 @@ pub static GENERATED_CATALOG: &[GeneratedStar] = &[
     GeneratedStar { hip: 26190, name: None, constellation: "", longitude_j2000: 60.037808, latitude_j2000: -83.957099, magnitude: 6.32, nature: "", pm_lon_mas_per_year: -169.367, pm_lat_mas_per_year: -21.273 },
     GeneratedStar { hip: 26197, name: None, constellation: "", longitude_j2000: 82.873447, latitude_j2000: -29.294168, magnitude: 5.67, nature: "", pm_lon_mas_per_year: 1.153, pm_lat_mas_per_year: -0.320 },
     GeneratedStar { hip: 26199, name: None, constellation: "", longitude_j2000: 82.881806, latitude_j2000: -29.287279, magnitude: 4.78, nature: "", pm_lon_mas_per_year: 0.714, pm_lat_mas_per_year: 0.650 },
-    GeneratedStar { hip: 26207, name: None, constellation: "", longitude_j2000: 83.706828, latitude_j2000: -13.369443, magnitude: 3.39, nature: "", pm_lon_mas_per_year: -1.142, pm_lat_mas_per_year: -1.813 },
+    GeneratedStar { hip: 26207, name: Some("Lambda Orionis"), constellation: "Orion", longitude_j2000: 83.706828, latitude_j2000: -13.369443, magnitude: 3.39, nature: "Mercury", pm_lon_mas_per_year: -1.142, pm_lat_mas_per_year: -1.813 },
     GeneratedStar { hip: 26215, name: None, constellation: "", longitude_j2000: 83.741599, latitude_j2000: -13.064706, magnitude: 5.60, nature: "", pm_lon_mas_per_year: 1.317, pm_lat_mas_per_year: -3.820 },
     GeneratedStar { hip: 26219, name: None, constellation: "", longitude_j2000: 80.630823, latitude_j2000: -56.318004, magnitude: 5.76, nature: "", pm_lon_mas_per_year: 67.922, pm_lat_mas_per_year: 114.592 },
     GeneratedStar { hip: 26220, name: None, constellation: "", longitude_j2000: 82.978588, latitude_j2000: -28.675992, magnitude: 4.98, nature: "", pm_lon_mas_per_year: -1.040, pm_lat_mas_per_year: 0.175 },
@@ -3905,7 +3906,7 @@ pub static GENERATED_CATALOG: &[GeneratedStar] = &[
     GeneratedStar { hip: 49485, name: None, constellation: "", longitude_j2000: 179.674016, latitude_j2000: -53.454440, magnitude: 5.06, nature: "", pm_lon_mas_per_year: 37.995, pm_lat_mas_per_year: -49.635 },
     GeneratedStar { hip: 49530, name: None, constellation: "", longitude_j2000: 151.699664, latitude_j2000: -5.622776, magnitude: 6.20, nature: "", pm_lon_mas_per_year: -25.297, pm_lat_mas_per_year: -26.868 },
     GeneratedStar { hip: 49569, name: None, constellation: "", longitude_j2000: 160.560162, latitude_j2000: -26.749860, magnitude: 5.59, nature: "", pm_lon_mas_per_year: 40.585, pm_lat_mas_per_year: -45.659 },
-    GeneratedStar { hip: 49583, name: None, constellation: "", longitude_j2000: 147.905110, latitude_j2000: 4.865716, magnitude: 3.48, nature: "", pm_lon_mas_per_year: -1.635, pm_lat_mas_per_year: -1.179 },
+    GeneratedStar { hip: 49583, name: Some("Al Jabhah"), constellation: "Leo", longitude_j2000: 147.905110, latitude_j2000: 4.865716, magnitude: 3.48, nature: "Saturn-Mercury", pm_lon_mas_per_year: -1.635, pm_lat_mas_per_year: -1.179 },
     GeneratedStar { hip: 49593, name: None, constellation: "", longitude_j2000: 141.009218, latitude_j2000: 22.099959, magnitude: 4.49, nature: "", pm_lon_mas_per_year: 50.656, pm_lat_mas_per_year: 19.888 },
     GeneratedStar { hip: 49619, name: None, constellation: "", longitude_j2000: 180.888428, latitude_j2000: -54.032098, magnitude: 6.40, nature: "", pm_lon_mas_per_year: -25.772, pm_lat_mas_per_year: -6.363 },
     GeneratedStar { hip: 49637, name: None, constellation: "", longitude_j2000: 150.413872, latitude_j2000: -1.419568, magnitude: 4.39, nature: "", pm_lon_mas_per_year: -53.399, pm_lat_mas_per_year: -88.595 },
@@ -5461,7 +5462,7 @@ pub static GENERATED_CATALOG: &[GeneratedStar] = &[
     GeneratedStar { hip: 72582, name: None, constellation: "", longitude_j2000: 203.410707, latitude_j2000: 50.352131, magnitude: 5.47, nature: "", pm_lon_mas_per_year: -364.066, pm_lat_mas_per_year: -12.738 },
     GeneratedStar { hip: 72603, name: None, constellation: "", longitude_j2000: 225.025475, latitude_j2000: 0.362157, magnitude: 5.15, nature: "", pm_lon_mas_per_year: -112.595, pm_lat_mas_per_year: -96.625 },
     GeneratedStar { hip: 72607, name: Some("Kochab"), constellation: "Ursa Minor", longitude_j2000: 133.319498, latitude_j2000: 72.987605, magnitude: 2.07, nature: "Saturn-Mercury", pm_lon_mas_per_year: -37.334, pm_lat_mas_per_year: -32.637 },
-    GeneratedStar { hip: 72622, name: None, constellation: "", longitude_j2000: 225.082664, latitude_j2000: 0.333064, magnitude: 2.75, nature: "", pm_lon_mas_per_year: -80.912, pm_lat_mas_per_year: -96.875 },
+    GeneratedStar { hip: 72622, name: Some("Zuben Elgenubi"), constellation: "Libra", longitude_j2000: 225.082664, latitude_j2000: 0.333064, magnitude: 2.75, nature: "Saturn-Mars", pm_lon_mas_per_year: -80.912, pm_lat_mas_per_year: -96.875 },
     GeneratedStar { hip: 72629, name: None, constellation: "", longitude_j2000: 220.383090, latitude_j2000: 15.419688, magnitude: 6.18, nature: "", pm_lon_mas_per_year: -33.879, pm_lat_mas_per_year: -3.154 },
     GeneratedStar { hip: 72631, name: None, constellation: "", longitude_j2000: 221.023089, latitude_j2000: 13.474352, magnitude: 4.93, nature: "", pm_lon_mas_per_year: 124.136, pm_lat_mas_per_year: -91.613 },
     GeneratedStar { hip: 72659, name: None, constellation: "", longitude_j2000: 213.549584, latitude_j2000: 33.768496, magnitude: 4.54, nature: "", pm_lon_mas_per_year: 202.221, pm_lat_mas_per_year: -13.140 },
@@ -5611,7 +5612,7 @@ pub static GENERATED_CATALOG: &[GeneratedStar] = &[
     GeneratedStar { hip: 74769, name: None, constellation: "", longitude_j2000: 240.065208, latitude_j2000: -28.574882, magnitude: 6.46, nature: "", pm_lon_mas_per_year: -62.000, pm_lat_mas_per_year: -37.279 },
     GeneratedStar { hip: 74775, name: None, constellation: "", longitude_j2000: 239.523224, latitude_j2000: -26.983329, magnitude: 6.44, nature: "", pm_lon_mas_per_year: -134.043, pm_lat_mas_per_year: -63.591 },
     GeneratedStar { hip: 74778, name: None, constellation: "", longitude_j2000: 245.172077, latitude_j2000: -40.984460, magnitude: 5.04, nature: "", pm_lon_mas_per_year: -0.653, pm_lat_mas_per_year: -4.526 },
-    GeneratedStar { hip: 74785, name: None, constellation: "", longitude_j2000: 229.371691, latitude_j2000: 8.495929, magnitude: 2.61, nature: "", pm_lon_mas_per_year: -88.531, pm_lat_mas_per_year: -45.337 },
+    GeneratedStar { hip: 74785, name: Some("Zuben Eschamali"), constellation: "Libra", longitude_j2000: 229.371691, latitude_j2000: 8.495929, magnitude: 2.61, nature: "Jupiter-Mercury", pm_lon_mas_per_year: -88.531, pm_lat_mas_per_year: -45.337 },
     GeneratedStar { hip: 74793, name: None, constellation: "", longitude_j2000: 141.647167, latitude_j2000: 74.958191, magnitude: 5.02, nature: "", pm_lon_mas_per_year: -36.116, pm_lat_mas_per_year: 3.722 },
     GeneratedStar { hip: 74824, name: None, constellation: "", longitude_j2000: 244.307173, latitude_j2000: -38.931608, magnitude: 4.07, nature: "", pm_lon_mas_per_year: -61.294, pm_lat_mas_per_year: -160.489 },
     GeneratedStar { hip: 74837, name: None, constellation: "", longitude_j2000: 246.529599, latitude_j2000: -43.441238, magnitude: 4.85, nature: "", pm_lon_mas_per_year: -1.523, pm_lat_mas_per_year: 8.847 },

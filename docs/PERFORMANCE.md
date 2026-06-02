@@ -1,7 +1,7 @@
 # XALEN Ephemeris -- Performance Benchmarks
 
 **Last updated:** 2026-05-25
-**Engine version:** 0.1.0
+**Engine version:** 0.5.0
 **Platform:** Apple Silicon (ARM64), macOS, Rust 2024 edition
 **Benchmark tool:** Criterion 0.5 with HTML reports
 
@@ -63,36 +63,42 @@ benchmark, 3-second warmup, confidence intervals reported).
 
 ## Context: Swiss Ephemeris Comparison
 
-Swiss Ephemeris (C implementation) typically computes a single planet position
-in approximately 10 us using its internal Moshier analytical engine, or faster
-with pre-loaded binary ephemeris files.
+> **Caveat — preliminary, unbenchmarked comparison.** The XALEN column below is
+> the measured Criterion median on the platform in the header (Apple Silicon
+> ARM64, macOS, release build). The "Swiss Eph" column is a rough **order-of-
+> magnitude estimate** from the Swiss Ephemeris documentation / community reports
+> — it was **not** benchmarked here, on this machine, or against any pinned Swiss
+> Ephemeris version. Hardware, build flags, Moshier-vs-`.se1`, and warm/cold caches
+> all move these numbers substantially. Treat any "faster"/"slower" conclusion as
+> indicative only; a head-to-head on identical hardware is future work.
 
-XALEN Ephemeris targets the same performance class in pure Rust:
+Swiss Ephemeris (C implementation) is reported to compute a single planet position
+in roughly the same order of magnitude (low-tens of microseconds with its Moshier
+analytical engine, faster with pre-loaded binary ephemeris files). XALEN targets
+the same performance class in pure Rust:
 
-| Operation | XALEN | Swiss Eph (typical) | Notes |
-|-----------|-------|---------------------|-------|
+| Operation | XALEN (measured) | Swiss Eph (estimate, unverified) | Notes |
+|-----------|------------------|----------------------------------|-------|
 | Sun position | 20.8 us | ~10 us | XALEN uses full VSOP87A with precession + aberration |
 | Moon position | 12.1 us | ~10 us | XALEN evaluates all 60 ELP2000-82 terms |
-| House cusps (Placidus) | 2.8 us | ~5 us | XALEN is faster due to optimized trisection |
-| Ayanamsa | 6.9 ns | ~1 us | XALEN is significantly faster (pure polynomial) |
+| House cusps (Placidus) | 2.8 us | ~5 us | XALEN's Placidus uses an optimized trisection (estimate not benchmarked) |
+| Ayanamsa | 6.9 ns | ~1 us | XALEN evaluates a pure polynomial (estimate not benchmarked) |
 | Full chart (9 bodies + houses) | 380 us | ~100-150 us | XALEN: no caching between body calls yet |
 
-**Key differences:**
+**Key differences (XALEN-internal facts; cross-engine deltas are estimates):**
 
 1. XALEN uses the full VSOP87A series for each planet call (no caching of intermediate
-   Earth position across bodies), which explains the ~2x overhead for individual planet
-   calls. A production optimization to cache the Earth heliocentric position per JD
-   would bring Sun/planet times closer to SE's numbers.
+   Earth position across bodies), which accounts for the per-body cost on individual
+   planet calls. A production optimization to cache the Earth heliocentric position per
+   JD would bring Sun/planet times down.
 
-2. House cusp computation is faster than SE because XALEN's Placidus implementation
-   uses an optimized convergence algorithm.
+2. House cusp and ayanamsa computation are very cheap in absolute terms (microsecond /
+   nanosecond class). Whether they are faster than a given Swiss Ephemeris build is
+   not something this document has measured — the SE figures are estimates.
 
-3. Ayanamsa is 100x+ faster because XALEN evaluates a simple polynomial directly,
-   while SE performs additional frame-rotation overhead.
-
-4. The full-chart benchmark (380 us) represents the real-world cost of computing
-   one complete natal chart. At this speed, a single thread can compute over
-   **2,600 full natal charts per second**.
+3. The full-chart benchmark (380 us) is the measured real-world cost of computing
+   one complete natal chart on the header platform. At this speed, a single thread
+   computes roughly **2,600 full natal charts per second** on that machine.
 
 ---
 

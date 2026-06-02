@@ -10,7 +10,7 @@ Implements the house-based system from Pt. Roop Chand Joshi's five Lal Kitab vol
 - **Effect classification** — `planet_effect` returns `Good`, `Neutral`, or `Troubled` for any planet-house combination.
 - **Planetary debts (Rin)** — `detect_debts` reports the five karmic debts: Ancestral (Pitri), Maternal (Matri), Spousal (Stri), Self (Atma), and Duty (Dharma).
 - **Dormant planets** — `is_dormant` detects Soya Hua Graha (planet in an enemy's house or conjunct an enemy).
-- **108-slot remedy lookup** — `remedy_lookup` and `all_remedies` enumerate the full 9-planet × 12-house remedy scaffold. The prescribed remedy and material-item text is **not bundled** in this open-source release (the readings are sourced from copyrighted Lal Kitab volumes), so the `remedies` / `items` vectors are currently empty; supply your own remedy copy keyed by planet-house.
+- **108-slot remedy lookup** — `remedy_lookup` and `all_remedies` enumerate the full 9-planet × 12-house remedy scaffold. The prescribed remedy and material-item text is **not bundled** in this open-source release (the readings are sourced from copyrighted Lal Kitab volumes), so the `remedies` / `items` fields are `Option<Vec<String>>` and are currently `None` (genuinely absent) rather than `Some(vec![])` — callers can therefore tell "no text bundled" from a populated list. Supply your own remedy copy keyed by planet-house.
 - **Varshphal** — `build_annual_chart` derives the Lal Kitab annual chart by the standard 12-year house rotation.
 - `serde` `Serialize`/`Deserialize` on all public data types.
 
@@ -35,10 +35,17 @@ let debts = detect_debts(&chart);
 assert!(!debts.is_empty());
 println!("{}", debts[0].kind); // "Pitri Rin (Ancestral Debt)"
 
-// Look up remedies for the troubled Sun.
+// Look up remedies for the troubled Sun. The remedy / item text is not
+// bundled in this open-source release, so `remedies` is `None` (absent),
+// never `Some(vec![])`.
 let remedy = remedy_lookup(Planet::Sun, 6);
-for step in &remedy.remedies {
-    println!("- {step}");
+match &remedy.remedies {
+    Some(steps) => {
+        for step in steps {
+            println!("- {step}");
+        }
+    }
+    None => println!("(no remedy text bundled for this combination)"),
 }
 ```
 

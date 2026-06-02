@@ -12,14 +12,14 @@ categories = ["science", "wasm"]
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-xalen-time = { version = "0.5.0", path = "../xalen-time" }
-xalen-coords = { version = "0.5.0", path = "../xalen-coords" }
-xalen-ephem = { version = "0.5.0", path = "../xalen-ephem" }
-xalen-houses = { version = "0.5.0", path = "../xalen-houses" }
-xalen-ayanamsa = { version = "0.5.0", path = "../xalen-ayanamsa" }
-xalen-vedic = { version = "0.5.0", path = "../xalen-vedic" }
-xalen-western = { version = "0.5.0", path = "../xalen-western" }
-xalen-stars = { version = "0.5.0", path = "../xalen-stars" }
+xalen-time = { version = "0.6.0", path = "../xalen-time" }
+xalen-coords = { version = "0.6.0", path = "../xalen-coords" }
+xalen-ephem = { version = "0.6.0", path = "../xalen-ephem" }
+xalen-houses = { version = "0.6.0", path = "../xalen-houses" }
+xalen-ayanamsa = { version = "0.6.0", path = "../xalen-ayanamsa" }
+xalen-vedic = { version = "0.6.0", path = "../xalen-vedic" }
+xalen-western = { version = "0.6.0", path = "../xalen-western" }
+xalen-stars = { version = "0.6.0", path = "../xalen-stars" }
 serde.workspace = true
 serde_json = "1"
 

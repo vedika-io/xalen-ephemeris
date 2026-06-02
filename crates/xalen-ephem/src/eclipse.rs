@@ -13,6 +13,16 @@
 //! 4. **Lunar eclipses** are still classified by comparing the Moon's ecliptic
 //!    latitude against the Earth-shadow cone limits (Meeus Ch. 54); a Besselian
 //!    lunar treatment is not yet implemented.
+//!
+//! # Magnitude honesty
+//!
+//! Neither result type exposes a true astronomical eclipse magnitude. Solar
+//! events carry [`SolarEclipse::coverage_proxy`] (a geocentric diameter-ratio /
+//! parallax-overlap figure) and lunar events carry
+//! [`LunarEclipse::shadow_depth_proxy`] (a latitude-derived depth measure).
+//! Both are honestly named proxies — the rigorous per-observer/umbral magnitude
+//! is not computed. The authoritative geometric quantity for solar eclipses is
+//! [`SolarEclipse::gamma`].
 
 use crate::almanac::Almanac;
 use crate::besselian::{GlobalSolarType, classify_solar_eclipse};
@@ -84,9 +94,15 @@ pub struct LunarEclipse {
     pub jd_maximum: f64,
     /// Eclipse classification.
     pub eclipse_type: LunarEclipseType,
-    /// Penumbral magnitude -- fraction of the Moon's diameter covered by the
-    /// penumbral shadow at maximum. Approximate; derived from latitude offset.
-    pub magnitude: f64,
+    /// **Shadow-depth proxy, NOT the astronomical eclipse magnitude.**
+    ///
+    /// A crude `1 − |β| / 1.58°` measure of how close the Full Moon sits to the
+    /// ecliptic (1.0 = Moon centred on the node-crossing, 0.0 = at the
+    /// penumbral edge). It is monotonic with shadow depth but is NOT the
+    /// umbral/penumbral magnitude (fraction of the lunar diameter immersed),
+    /// which requires Earth-shadow cone radii at the Moon's distance — not yet
+    /// implemented. Do not report this as "magnitude" to users.
+    pub shadow_depth_proxy: f64,
     /// Moon's ecliptic latitude at maximum (degrees).
     pub moon_latitude_deg: f64,
 }
@@ -113,9 +129,17 @@ pub struct SolarEclipse {
     pub jd_maximum: f64,
     /// Eclipse classification, from the Besselian shadow geometry.
     pub eclipse_type: SolarEclipseType,
-    /// Magnitude -- ratio of apparent Moon diameter to apparent Sun diameter,
-    /// adjusted for the latitude offset. Values >1 indicate total geometry.
-    pub magnitude: f64,
+    /// **Coverage proxy, NOT the astronomical (local) eclipse magnitude.**
+    ///
+    /// For central (Total/Annular/Hybrid) geometry this is the geocentric
+    /// apparent Moon/Sun **diameter ratio** (>1 ⇒ total disc coverage, <1 ⇒
+    /// annular ring); for Partial geometry it is a parallax-corrected
+    /// disc-overlap heuristic seeded by the New-Moon separation. Neither is the
+    /// rigorous local magnitude at the greatest-eclipse sub-point, which needs a
+    /// per-observer Besselian reduction (not implemented). The authoritative
+    /// geometric quantity here is [`Self::gamma`]; treat this field as an
+    /// indicative coverage figure only.
+    pub coverage_proxy: f64,
     /// Moon's ecliptic latitude at maximum (degrees).
     pub moon_latitude_deg: f64,
     /// γ: least distance of the shadow axis from Earth's centre at greatest
@@ -166,14 +190,15 @@ pub fn find_lunar_eclipses(almanac: &Almanac, jd_start: f64, jd_end: f64) -> Vec
                 LunarEclipseType::Penumbral
             };
 
-            // Approximate penumbral magnitude: how deep into the shadow the
-            // Moon is. 1.0 means the Moon's center is exactly on the ecliptic.
-            let magnitude = 1.0 - (lat_deg.abs() / LUNAR_PENUMBRAL_LIMIT);
+            // Shadow-depth PROXY (not the astronomical magnitude): how close the
+            // Moon sits to the node-crossing. 1.0 = Moon's centre on the
+            // ecliptic, 0.0 = at the penumbral-limit edge. See the field doc.
+            let shadow_depth_proxy = 1.0 - (lat_deg.abs() / LUNAR_PENUMBRAL_LIMIT);
 
             eclipses.push(LunarEclipse {
                 jd_maximum: jd_full,
                 eclipse_type,
-                magnitude,
+                shadow_depth_proxy,
                 moon_latitude_deg: lat_deg,
             });
         }
@@ -260,7 +285,7 @@ pub fn find_solar_eclipses(almanac: &Almanac, jd_start: f64, jd_end: f64) -> Vec
                     &DeltaTModel::StephensonMorrisonHohenkerk2016,
                 ) / 86400.0;
 
-            // Magnitude (APPROXIMATE — not a Besselian local magnitude): central
+            // Coverage PROXY (NOT a Besselian local magnitude): central
             // eclipses report the geocentric apparent diameter ratio; partials a
             // lunar-parallax overlap heuristic seeded by the New-Moon separation.
             // A rigorous magnitude needs the per-observer reduction at the
@@ -271,7 +296,7 @@ pub fn find_solar_eclipses(almanac: &Almanac, jd_start: f64, jd_end: f64) -> Vec
             // certain locations on Earth due to the Moon's parallax (~0.95
             // degrees). We compute the parallax-corrected separation for the
             // optimal observer location.
-            let magnitude = match eclipse_type {
+            let coverage_proxy = match eclipse_type {
                 SolarEclipseType::Total | SolarEclipseType::Annular | SolarEclipseType::Hybrid => {
                     diameter_ratio
                 }
@@ -304,7 +329,7 @@ pub fn find_solar_eclipses(almanac: &Almanac, jd_start: f64, jd_end: f64) -> Vec
             eclipses.push(SolarEclipse {
                 jd_maximum,
                 eclipse_type,
-                magnitude,
+                coverage_proxy,
                 moon_latitude_deg: lat_deg,
                 gamma,
             });
@@ -527,7 +552,7 @@ mod tests {
     }
 
     #[test]
-    fn lunar_eclipse_magnitude_range() {
+    fn lunar_eclipse_shadow_depth_proxy_range() {
         let a = almanac();
         let jd_start = jd_from_date(2020, 1, 1.0);
         let jd_end = jd_from_date(2030, 1, 1.0);
@@ -540,9 +565,9 @@ mod tests {
 
         for e in &eclipses {
             assert!(
-                e.magnitude > 0.0 && e.magnitude <= 1.0,
-                "Magnitude out of range: {} at JD {}",
-                e.magnitude,
+                e.shadow_depth_proxy > 0.0 && e.shadow_depth_proxy <= 1.0,
+                "Shadow-depth proxy out of range: {} at JD {}",
+                e.shadow_depth_proxy,
                 e.jd_maximum
             );
             assert!(
@@ -679,7 +704,7 @@ mod tests {
     }
 
     #[test]
-    fn solar_eclipse_magnitude_positive() {
+    fn solar_eclipse_coverage_proxy_positive() {
         let a = almanac();
         let jd_start = jd_from_date(2020, 1, 1.0);
         let jd_end = jd_from_date(2030, 1, 1.0);
@@ -687,9 +712,9 @@ mod tests {
 
         for e in &eclipses {
             assert!(
-                e.magnitude > 0.0,
-                "Solar eclipse magnitude should be positive: {} at JD {} ({:?})",
-                e.magnitude,
+                e.coverage_proxy > 0.0,
+                "Solar eclipse coverage proxy should be positive: {} at JD {} ({:?})",
+                e.coverage_proxy,
                 e.jd_maximum,
                 e.eclipse_type
             );
@@ -802,9 +827,9 @@ mod tests {
             e.eclipse_type
         );
         assert!(
-            e.magnitude > 1.0,
-            "Total solar eclipse magnitude should be >1.0, got {}",
-            e.magnitude
+            e.coverage_proxy > 1.0,
+            "Total solar eclipse coverage proxy (diameter ratio) should be >1.0, got {}",
+            e.coverage_proxy
         );
     }
 
@@ -857,9 +882,9 @@ mod tests {
             e.eclipse_type
         );
         assert!(
-            e.magnitude > 0.0 && e.magnitude < 1.0,
-            "Annular solar eclipse magnitude should be in (0, 1), got {}",
-            e.magnitude
+            e.coverage_proxy > 0.0 && e.coverage_proxy < 1.0,
+            "Annular solar eclipse coverage proxy (diameter ratio) should be in (0, 1), got {}",
+            e.coverage_proxy
         );
     }
 
@@ -910,9 +935,9 @@ mod tests {
             e.eclipse_type
         );
         assert!(
-            e.magnitude > 0.01,
-            "Partial solar eclipse should have meaningful magnitude, got {}",
-            e.magnitude
+            e.coverage_proxy > 0.01,
+            "Partial solar eclipse should have a meaningful coverage proxy, got {}",
+            e.coverage_proxy
         );
     }
 

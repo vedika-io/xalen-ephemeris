@@ -285,9 +285,12 @@ mod tests {
             GlobalSolarType::Total,
             "2017 is a total eclipse"
         );
-        // γ matches NASA to ~0.0015 ER. The residual is consistent with the
-        // analytical ephemeris/reduction (~10" Moon, truncated ELP); the cone
-        // angles match NASA to <0.05%, so the Besselian method itself is sound.
+        // γ matches NASA to ~0.0015 ER. The residual is the truncated-ELP Moon
+        // series limit (the apparent Moon now carries Δψ + geocentric light-time
+        // but NOT annual aberration — see vsop::apparent_moon); the cone angles
+        // match NASA to <0.05%, so the Besselian method itself is sound. The
+        // greatest-eclipse time agrees with NASA to ~2 s (was ~19-30 s before the
+        // Moon annual-aberration bug was removed).
         assert!(
             (g.gamma - 0.4367).abs() < 0.0025,
             "γ should match NASA 0.4367 within ephemeris-limited tolerance, got {:.5}",

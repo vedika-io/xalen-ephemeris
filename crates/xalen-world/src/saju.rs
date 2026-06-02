@@ -297,6 +297,11 @@ pub struct SajuChart {
     pub day_master: HeavenlyStem,
     /// Element of the Day Master.
     pub day_master_element: Element,
+    /// Birth instant as a Julian Day (midnight JD of the civil date + hour
+    /// fraction). Retained so [`daeun`] can recover the astronomically correct
+    /// distance to the adjacent solar term (the real Daeun start age) without a
+    /// signature change. Not part of the four pillars themselves.
+    pub birth_jd: f64,
 }
 
 impl std::fmt::Display for SajuChart {
@@ -383,6 +388,63 @@ fn year_pillar(year: i32) -> (HeavenlyStem, EarthlyBranch) {
     )
 }
 
+/// Determine the Saju solar year for a birth instant, honoring the Ipchun
+/// (입춘 / 立春 Li Chun, ≈ 4 Feb) boundary that opens the solar year.
+///
+/// Saju, like Chinese BaZi, anchors the year pillar to the Sun reaching 315°
+/// (Start of Spring), NOT to the civil 1 January. A birth between 1 January and
+/// Ipchun therefore belongs to the *previous* solar year. We reuse the published
+/// `xalen_chinese::li_chun_jd` so Saju and BaZi share one solar-term model.
+fn saju_solar_year(year: i32, birth_jd: f64) -> i32 {
+    let li_chun = xalen_chinese::li_chun_jd(year);
+    if birth_jd < li_chun { year - 1 } else { year }
+}
+
+/// Signed day-distance from `birth_jd` to the adjacent **Jie Qi** (節氣, the
+/// 12 major month-opening solar terms at 30° intervals starting from Li Chun =
+/// 315°). Positive when `forward` (distance to the NEXT term), negative when
+/// backward (distance to the PREVIOUS term). Used by [`daeun`] for the start age.
+///
+/// The Sun's ecliptic longitude is the published `xalen_chinese` approximation
+/// (Meeus low-accuracy, ~0.01°), so Saju and BaZi share one solar model. The
+/// term longitudes are the multiples-of-30° grid phased at 315°
+/// (315, 345, 15, 45, …, 285) — exactly the BaZi month boundaries.
+fn days_to_adjacent_jie_qi(birth_jd: f64, forward: bool) -> f64 {
+    // Mean solar motion ≈ 360°/365.2422 ≈ 0.9856°/day — used for the Newton step.
+    const DEG_PER_DAY: f64 = 0.985_647;
+
+    let lon0 = xalen_chinese::solar_longitude_approx(birth_jd);
+    // How far (0..30) the Sun has advanced past the most recent Jie Qi boundary.
+    let past = (lon0 - 315.0).rem_euclid(30.0);
+
+    // Target longitude of the adjacent boundary, expressed relative to lon0 so
+    // the sign of the longitude delta carries the search direction.
+    let target_delta_deg = if forward {
+        30.0 - past // ahead to the next boundary (0, 30]
+    } else if past < 1e-9 {
+        -30.0 // exactly on a boundary: the previous one is a full term back
+    } else {
+        -past // behind to the previous boundary [-30, 0)
+    };
+    let target_lon = (lon0 + target_delta_deg).rem_euclid(360.0);
+
+    // Newton/secant refinement on solar longitude. Initial guess by mean motion.
+    let mut jd = birth_jd + target_delta_deg / DEG_PER_DAY;
+    for _ in 0..40 {
+        let cur = xalen_chinese::solar_longitude_approx(jd);
+        // Signed angular error wrapped to (-180, 180].
+        let mut diff = (cur - target_lon).rem_euclid(360.0);
+        if diff > 180.0 {
+            diff -= 360.0;
+        }
+        if diff.abs() < 1e-6 {
+            break;
+        }
+        jd -= diff / DEG_PER_DAY;
+    }
+    jd - birth_jd
+}
+
 /// Compute the month pillar from the year stem and month (1-12).
 ///
 /// The month stem is derived from the year stem following the same
@@ -452,7 +514,9 @@ fn hour_pillar(day_stem: HeavenlyStem, hour: u32) -> (HeavenlyStem, EarthlyBranc
     (stem, branch)
 }
 
-/// Convert Gregorian date to Julian Day number (noon-based).
+/// Convert a Gregorian civil date to its Julian Day at 00:00 UT (midnight) — the
+/// trailing `- 1524.5` (not `- 1524.0`) makes this midnight-based. Callers add an
+/// hour fraction when they need the exact birth instant; `day_pillar` floors it.
 fn gregorian_to_jd(year: i32, month: u32, day: u32) -> f64 {
     let y = if month <= 2 { year - 1 } else { year } as f64;
     let m = if month <= 2 { month + 12 } else { month } as f64;
@@ -478,7 +542,15 @@ pub fn compute_saju(year: i32, month: u32, day: u32, hour: u32) -> SajuChart {
     let day = day.clamp(1, 31);
     let hour = hour.min(23);
 
-    let yp = year_pillar(year);
+    // Birth instant as a Julian Day (midnight JD of the civil date + the hour
+    // fraction). Used both to resolve the Ipchun solar-year boundary for the
+    // year pillar and the Jie Qi solar-term distance for Daeun.
+    let birth_jd = gregorian_to_jd(year, month, day) + hour as f64 / 24.0;
+
+    // Year pillar uses the Saju SOLAR year (Ipchun boundary), not the raw
+    // Gregorian year — a Jan..~Feb-4 birth rolls back to the previous year.
+    let solar_year = saju_solar_year(year, birth_jd);
+    let yp = year_pillar(solar_year);
     let mp = month_pillar(yp.0, month);
     let dp = day_pillar(year, month, day);
     let hp = hour_pillar(dp.0, hour);
@@ -490,6 +562,7 @@ pub fn compute_saju(year: i32, month: u32, day: u32, hour: u32) -> SajuChart {
         hour_pillar: hp,
         day_master: dp.0,
         day_master_element: dp.0.element(),
+        birth_jd,
     }
 }
 
@@ -501,7 +574,7 @@ pub fn compute_saju(year: i32, month: u32, day: u32, hour: u32) -> SajuChart {
 /// - Male + Yin year OR Female + Yang year: backward through the cycle
 ///
 /// Returns 8 periods covering ages roughly 1-80.
-pub fn daeun(chart: &SajuChart, gender: Gender, birth_year: i32) -> Vec<DaeunPeriod> {
+pub fn daeun(chart: &SajuChart, gender: Gender, _birth_year: i32) -> Vec<DaeunPeriod> {
     let year_stem_yang = chart.year_pillar.0.is_yang();
     let forward = match gender {
         Gender::Male => year_stem_yang,
@@ -511,10 +584,18 @@ pub fn daeun(chart: &SajuChart, gender: Gender, birth_year: i32) -> Vec<DaeunPer
     let month_stem_idx = chart.month_pillar.0.index();
     let month_branch_idx = chart.month_pillar.1.index();
 
-    // Starting age for first Daeun: simplified formula based on birth year.
-    // In practice this depends on the distance to the next/previous solar term,
-    // but we use a common approximation: (birth_year % 3) + 1, clamped 1-10.
-    let start_age = ((birth_year.unsigned_abs() % 3) + 1).min(10);
+    // Starting age for the first Daeun = distance (in days) from birth to the
+    // ADJACENT solar term, divided by three (the classical "3 days = 1 year"
+    // rule). The adjacent term is the NEXT Jie Qi when the cycle runs forward
+    // (yang-year male / yin-year female) and the PREVIOUS one when it runs
+    // backward — i.e. the same direction that drives the stem/branch traversal.
+    // `_birth_year` is retained for API compatibility but is no longer used: the
+    // distance comes from the stored birth instant, which is astronomically
+    // meaningful, unlike the old `birth_year % 3` placeholder.
+    let days = days_to_adjacent_jie_qi(chart.birth_jd, forward).abs();
+    // 3 days ≈ 1 year of life; round to the nearest whole year, floored at 1
+    // (a real Daeun never starts at age 0). Real start ages run ~1-10.
+    let start_age = ((days / 3.0).round() as u32).clamp(1, 10);
 
     let mut periods = Vec::with_capacity(8);
     for i in 0..8u32 {
@@ -704,8 +785,12 @@ mod tests {
 
     #[test]
     fn daeun_male_yang_goes_forward() {
-        // 2024 year stem = Gap (Yang) + Male -> forward
-        let chart = compute_saju(2024, 1, 15, 8);
+        // 2024 year stem = Gap (Yang) + Male -> forward.
+        // NOTE: the date must be AFTER Ipchun (Li Chun ≈ 4 Feb) so the Saju solar
+        // year is 2024 (Gap, Yang). A January date would roll back to 2023 (Gui,
+        // Yin) under the Ipchun boundary and flip the direction — see
+        // `ipchun_year_boundary_january_birth`. We use mid-March 2024.
+        let chart = compute_saju(2024, 3, 15, 8);
         assert!(chart.year_pillar.0.is_yang());
         let periods = daeun(&chart, Gender::Male, 2024);
         // First period stem should be the NEXT stem after the month stem

@@ -10,7 +10,7 @@ Part of the [XALEN Ephemeris](https://github.com/vedika-io/xalen-ephemeris) suit
 - **Sexagenary cycle** — `sexagenary_year` and `sexagenary_day` resolve any year / Julian Day to its stem-branch pillar.
 - **Solar terms (Jie Qi)** — `solar_term_sun_longitude`, `solar_longitude_approx` (Meeus Ch.25 low-accuracy formula), `solar_month_from_jd`, and `li_chun_jd` map dates to the 24-term / 12-month solar calendar.
 - **Zi Wei Dou Shu (Purple Star Astrology)** — `ziwei` module for the 12-palace star chart.
-- **Qi Men Dun Jia (奇门遁甲)** — `qimen` module for the 9-palace strategic-divination grid.
+- **Qi Men Dun Jia (奇门遁甲)** — `qimen` module: 9-Star / 8-Door / 8-Deity / San-Qi-Liu-Yi / Lo-Shu reference data plus `compute_qimen`, the **time chart (時家奇門) cast by the San Yuan placement school**. The Ju is set by the solar term + San Yuan Fu Tou yuan (`qimen_ju`), and Zhi Fu / Zhi Shi are anchored to the hour's Xun-head Yi. Qi Men has genuine school variation; this implements the San Yuan time-chart school consistently rather than claiming universality.
 - **Feng Shui** — `fengshui` module with Flying Stars (Xuan Kong Fei Xing) and Eight Mansions (Ba Zhai).
 - All public types derive `serde::{Serialize, Deserialize}`.
 

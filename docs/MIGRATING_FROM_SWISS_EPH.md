@@ -4,7 +4,8 @@ This guide shows side-by-side code for every common Swiss Ephemeris operation
 and its XALEN equivalent in Rust, Node.js, and Python.
 
 **Why migrate?** XALEN is pure Rust -- no C dependencies, no `.se1` data files
-to ship, no GPL licensing concerns. It compiles to a single binary or `.wasm`.
+to ship, and Apache-2.0 licensed (no copyleft, vs Swiss Ephemeris's AGPL-3.0 or
+paid commercial license). It compiles to a single binary or `.wasm`.
 The API is type-safe, thread-safe (`Send + Sync`), and the same crate powers
 all language bindings.
 
@@ -12,14 +13,22 @@ all language bindings.
 
 ## Quick start
 
+> **Availability:** the Rust crates are on crates.io at the **0.3.1** line (pin
+> `0.3` or depend on this repo for the newer 0.4.x+ work, which is not yet
+> published). The **Node.js (`npm install xalen`) and Python (`pip install xalen`)
+> packages are forthcoming — not yet published.** There is an unrelated `xalen`
+> package on PyPI (a separate XALEN SDK); it is **not** these ephemeris bindings.
+> Until the bindings publish, build them from source: `cd crates/xalen-python &&
+> maturin develop` and `cd crates/xalen-node && napi build --release`.
+
 ```bash
-# Rust
+# Rust (crates.io 0.3.1 line; pin 0.3 or use a git/path dep for newer work)
 cargo add xalen-ephem xalen-ayanamsa xalen-houses xalen-time xalen-stars xalen-vedic
 
-# Node.js
-npm install @xalen/ephemeris
+# Node.js — FORTHCOMING (not yet on npm); build from source for now
+npm install xalen
 
-# Python
+# Python — FORTHCOMING (not yet on PyPI as these bindings); build from source for now
 pip install xalen
 ```
 
@@ -74,7 +83,7 @@ let latitude  = xx[1];
 ### XALEN (Node.js)
 
 ```js
-const xalen = require("@xalen/ephemeris");
+const xalen = require("xalen");
 
 // By name
 const lon = xalen.planetLongitude("Sun", jd);
@@ -401,16 +410,21 @@ use xalen_ephem::{Almanac, find_solar_eclipses, find_lunar_eclipses};
 let almanac = Almanac::default_vedic();
 let solar = find_solar_eclipses(&almanac, jd_start, jd_end);
 for eclipse in &solar {
-    println!("JD {:.2}: {:?}, mag {:.3}",
-        eclipse.jd_maximum, eclipse.eclipse_type, eclipse.magnitude);
+    // `coverage_proxy` is a diameter-ratio / overlap PROXY, not the
+    // astronomical magnitude; `gamma` is the authoritative Besselian quantity.
+    println!("JD {:.2}: {:?}, gamma {:.3}, coverage~{:.3}",
+        eclipse.jd_maximum, eclipse.eclipse_type, eclipse.gamma, eclipse.coverage_proxy);
 }
 
 let lunar = find_lunar_eclipses(&almanac, jd_start, jd_end);
 ```
 
 XALEN returns typed results (`SolarEclipse`, `LunarEclipse`) with classification
-(`Total`, `Annular`, `Partial`, `Penumbral`) and magnitude. Verified against the
-NASA Eclipse Catalog for 2024--2025.
+(`Total`, `Annular`, `Partial`, `Penumbral`), the Besselian `gamma` (solar), and
+honestly-named proxies (`coverage_proxy` for solar, `shadow_depth_proxy` for
+lunar) rather than a true astronomical magnitude. Global eclipse type verified
+against the NASA Eclipse Catalog for 2024--2025. For a real per-observer
+magnitude / obscuration / contact times, use the local-circumstances layer.
 
 ---
 
@@ -570,6 +584,17 @@ file I/O, no `ephe_path`, and no `close()` call.
    Use body ID 13 in the bindings, or compute it yourself:
    `Body::ketu_longitude(rahu_lon_rad)`.
 
-5. **No speed computation yet.** SE returns velocity in `xx[3..5]`. XALEN's
-   current VSOP87 provider does not compute speed. Use finite differences
-   if needed: `(lon(jd + 0.001) - lon(jd - 0.001)) / 0.002`.
+5. **Speed is computed; retrograde is the sign of the longitude speed.**
+   SE returns velocity in `xx[3..5]`. XALEN computes daily motion directly via
+   `Almanac::geocentric_speed` (in the `swe_calc_ut` compat shim, pass
+   `SEFLG_SPEED` to fill `xx[3..6]`). A body is retrograde when its geocentric
+   ecliptic-longitude speed is negative:
+
+   ```rust
+   use xalen_ephemeris::ephem::{Almanac, Body};
+   use xalen_ephemeris::time::JdUT1;
+
+   let almanac = Almanac::default_vedic();
+   let speed = almanac.geocentric_speed(Body::Mercury, JdUT1(jd)).unwrap();
+   let is_retrograde = speed.longitude < 0.0; // negative = retrograde
+   ```

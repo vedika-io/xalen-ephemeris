@@ -8,6 +8,7 @@ Built as both `cdylib` and `staticlib`, this crate exposes a small, stable `exte
 ## Features
 - **`xalen_init() -> int`** — thread-safe, idempotent initialization of the shared almanac (lazy `OnceLock`); returns `0`.
 - **`xalen_planet_position(jd_ut1, body_id, *out XalenPosition) -> int`** — geocentric tropical ecliptic longitude, latitude (deg), and distance (AU). Output is zero-initialized before use; null `out` returns `-1`.
+- **`xalen_planet_position_full(jd_ut1, body_id, *out XalenPositionFull) -> int`** — the FULL six-component state Swiss Ephemeris returns from `swe_calc_ut(..., SEFLG_SPEED)`: longitude, latitude (deg), distance (AU), plus daily-motion speeds (`lon_speed_deg`, `lat_speed_deg` in deg/day, `dist_speed_au` in AU/day) and an `is_retrograde` flag (`1`/`0`, from the tropical longitude rate). Additive — the `xalen_planet_position` / `XalenPosition` ABI is unchanged. Ketu (id 13) inherits Rahu's speed and retrograde state.
 - **`xalen_sidereal_longitude(jd_ut1, body_id, ayanamsa_id) -> double`** — sidereal longitude (deg) for the chosen ayanamsa.
 - **`xalen_ayanamsa(jd_ut1, ayanamsa_id) -> double`** — ayanamsa offset in degrees at the given epoch.
 - **`xalen_houses(jd_ut1, lat, lon, system_id, *out XalenHouses) -> int`** — 12 house cusps, Ascendant, and MC (deg).

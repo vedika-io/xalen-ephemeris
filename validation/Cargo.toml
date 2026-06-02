@@ -1,0 +1,24 @@
+[package]
+name = "xalen-validation"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Reproducible accuracy validation runner — compares XALEN against a pyswisseph oracle file at any chart count"
+publish = false
+
+[[bin]]
+name = "xalen-validation"
+path = "src/main.rs"
+
+[dependencies]
+xalen-time = { path = "../crates/xalen-time", version = "0.6.0" }
+xalen-coords = { path = "../crates/xalen-coords", version = "0.6.0" }
+xalen-ephem = { path = "../crates/xalen-ephem", version = "0.6.0" }
+xalen-houses = { path = "../crates/xalen-houses", version = "0.6.0" }
+xalen-ayanamsa = { path = "../crates/xalen-ayanamsa", version = "0.6.0" }
+serde = { workspace = true }
+serde_json = "1"
+
+[lints]
+workspace = true

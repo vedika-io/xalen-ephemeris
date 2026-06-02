@@ -1,0 +1,4 @@
+# Generated oracle files from oracle_pyswisseph.py — can reach several GB at
+# large N; never commit them. Regenerate with the commands in README.md.
+oracle.jsonl
+*.jsonl

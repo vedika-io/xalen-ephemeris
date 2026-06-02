@@ -12,7 +12,7 @@ Part of the [XALEN Ephemeris](https://github.com/vedika-io/xalen-ephemeris) suit
 - `challenge_numbers` and `pinnacle_numbers` (4-element arrays for life stages).
 - Master-number preservation (11, 22, 33) via `reduce(n, preserve_master)`, plus `check_master_number` and `karmic_debt` (13/14/16/19) detection.
 - `lo_shu_grid` magic-square placement from `birth_date_digits`.
-- `full_profile` to compute a `NumerologyProfile` in one call. (`number_meaning` returns an interpretive keyword slot for each single-digit and master number; the descriptive text is not bundled in this open-source release and the function currently returns an empty string for every number — supply your own keyword copy.)
+- `full_profile` to compute a `NumerologyProfile` in one call. (`number_meaning` returns `Option<&'static str>` for each single-digit and master number; the descriptive text is not bundled in this open-source release, so the function currently returns `None` (genuinely absent) for every number rather than `Some("")` — callers can tell "no meaning text" from a real meaning. Supply your own keyword copy.)
 - All public types derive `serde::Serialize` / `Deserialize`.
 
 ## Usage

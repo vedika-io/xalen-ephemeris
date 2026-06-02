@@ -286,21 +286,21 @@ pub fn full_profile(
     }
 }
 
-pub fn number_meaning(n: u32) -> &'static str {
+/// Interpretive meaning of a numerology number.
+///
+/// Honesty contract: this crate ships **no** AI-generated or
+/// copyright-encumbered interpretive prose. Until a verified public-domain
+/// source is backfilled, every entry is genuinely absent, so this returns
+/// [`None`] rather than `Some("")`. A `Some(_)` would falsely advertise the
+/// presence of real content; `None` lets callers distinguish "no meaning text
+/// available" from an empty meaning, and decide their own fallback behaviour.
+pub fn number_meaning(n: u32) -> Option<&'static str> {
     match n {
-        1 => "",
-        2 => "",
-        3 => "",
-        4 => "",
-        5 => "",
-        6 => "",
-        7 => "",
-        8 => "",
-        9 => "",
-        11 => "",
-        22 => "",
-        33 => "",
-        _ => "",
+        // No verified public-domain meaning text is currently bundled for any
+        // number, so all defined numbers map to `None` (absent), and any other
+        // integer is also `None` (undefined).
+        1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 11 | 22 | 33 => None,
+        _ => None,
     }
 }
 
@@ -488,6 +488,25 @@ mod tests {
         for i in 1..=9 {
             let _ = number_meaning(i);
         }
+    }
+
+    #[test]
+    fn number_meaning_returns_none_for_absent_entries() {
+        // Honesty contract: no interpretive prose is bundled, so every defined
+        // number (and every undefined one) must report absence as `None`,
+        // never `Some("")`. This lets callers tell "real content" from
+        // "stripped / not yet backfilled".
+        for n in [1u32, 2, 3, 4, 5, 6, 7, 8, 9, 11, 22, 33] {
+            assert_eq!(
+                number_meaning(n),
+                None,
+                "number {n} must report absent meaning as None, not Some(\"\")"
+            );
+        }
+        // Undefined numbers are also absent (None), not an empty string.
+        assert_eq!(number_meaning(0), None);
+        assert_eq!(number_meaning(10), None);
+        assert_eq!(number_meaning(100), None);
     }
 
     #[test]

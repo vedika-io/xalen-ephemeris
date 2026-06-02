@@ -6103,15 +6103,36 @@ pub fn brighter_than(max_mag: f64) -> Vec<&'static FixedStar> {
 }
 
 /// Return the ecliptic longitude and latitude (degrees) for a star,
-/// applying precession from J2000.0 to the requested Julian Day.
+/// precessing the J2000.0 mean ecliptic position to the **mean ecliptic of
+/// date** at the requested Julian Day.
 ///
-/// Uses simple linear precession at 50.29"/yr.  For high-precision work
-/// use the full IAU 2006 precession matrix in `xalen-coords`.
+/// Uses the SOFA-validated IAU 2006/P03 precession rotation
+/// ([`xalen_coords::precession_matrix_p03_nobias`] +
+/// [`xalen_coords::precess_ecliptic_to_of_date`]): the J2000 ecliptic direction
+/// is rotated to the ecliptic of date, which couples longitude AND latitude.
+///
+/// This replaces the previous planar `longitude += 50.29″·dt` approximation
+/// that held ecliptic latitude FIXED. By never moving latitude, that
+/// approximation misplaced high-ecliptic-latitude stars — e.g. Vega (+61.7°) by
+/// ~0.06°/1000 yr vs Swiss, almost entirely in the latitude it refused to move.
+///
+/// Proper motion is NOT applied here (this catalog stores equatorial pmRA/pmDec,
+/// not ecliptic components); the function precesses the catalogue's J2000 mean
+/// place, matching its prior contract. The result is the mean ecliptic of date;
+/// apply nutation separately for the true (apparent) place.
 pub fn precessed_ecliptic(star: &FixedStar, jd: f64) -> (f64, f64) {
-    let years = (jd - 2451545.0) / 365.25;
-    let prec_deg = years * 50.29 / 3600.0;
-    let lon = (star.ecl_lon_deg + prec_deg).rem_euclid(360.0);
-    (lon, star.ecl_lat_deg)
+    let t = (jd - 2451545.0) / 36525.0; // Julian centuries TT from J2000.
+    let pos = xalen_coords::EclipticPosition {
+        longitude: star.ecl_lon_deg.to_radians(),
+        latitude: star.ecl_lat_deg.to_radians(),
+        distance: 1.0,
+    };
+    let prec = xalen_coords::precession_matrix_p03_nobias(t);
+    let of_date = xalen_coords::precess_ecliptic_to_of_date(pos, prec, t);
+    (
+        of_date.longitude.to_degrees().rem_euclid(360.0),
+        of_date.latitude.to_degrees(),
+    )
 }
 
 // ── Nakshatra yogatara lookup ──────────────────────────────────────
@@ -6370,12 +6391,110 @@ mod tests {
         let shift = lon_2100 - sirius.ecl_lon_deg;
         assert!(
             (shift - 1.397).abs() < 0.01,
-            "100-year precession shift should be ~1.397 deg, got {}",
+            "100-year precession longitude shift should be ~1.397 deg, got {}",
             shift,
         );
+        // Latitude is NO LONGER held fixed: the rigorous IAU 2006/P03 rotation
+        // couples it. For Sirius (ecliptic lat ~-39.6°) a century of precession
+        // moves the latitude by ~0.012° (~44″). The old planar model wrongly
+        // froze it — this assertion guards against that regression returning.
+        let dlat = (lat_2100 - sirius.ecl_lat_deg).abs();
         assert!(
-            (lat_2100 - sirius.ecl_lat_deg).abs() < 1e-10,
-            "Ecliptic latitude should not change with simple precession",
+            dlat > 1e-3,
+            "rigorous precession must move ecliptic latitude (got Δ={dlat} deg) \
+             — a frozen latitude means the planar bug is back",
+        );
+        assert!(
+            dlat < 0.05,
+            "Sirius latitude should move only ~0.012 deg over a century, got {dlat}",
+        );
+    }
+
+    /// Multi-epoch validation of [`precessed_ecliptic`] against `pyswisseph`.
+    ///
+    /// Reference longitudes/latitudes are LIVE `pyswisseph` 2.10.3.2 `swe.fixstar2`
+    /// output for the MEAN ecliptic of date (flags
+    /// `FLG_SWIEPH | FLG_NONUT | FLG_NOABERR | FLG_NOGDEFL`) at JD(1000-01-01
+    /// 12:00) = 2086303.0 and JD(3000-01-01 12:00) = 2816788.0.
+    ///
+    /// `precessed_ecliptic` does NOT apply proper motion (this catalog stores
+    /// equatorial pmRA/pmDec, not ecliptic components), so this test uses three
+    /// very-low-proper-motion stars — Rigel, Alnilam, Mintaka (all |pm| ≲ 4
+    /// mas/yr, i.e. < 0.07′ of drift over a millennium) — to isolate and confirm
+    /// the precession ROTATION. All three match Swiss to < 0.1′. (High-pm stars
+    /// would show the omitted-pm offset, not a precession error.)
+    #[test]
+    fn precessed_ecliptic_multi_epoch_matches_pyswisseph() {
+        struct Row {
+            name: &'static str,
+            jd: f64,
+            swiss_lon: f64,
+            swiss_lat: f64,
+        }
+        const ROWS: &[Row] = &[
+            Row {
+                name: "Rigel",
+                jd: 2086303.0,
+                swiss_lon: 62.876731,
+                swiss_lat: -31.252123,
+            },
+            Row {
+                name: "Rigel",
+                jd: 2816788.0,
+                swiss_lon: 90.836973,
+                swiss_lat: -30.993682,
+            },
+            Row {
+                name: "Alnilam",
+                jd: 2086303.0,
+                swiss_lon: 69.521241,
+                swiss_lat: -24.637293,
+            },
+            Row {
+                name: "Alnilam",
+                jd: 2816788.0,
+                swiss_lon: 97.462335,
+                swiss_lat: -24.377031,
+            },
+            Row {
+                name: "Mintaka",
+                jd: 2086303.0,
+                swiss_lon: 68.419039,
+                swiss_lat: -23.683777,
+            },
+            Row {
+                name: "Mintaka",
+                jd: 2816788.0,
+                swiss_lon: 96.361696,
+                swiss_lat: -23.423621,
+            },
+        ];
+        const TOL_ARCMIN: f64 = 1.0;
+
+        let mut worst = 0.0_f64;
+        for r in ROWS {
+            let star = find_by_name(r.name).expect("star in catalog");
+            let (lon, lat) = precessed_ecliptic(star, r.jd);
+            let dlon =
+                (((lon - r.swiss_lon + 180.0).rem_euclid(360.0)) - 180.0) * lat.to_radians().cos();
+            let dlat = lat - r.swiss_lat;
+            let sep = (dlon * dlon + dlat * dlat).sqrt() * 60.0;
+            worst = worst.max(sep);
+            assert!(
+                sep <= TOL_ARCMIN,
+                "{} at JD {}: model {:.5}/{:.5} vs Swiss {:.5}/{:.5} = {:.3}' > {TOL_ARCMIN}'",
+                r.name,
+                r.jd,
+                lon,
+                lat,
+                r.swiss_lon,
+                r.swiss_lat,
+                sep,
+            );
+        }
+        assert!(
+            worst < 0.1,
+            "expected sub-0.1' agreement, worst was {worst:.3}'"
         );
     }
 

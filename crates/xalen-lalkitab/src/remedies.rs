@@ -7,32 +7,55 @@
 use crate::houses::Planet;
 use serde::{Deserialize, Serialize};
 
-/// A Lal Kitab remedy entry.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 /// A Lal Kitab remedy for a specific planet-house combination.
+///
+/// Honesty contract: this crate ships **no** AI-generated or
+/// copyright-encumbered remedy prose. The remedy and item text from
+/// Pt. Roop Chand Joshi's *Lal Kitab* is still encumbered and has not been
+/// backfilled, so [`remedies`](Self::remedies) and [`items`](Self::items) are
+/// `None` (genuinely absent) rather than `Some(vec![])`. A `Some(_)` would
+/// falsely advertise that real content is present; `None` lets a caller
+/// distinguish "no remedy text bundled for this combination" from "a remedy
+/// that happens to list zero items".
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LalKitabRemedy {
     pub planet: Planet,
     /// House number (1-12).
     pub house: usize,
-    /// Textual remedy descriptions.
-    pub remedies: Vec<String>,
-    /// Specific items involved (donations, wearing, keeping at home).
-    pub items: Vec<String>,
+    /// Textual remedy descriptions, or `None` when no remedy text is bundled
+    /// for this planet-house combination.
+    pub remedies: Option<Vec<String>>,
+    /// Specific items involved (donations, wearing, keeping at home), or `None`
+    /// when no item data is bundled for this planet-house combination.
+    pub items: Option<Vec<String>>,
 }
 
 /// Look up remedies for `planet` in `house` (1-12).
 ///
-/// Returns a `LalKitabRemedy` for the planet-house combination.
-/// Panics if house is out of 1-12 range.
+/// Always returns a `LalKitabRemedy` correctly keyed by `planet` and `house`
+/// (the input house is clamped to 1-12). The `remedies` / `items` fields are
+/// `None` whenever no real remedy text is bundled for the combination — see
+/// the [`LalKitabRemedy`] honesty contract. They are `Some(_)` only once
+/// genuine public-domain or licensed Lal Kitab text has been added.
 pub fn remedy_lookup(planet: Planet, house: usize) -> LalKitabRemedy {
     let house = house.clamp(1, 12);
 
     let (remedies, items) = remedy_data(planet, house);
+    // Map an empty list (stripped / not-yet-backfilled) to `None`, and a
+    // populated list to `Some(_)`. This is the single point that enforces the
+    // "absent ⇒ None, present ⇒ Some" honesty contract.
+    let to_opt = |v: Vec<&'static str>| -> Option<Vec<String>> {
+        if v.is_empty() {
+            None
+        } else {
+            Some(v.into_iter().map(String::from).collect())
+        }
+    };
     LalKitabRemedy {
         planet,
         house,
-        remedies: remedies.into_iter().map(String::from).collect(),
-        items: items.into_iter().map(String::from).collect(),
+        remedies: to_opt(remedies),
+        items: to_opt(items),
     }
 }
 
@@ -212,6 +235,26 @@ mod tests {
     fn every_entry_has_planet_and_house() {
         for r in all_remedies() {
             assert!(r.house >= 1 && r.house <= 12);
+        }
+    }
+
+    #[test]
+    fn empty_entries_report_none_not_some_empty() {
+        // Honesty contract: no remedy prose is bundled, so every one of the 108
+        // planet-house combinations must report absent content as `None`,
+        // never `Some(vec![])`. This lets callers tell "real remedy text" from
+        // "stripped / not yet backfilled".
+        for r in all_remedies() {
+            assert_eq!(
+                r.remedies, None,
+                "{:?} in house {} must report remedies as None, not Some(vec![])",
+                r.planet, r.house
+            );
+            assert_eq!(
+                r.items, None,
+                "{:?} in house {} must report items as None, not Some(vec![])",
+                r.planet, r.house
+            );
         }
     }
 

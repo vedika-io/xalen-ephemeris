@@ -4,19 +4,30 @@ build-backend = "maturin"
 
 [project]
 name = "xalen"
-description = "Pure-Rust astronomical & astrology ephemeris — VSOP87 planets, Vedic/Western/KP, house systems, ayanamsa, fixed stars, numerology."
+description = "Pure-Rust astronomical & astrology ephemeris — VSOP87 planets, Vedic/Western/KP, house systems, ayanamsa, fixed stars, numerology. A pyswisseph drop-in."
+readme = "README.md"
 requires-python = ">=3.8"
 license = "Apache-2.0"
-keywords = ["ephemeris", "astrology", "astronomy", "vedic", "vsop87"]
+keywords = ["ephemeris", "astrology", "astronomy", "vedic", "vsop87", "swisseph", "pyswisseph", "jyotish", "panchang", "nakshatra"]
 classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
     "Programming Language :: Rust",
     "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: 3",
     "Topic :: Scientific/Engineering :: Astronomy",
+    "Topic :: Scientific/Engineering :: Mathematics",
 ]
 dynamic = ["version"]
 
 [project.urls]
+Homepage = "https://github.com/vedika-io/xalen-ephemeris"
 Repository = "https://github.com/vedika-io/xalen-ephemeris"
+Documentation = "https://github.com/vedika-io/xalen-ephemeris/blob/main/docs/ACCURACY.md"
+Issues = "https://github.com/vedika-io/xalen-ephemeris/issues"
 
 [tool.maturin]
 # `extension-module` is an OPTIONAL Cargo feature (so `cargo test` can link
@@ -24,3 +35,25 @@ Repository = "https://github.com/vedika-io/xalen-ephemeris"
 # maturin builds the extension correctly (host interpreter resolves symbols).
 features = ["extension-module"]
 manifest-path = "Cargo.toml"
+# PyO3 extension module (vs cffi/uniffi). Stated explicitly so `maturin build`
+# and `maturin sdist` agree on the binding kind regardless of maturin defaults.
+bindings = "pyo3"
+# abi3: build one stable-ABI wheel (tag cp38-abi3) per platform that works on
+# CPython 3.8 and every later 3.x. The abi3-py38 Cargo feature on pyo3 (see
+# Cargo.toml) drives the compile; maturin tags the wheel from the lowest
+# abi3-pyXX feature it detects. `maturin build --release` therefore emits a
+# single forward-compatible wheel per platform instead of one per interpreter.
+#
+# `maturin sdist` produces a source distribution that pip can build on any
+# platform with a Rust toolchain (the whole xalen-* workspace is vendored into
+# the sdist via the include rules below), so an unsupported platform still
+# installs from source.
+# Ship the hand-written type stubs + PEP 561 marker so pyswisseph/native users
+# get autocomplete and mypy checking. `xalen.pyi` types the top-level extension
+# module; `xalen/swe.pyi` types the `xalen.swe` drop-in submodule.
+include = [
+    { path = "xalen.pyi", format = "wheel" },
+    { path = "py.typed", format = "wheel" },
+    { path = "xalen/swe.pyi", format = "wheel" },
+    { path = "xalen/py.typed", format = "wheel" },
+]

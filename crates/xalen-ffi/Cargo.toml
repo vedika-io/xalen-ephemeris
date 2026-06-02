@@ -12,11 +12,11 @@ categories = ["science", "api-bindings"]
 crate-type = ["cdylib", "staticlib"]
 
 [dependencies]
-xalen-time = { version = "0.5.0", path = "../xalen-time" }
-xalen-coords = { version = "0.5.0", path = "../xalen-coords" }
-xalen-ephem = { version = "0.5.0", path = "../xalen-ephem" }
-xalen-houses = { version = "0.5.0", path = "../xalen-houses" }
-xalen-ayanamsa = { version = "0.5.0", path = "../xalen-ayanamsa" }
+xalen-time = { version = "0.6.0", path = "../xalen-time" }
+xalen-coords = { version = "0.6.0", path = "../xalen-coords" }
+xalen-ephem = { version = "0.6.0", path = "../xalen-ephem" }
+xalen-houses = { version = "0.6.0", path = "../xalen-houses" }
+xalen-ayanamsa = { version = "0.6.0", path = "../xalen-ayanamsa" }
 
 [lints]
 workspace = true

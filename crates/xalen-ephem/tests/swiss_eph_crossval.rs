@@ -9,15 +9,18 @@
 //
 // MEASURED ACCURACY (this engine vs JPL DE440):
 //   Sun:     14" at J2000, 6" at 2024  (VSOP87A full series)
-//   Moon:    truncated ELP2000-82 (60 longitude terms), WITHOUT an explicit
-//            nutation-in-longitude (delta_psi) term — unlike the Sun, the
-//            planets, and the DE440 provider (see vsop.rs Body::Moon). This
-//            engineering choice matches the NASA Besselian eclipse circumstances
-//            (2017/2024 within ~30s) and J2000 Horizons, where the series
-//            truncation error happens to ~cancel the omitted nutation. Away from
-//            J2000 the analytical Moon is only accurate to ~tens of arcsec
-//            (measured up to ~17" at medieval epochs, ~31" worst-case per docs):
-//            use the DE440 provider for an accurate apparent Moon.
+//   Moon:    truncated ELP2000-82 (60 longitude terms), assembled into an
+//            apparent place by vsop::apparent_moon = mean-of-date series + Δψ
+//            (IAU 2000B nutation) + geocentric light-time (~0.7"). It does NOT
+//            receive the full ANNUAL aberration term (κ=20.49552") that planets
+//            get — the geocentric Moon shares Earth's heliocentric velocity, so
+//            that term does not apply (a prior build wrongly applied it, adding
+//            up to ~44" of error). Residual vs pyswisseph 2.10.03: RMS ~2.82"
+//            over AD 1600-2100 (max ~12"), now limited by the 60-term series
+//            truncation; at these J2000/1950/2024/2050 epochs the apparent Moon
+//            lands within ~0.3-3.5" of JPL. The corrected Moon also improves the
+//            NASA Besselian eclipse-time agreement (2017/2024 from ~19-30s to
+//            ~2s). Use the DE440 provider for sub-arcsecond apparent Moon.
 //   Mercury: 14" at J2000              (VSOP87A)
 //   Venus:   14" at J2000              (VSOP87A)
 //   Mars:    14" at J2000, 6" at 2024  (VSOP87A)
@@ -53,8 +56,9 @@ struct JplRef {
 // JPL Horizons DE440 — J2000.0 (2000-01-01 12:00 UT)
 // Expected values are apparent geocentric ecliptic-of-date longitudes (ObsEcLon).
 // VSOP87 planets land within ~1.1"; the Moon's apparent path (mean-of-date ELP
-// + delta_psi + aberration) lands within the Moon tolerance below — the residual
-// is the truncated-ELP series limit, not a frame error.
+// + Δψ + geocentric light-time, NOT annual aberration) lands within the Moon
+// tolerance below — the residual is the truncated-ELP series limit, not a frame
+// error.
 const JPL_J2000_REFS: &[JplRef] = &[
     JplRef {
         body: Body::Sun,

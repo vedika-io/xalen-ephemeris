@@ -1,7 +1,11 @@
+/// Antiscia and contra-antiscia — reflections across the solstitial axis.
+pub mod antiscia;
 /// Planetary aspects (conjunction, opposition, trine, square, sextile, etc.).
 pub mod aspects;
 /// Cosmobiology (Ebertin) methods and analysis.
 pub mod cosmobiology;
+/// Declination aspects — parallel and contraparallel.
+pub mod declination;
 /// Essential and accidental dignities for Western astrology.
 pub mod dignity;
 /// Electional astrology timing rules.

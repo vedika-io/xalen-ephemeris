@@ -51,6 +51,44 @@ VMAG_LIMIT = 6.5
 # and the HIP record are the same body (logged, not a hard fabrication gate).
 IAU_POS_SANITY_DEG = 0.1   # IAU RA/Dec vs HIP-derived position must agree this well
 
+# Curated-spelling -> IAU-CSN-spelling alias map.
+#
+# A handful of curated catalog names use a traditional spelling that differs
+# from the official IAU-WGSN ASCII name in IAU-CSN.txt, so the exact-name lookup
+# `iau.get(curated_name)` misses and the star silently falls back to the coarse
+# curated coordinates. Each alias below resolves the curated spelling to the
+# authoritative IAU-CSN entry; the HIP designation (and therefore every emitted
+# coordinate) still comes entirely from IAU-CSN -> Hipparcos, never invented.
+#
+#   "Zuben Elgenubi" (Bayer alpha2 Lib)  -> IAU "Zubenelgenubi"   (HIP 72622)
+#   "Zuben Eschamali" (Bayer beta Lib)   -> IAU "Zubeneschamali"  (HIP 74785)
+#   "Bharani 41" (Flamsteed 41 Ari)      -> IAU "Bharani"         (HIP 13209)
+#   "Lambda Orionis" (Bayer lambda Ori)  -> IAU "Meissa"          (HIP 26207)
+#   "Hyadum II" (Bayer delta1 Tau)       -> IAU "Secunda Hyadum"  (HIP 20455)
+CURATED_TO_IAU = {
+    "Zuben Elgenubi": "Zubenelgenubi",
+    "Zuben Eschamali": "Zubeneschamali",
+    "Bharani 41": "Bharani",
+    "Lambda Orionis": "Meissa",
+    "Hyadum II": "Secunda Hyadum",
+}
+
+# Curated-spelling -> explicit HIP designation, for traditional star names that
+# have NO IAU-WGSN proper name at all (so they cannot be resolved through
+# IAU-CSN). These bodies are still real Hipparcos stars; the HIP number is the
+# documented Bright Star / Bayer-Flamsteed identification, and every coordinate
+# still comes from the Hipparcos record for that HIP — only the *name* is the
+# traditional one.
+#
+#   "Al Jabhah" (Bayer eta Leonis, HR 4031 = HD 87737) -> HIP 49583.
+#     WGSN has not assigned eta Leonis a proper name (it named the nearby
+#     zeta Leonis "Adhafera" and gamma1 Leonis "Algieba"; eta Leonis is a
+#     distinct, unnamed star), so this is an explicit HIP designation, not an
+#     IAU-CSN alias.
+CURATED_TO_HIP = {
+    "Al Jabhah": 49583,
+}
+
 
 def field(line, a, b):
     """1-indexed inclusive byte slice, stripped."""
@@ -250,27 +288,42 @@ def main():
     name_by_hip = {}
     used_names = set()
     matched = 0
+    aliased = 0
     sanity_warnings = []
     for c in curated:
-        rec = iau.get(c["name"])
-        if not rec:
+        # 1. Direct IAU-CSN lookup, then 2. curated->IAU alias, both of which
+        #    still resolve a real IAU-CSN (proper-name -> HIP) row.
+        rec = iau.get(c["name"]) or iau.get(CURATED_TO_IAU.get(c["name"], ""))
+        if rec:
+            hip, ira, idec = rec
+            if hip is None or hip not in star_by_hip:
+                continue
+            s = star_by_hip[hip]
+            # Sanity: the IAU RA/Dec and the HIP record must be the same star.
+            # Compare in equatorial space at J2000 (cos-dec weighted).
+            dra = (s["ra2000"] - ira + 180.0) % 360.0 - 180.0
+            ddec = s["de2000"] - idec
+            sep = math.hypot(dra * math.cos(math.radians(idec)), ddec)
+            if sep > IAU_POS_SANITY_DEG:
+                sanity_warnings.append(f"{c['name']} HIP{hip} IAU-vs-HIP sep={sep:.3f} deg")
+                continue
+            if hip not in name_by_hip:
+                name_by_hip[hip] = (c["name"], c["constellation"], c["nature"])
+                used_names.add(c["name"])
+                matched += 1
+                if c["name"] in CURATED_TO_IAU:
+                    aliased += 1
             continue
-        hip, ira, idec = rec
-        if hip is None or hip not in star_by_hip:
-            continue
-        s = star_by_hip[hip]
-        # Sanity: the IAU RA/Dec and the HIP record must be the same star.
-        # Compare in equatorial space at J2000 (cos-dec weighted).
-        dra = (s["ra2000"] - ira + 180.0) % 360.0 - 180.0
-        ddec = s["de2000"] - idec
-        sep = math.hypot(dra * math.cos(math.radians(idec)), ddec)
-        if sep > IAU_POS_SANITY_DEG:
-            sanity_warnings.append(f"{c['name']} HIP{hip} IAU-vs-HIP sep={sep:.3f} deg")
-            continue
-        if hip not in name_by_hip:
+
+        # 3. No IAU-WGSN name exists for this body — use the documented explicit
+        #    HIP designation (still a real Hipparcos record; only the traditional
+        #    name is carried over, no coordinate is invented).
+        hip = CURATED_TO_HIP.get(c["name"])
+        if hip is not None and hip in star_by_hip and hip not in name_by_hip:
             name_by_hip[hip] = (c["name"], c["constellation"], c["nature"])
             used_names.add(c["name"])
             matched += 1
+            aliased += 1
 
     unmatched = [c["name"] for c in curated if c["name"] not in used_names]
 
@@ -286,7 +339,8 @@ def main():
     lines.append(f"// Filter: Vmag <= {VMAG_LIMIT}  ->  {len(stars)} stars.")
     lines.append("// Epoch: positions propagated J1991.25 -> J2000.0 (8.75 yr) using pmRA/pmDE,")
     lines.append(f"//        then RA/Dec -> ecliptic at the IAU 2006 J2000 mean obliquity ({OBLIQUITY_J2000_DEG:.10f} deg).")
-    lines.append(f"// Curated traditional names joined via the IAU-CSN authority (name->HIP): {matched} matched.")
+    lines.append(f"// Curated traditional names joined to HIP: {matched} matched ({aliased} via")
+    lines.append("// curated-spelling alias / explicit HIP designation; the rest by exact IAU-CSN name).")
     lines.append("//")
     lines.append("// Every coordinate, magnitude, and proper-motion value below is derived from a")
     lines.append("// real hip_main.dat record. No value is invented or interpolated.")
@@ -332,6 +386,7 @@ def main():
     print(f"records with Vmag/RA/Dec : {len(records)}")
     print(f"Vmag <= {VMAG_LIMIT} (emitted)    : {len(stars)}")
     print(f"curated names matched    : {matched} / {len(curated)} (via IAU-CSN authority)")
+    print(f"   of which via alias/HIP : {aliased} (curated-spelling alias or explicit HIP)")
     if sanity_warnings:
         print(f"IAU<->HIP sanity skips   : {len(sanity_warnings)}")
         for w in sanity_warnings:

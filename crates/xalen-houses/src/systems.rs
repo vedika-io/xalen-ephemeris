@@ -17,9 +17,25 @@ pub enum HouseSystem {
     Vehlow,
     Sripati,
     KrusinskiPisa,
-    /// Gauquelin sectors — 36-sector division projected onto 12 cusps.
-    /// Note: Gauquelin sectors require a 36-sector model not yet implemented.
-    /// Currently returns Placidus as approximation.
+    /// Gauquelin sectors — the 36-fold mundane division of statistical
+    /// astrology (Swiss Ephemeris code `G`).
+    ///
+    /// Gauquelin analysis divides the diurnal and nocturnal arcs into 36
+    /// sectors counted clockwise from the Ascendant: the semi-diurnal arc and
+    /// the semi-nocturnal arc of every point are each split into nine equal
+    /// parts. Every third sector boundary coincides with a Placidus house cusp
+    /// (sector 1 = Ascendant, sector 10 = Midheaven, sector 19 = Descendant,
+    /// sector 28 = Imum Coeli), so the 36 sectors are the Placidus houses
+    /// trisected in mundo.
+    ///
+    /// The 36-sector division cannot be represented by this crate's 12-cusp
+    /// `[f64; 12]` array, so the dedicated entry points are
+    /// [`crate::gauquelin_sectors`] (the 36 sector-boundary longitudes) and
+    /// [`crate::gauquelin_position`] (the continuous `[1, 37)` sector value of
+    /// a body). When passed to [`crate::compute_houses`] this variant fills the
+    /// 12-cusp array with the twelve every-third sector boundaries — which are
+    /// exactly the Placidus cusps — so the conventional `HouseCusps` contract
+    /// still returns genuine Gauquelin boundaries.
     Gauquelin,
     /// Sunshine house system (Makransky variant) — sun-based houses.
     /// Note: this is the MC/ASC declination-based approximation. Full Sunshine
@@ -108,9 +124,12 @@ impl HouseSystem {
     ///   expose as a separate `hsys` value (the earlier `'b'` was invented).
     ///
     /// NOTE: the letter only certifies which Swiss *system* a code names — it is
-    /// NOT a claim of bit-for-bit Swiss output. Gauquelin/Sunshine remain
-    /// documented approximations in `cusps.rs`; the letters here are merely the
-    /// correct Swiss identifiers for those systems.
+    /// NOT a claim of bit-for-bit Swiss output. `Gauquelin` (`G`) returns the
+    /// twelve every-third sector boundaries through the 12-cusp API; its full
+    /// 36-sector output is exposed by [`crate::gauquelin_sectors`] and matches
+    /// Swiss `swe_house_pos(..., 'G')` to better than 1e-4° (see `cusps.rs`).
+    /// Sunshine remains a documented MC/ASC approximation in `cusps.rs`. The
+    /// letters here are the correct Swiss identifiers for those systems.
     pub fn swiss_ephem_code(&self) -> Option<char> {
         match self {
             HouseSystem::WholeSign => Some('W'),

@@ -60,9 +60,20 @@ def main():
     flag = (swe.FLG_SWIEPH | swe.FLG_J2000 | swe.FLG_NONUT
             | swe.FLG_NOABERR | swe.FLG_NOGDEFL)
 
-    # Swiss name-disambiguation artifacts: validate against the explicit Bayer
-    # designation instead of the ambiguous common name.
-    BAYER_OVERRIDE = {"Menkar": ",alCet"}
+    # Swiss name-disambiguation: where the catalog's traditional spelling is not
+    # the name Swiss's sefstars.txt indexes, validate against the explicit Bayer
+    # / Flamsteed designation instead of the common name. (Same body, just the
+    # name Swiss recognizes — not a coordinate override.)
+    BAYER_OVERRIDE = {
+        "Menkar": ",alCet",            # alpha Ceti (Swiss prefix-search returns lambda Cet)
+        "Bharani 41": ",41Ari",        # 41 Arietis
+        "Lambda Orionis": ",laOri",    # lambda Orionis (= Meissa)
+        "Hyadum II": ",de-1Tau",       # delta1 Tauri (= Secunda Hyadum)
+        "Zuben Elgenubi": ",al-2Lib",  # alpha2 Librae (= Zubenelgenubi)
+        "Zuben Eschamali": ",beLib",   # beta Librae (= Zubeneschamali)
+        "Al Jabhah": ",etLeo",         # eta Leonis (no IAU-WGSN proper name)
+        "Imai": ",deCru",              # delta Crucis (Swiss indexes it as "Decrux")
+    }
 
     named = load_named(args.rs)
     seps, missing, outliers = [], [], []

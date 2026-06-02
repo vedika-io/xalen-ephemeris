@@ -12,7 +12,7 @@ This crate turns sidereal longitudes (produced by `xalen-coords` + `xalen-ayanam
 - **Yogas & doshas** — Pancha Mahapurusha / Raja yogas, Mangal (Kuja) Dosha, Kaal Sarp, and Gandanta detection.
 - **Divisional (varga) charts** — D-2 through D-60.
 - **Strength & dignity** — Shadbala, Ashtakavarga, planetary dignity, and Mrityu Bhaga death-degrees.
-- **Specialized branches** — KP (Krishnamurti Paddhati), Jaimini karakas/arudha, Nadi (Bhrigu Nandi Nadi — 48 planet/sign rule slots tagged by life-domain; the interpretive readings are **not bundled** in this open-source release, so each slot's indication text is currently empty), Tajaka / Varshaphal annual charts, Prashna (horary), and Muhurta (electional) timing.
+- **Specialized branches** — KP (Krishnamurti Paddhati), Jaimini karakas/arudha, Nadi (Bhrigu Nandi Nadi — 48 planet/sign rule slots tagged by life-domain; the interpretive readings are **not bundled** in this open-source release, so each slot's `indication` field returns `None` rather than an empty string), Tajaka / Varshaphal annual charts, Prashna (horary), and Muhurta (electional) timing.
 - **Transits & motion** — Gochara transit analysis, retrograde/motion status, and Upagraha sub-bodies (Gulika, Mandi, etc.).
 - **i18n** — Hindi, Sanskrit, Tamil, and Telugu names for planets, rashis, nakshatras, tithis, yogas, karanas, and varas.
 

@@ -10,6 +10,8 @@ use xalen_vedic::nakshatra::Nakshatra;
 use xalen_vedic::panchang::compute_panchang;
 use xalen_vedic::rashi::Rashi;
 
+mod swe_compat;
+
 // ---------------------------------------------------------------------------
 // ID-to-enum converters (mirrors xalen-wasm)
 // ---------------------------------------------------------------------------
@@ -110,6 +112,81 @@ fn house_system_from_id(id: u8) -> PyResult<HouseSystem> {
 fn compute_ayanamsa_deg(jd_ut1: f64, aya: &Ayanamsa) -> f64 {
     let tt = JdUT1(jd_ut1).to_tt(&DeltaTModel::StephensonMorrisonHohenkerk2016);
     aya.compute_deg(tt.as_f64())
+}
+
+/// The full six-component position of a body plus its retrograde flag — the same
+/// information `pyswisseph`'s `swe.calc_ut(..., FLG_SPEED)` returns in `xx[0..6]`.
+///
+/// * `longitude`, `latitude` — ecliptic, degrees (longitude wrapped to [0,360)).
+/// * `distance` — geocentric distance, AU.
+/// * `lon_speed`, `lat_speed` — daily motion, degrees/day.
+/// * `dist_speed` — radial velocity, AU/day.
+/// * `is_retrograde` — true when the **tropical** longitude rate is negative
+///   (the astrologically meaningful definition; subtracting a slowly-precessing
+///   ayanamsa never flips this sign).
+pub(crate) struct PositionFull {
+    pub longitude: f64,
+    pub latitude: f64,
+    pub distance: f64,
+    pub lon_speed: f64,
+    pub lat_speed: f64,
+    pub dist_speed: f64,
+    pub is_retrograde: bool,
+}
+
+/// Compute the full 6-tuple (+ retrograde) for `body` at `jd_ut1`.
+///
+/// When `ayanamsa` is `Some`, the longitude is made sidereal (tropical minus
+/// ayanamsa) and the longitude speed has the ayanamsa's own precession rate
+/// removed — matching Swiss `swe_calc_ut(..., SEFLG_SIDEREAL | SEFLG_SPEED)`.
+/// The retrograde flag is always taken from the frame-independent tropical rate.
+///
+/// `body` here is already a real [`Body`]; Ketu is handled by the caller (it is
+/// Rahu's position + 180° and shares Rahu's speed/retrograde state).
+pub(crate) fn position_full(
+    almanac: &Almanac,
+    body: Body,
+    jd_ut1: f64,
+    ayanamsa: Option<&Ayanamsa>,
+) -> Result<PositionFull, xalen_ephem::EphemerisError> {
+    let jd = JdUT1(jd_ut1);
+    let pos = almanac.geocentric_ecliptic(body, jd)?;
+    let speed = almanac.geocentric_speed(body, jd)?;
+
+    // Retrograde is defined on the tropical longitude rate, before any ayanamsa
+    // subtraction (the ayanamsa moves <0.0002°/day — it can never flip the sign).
+    let is_retrograde = speed.longitude < 0.0;
+
+    let tropical_lon = pos.longitude.to_degrees();
+    let tropical_lon_speed = speed.longitude_deg_per_day();
+
+    let (longitude, lon_speed) = match ayanamsa {
+        Some(aya) => {
+            let aya_deg = compute_ayanamsa_deg(jd_ut1, aya);
+            // Mirror compat::swe_calc_ut: subtract the ayanamsa's own daily rate
+            // from the longitude speed via a ±0.5-day finite difference, so the
+            // sidereal speed matches Swiss to sub-arcsecond/day.
+            let model = DeltaTModel::StephensonMorrisonHohenkerk2016;
+            let jd_tt0 = JdUT1(jd_ut1 - 0.5).to_tt(&model).as_f64();
+            let jd_tt1 = JdUT1(jd_ut1 + 0.5).to_tt(&model).as_f64();
+            let ayanamsa_rate = aya.compute_deg(jd_tt1) - aya.compute_deg(jd_tt0); // deg/day
+            (
+                (tropical_lon - aya_deg).rem_euclid(360.0),
+                tropical_lon_speed - ayanamsa_rate,
+            )
+        }
+        None => (tropical_lon.rem_euclid(360.0), tropical_lon_speed),
+    };
+
+    Ok(PositionFull {
+        longitude,
+        latitude: pos.latitude.to_degrees(),
+        distance: pos.distance,
+        lon_speed,
+        lat_speed: speed.latitude_deg_per_day(),
+        dist_speed: speed.distance,
+        is_retrograde,
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -291,6 +368,81 @@ fn planet_longitude(jd: f64, body: u8, sidereal: bool, ayanamsa: u8) -> PyResult
             .geocentric_longitude_deg(b, jd_ut1)
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
     }
+}
+
+/// Compute the FULL position of a body: the six-component state pyswisseph
+/// returns from ``swe.calc_ut(..., FLG_SPEED)`` plus a retrograde flag.
+///
+/// This is the high-fidelity counterpart to :func:`planet_longitude` (which
+/// discards everything but longitude). Use it whenever you need latitude,
+/// distance, daily motion (speed), or retrograde status.
+///
+/// Parameters
+/// ----------
+/// jd : float
+///     Julian Day (UT1).
+/// body : int
+///     Body ID: 0=Sun .. 12=Chiron, 13=Ketu (Rahu+180). See
+///     :func:`planet_longitude` for the full mapping.
+/// sidereal : bool, optional
+///     If True, return sidereal longitude (tropical minus ayanamsa) and remove
+///     the ayanamsa's own precession rate from ``lon_speed`` (matching Swiss's
+///     ``SEFLG_SIDEREAL | SEFLG_SPEED``). Default False = tropical.
+/// ayanamsa : int, optional
+///     Ayanamsa system ID. Only used when sidereal=True.
+///
+/// Returns
+/// -------
+/// dict
+///     ``{"longitude": float, "latitude": float, "distance": float,
+///        "lon_speed": float, "lat_speed": float, "dist_speed": float,
+///        "is_retrograde": bool}``. Longitude/latitude/speeds in degrees
+///     (speeds per day); distance and dist_speed in AU (per day). ``longitude``
+///     is wrapped to [0, 360); ``is_retrograde`` is taken from the tropical
+///     longitude rate regardless of the ``sidereal`` flag.
+#[pyfunction]
+#[pyo3(signature = (jd, body, sidereal = false, ayanamsa = 0))]
+fn planet_position(
+    py: Python<'_>,
+    jd: f64,
+    body: u8,
+    sidereal: bool,
+    ayanamsa: u8,
+) -> PyResult<Py<PyAny>> {
+    check_jd(jd)?;
+    let almanac = Almanac::default_vedic();
+
+    // Resolve the ayanamsa enum once (only when sidereal) so position_full can
+    // both subtract its value and difference its rate.
+    let aya: Option<Ayanamsa> = if sidereal {
+        Some(ayanamsa_from_id(ayanamsa)?)
+    } else {
+        None
+    };
+
+    // Ketu (id 13) = Rahu's position + 180°, sharing Rahu's speed/retrograde.
+    let (resolved_body, ketu_shift) = if body == 13 {
+        (Body::MeanNode, true)
+    } else {
+        (body_from_id(body)?, false)
+    };
+
+    let mut p = position_full(&almanac, resolved_body, jd, aya.as_ref())
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+    if ketu_shift {
+        p.longitude = (p.longitude + 180.0).rem_euclid(360.0);
+        p.latitude = -p.latitude; // Ketu's ecliptic latitude is opposite Rahu's
+    }
+
+    let dict = PyDict::new(py);
+    dict.set_item("longitude", p.longitude)?;
+    dict.set_item("latitude", p.latitude)?;
+    dict.set_item("distance", p.distance)?;
+    dict.set_item("lon_speed", p.lon_speed)?;
+    dict.set_item("lat_speed", p.lat_speed)?;
+    dict.set_item("dist_speed", p.dist_speed)?;
+    dict.set_item("is_retrograde", p.is_retrograde)?;
+    Ok(dict.into())
 }
 
 /// Compute longitudes for all major planets at once.
@@ -853,7 +1005,7 @@ fn ayanamsa_by_name(jd: f64, system: &str) -> PyResult<f64> {
 ///
 /// Provides high-precision planetary positions (VSOP87), Vedic astrology
 /// computations (nakshatra, panchang, rashi), house cusps (14 systems),
-/// ayanamsa (8+ systems), fixed stars, and numerology.
+/// ayanamsa (50 systems), fixed stars, and numerology.
 ///
 /// Quick start::
 ///
@@ -865,6 +1017,7 @@ fn ayanamsa_by_name(jd: f64, system: &str) -> PyResult<f64> {
 fn xalen(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Core ephemeris
     m.add_function(wrap_pyfunction!(planet_longitude, m)?)?;
+    m.add_function(wrap_pyfunction!(planet_position, m)?)?;
     m.add_function(wrap_pyfunction!(all_planets, m)?)?;
     m.add_function(wrap_pyfunction!(julian_day, m)?)?;
 
@@ -893,6 +1046,17 @@ fn xalen(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(sidereal_longitude, m)?)?;
     m.add_function(wrap_pyfunction!(houses_by_name, m)?)?;
     m.add_function(wrap_pyfunction!(ayanamsa_by_name, m)?)?;
+
+    // `xalen.swe` — pyswisseph drop-in compatibility submodule. Registering it as
+    // a child module AND in sys.modules lets `import xalen.swe as swe` work as a
+    // search-and-replace for `import swisseph as swe`.
+    let swe = PyModule::new(m.py(), "swe")?;
+    swe_compat::register(&swe)?;
+    m.add_submodule(&swe)?;
+    m.py()
+        .import("sys")?
+        .getattr("modules")?
+        .set_item("xalen.swe", &swe)?;
 
     Ok(())
 }
@@ -1133,6 +1297,165 @@ mod tests {
                 (ketu - expected).abs() < 1e-9,
                 "Ketu must be exactly opposite Rahu: rahu={rahu}, ketu={ketu}, expected={expected}"
             );
+        });
+    }
+
+    #[test]
+    fn test_position_full_six_tuple_and_retrograde() {
+        let almanac = Almanac::default_vedic();
+        let jd = 2_451_545.0; // J2000
+
+        // Sun: ~1°/day prograde, ~1 AU, never retrograde.
+        let sun = position_full(&almanac, Body::Sun, jd, None).unwrap();
+        assert!(sun.longitude >= 0.0 && sun.longitude < 360.0);
+        assert!(
+            sun.lon_speed > 0.9 && sun.lon_speed < 1.1,
+            "Sun speed {}",
+            sun.lon_speed
+        );
+        assert!(
+            sun.distance > 0.95 && sun.distance < 1.02,
+            "Sun dist {}",
+            sun.distance
+        );
+        assert!(!sun.is_retrograde, "Sun is never retrograde");
+
+        // Mean node: always retrograde, negative longitude speed.
+        let node = position_full(&almanac, Body::MeanNode, jd, None).unwrap();
+        assert!(node.is_retrograde, "Mean node is always retrograde");
+        assert!(
+            node.lon_speed < 0.0,
+            "node lon_speed {} should be < 0",
+            node.lon_speed
+        );
+    }
+
+    #[test]
+    fn test_position_full_speed_matches_pyswisseph() {
+        // Reference values from pyswisseph 2.10.03
+        //   swe.calc_ut(2451545.0, body, FLG_SWIEPH|FLG_SPEED) at J2000:
+        //   Sun  lon_speed = 1.019432 °/day, dist = 0.98332764 AU
+        //   Moon lon_speed = 12.021183 °/day
+        //   Mars lon_speed = 0.775673 °/day
+        // XALEN's finite-difference speed must agree to well under 0.01°/day.
+        let almanac = Almanac::default_vedic();
+        let jd = 2_451_545.0;
+        let sun = position_full(&almanac, Body::Sun, jd, None).unwrap();
+        assert!(
+            (sun.lon_speed - 1.019432).abs() < 0.01,
+            "Sun lon_speed {} vs pyswisseph 1.019432",
+            sun.lon_speed
+        );
+        assert!(
+            (sun.distance - 0.98332764).abs() < 1e-4,
+            "Sun dist {} vs pyswisseph 0.98332764",
+            sun.distance
+        );
+        let moon = position_full(&almanac, Body::Moon, jd, None).unwrap();
+        assert!(
+            (moon.lon_speed - 12.021183).abs() < 0.05,
+            "Moon lon_speed {} vs pyswisseph 12.021183",
+            moon.lon_speed
+        );
+        let mars = position_full(&almanac, Body::Mars, jd, None).unwrap();
+        assert!(
+            (mars.lon_speed - 0.775673).abs() < 0.02,
+            "Mars lon_speed {} vs pyswisseph 0.775673",
+            mars.lon_speed
+        );
+    }
+
+    #[test]
+    fn test_position_full_sidereal_subtracts_ayanamsa() {
+        let almanac = Almanac::default_vedic();
+        let jd = 2_451_545.0;
+        let trop = position_full(&almanac, Body::Sun, jd, None).unwrap();
+        let sid = position_full(&almanac, Body::Sun, jd, Some(&Ayanamsa::Lahiri)).unwrap();
+        let offset = (trop.longitude - sid.longitude).rem_euclid(360.0);
+        assert!(offset > 23.0 && offset < 25.0, "Lahiri offset {offset}");
+        // Sidereal longitude speed is slightly LESS than tropical (ayanamsa rate
+        // ~0.145″/day removed) but still ~1°/day and positive.
+        assert!(sid.lon_speed > 0.9 && sid.lon_speed < trop.lon_speed);
+        // Retrograde flag is frame-independent.
+        assert_eq!(trop.is_retrograde, sid.is_retrograde);
+    }
+
+    #[test]
+    fn test_planet_position_dict_keys_and_ketu() {
+        pyo3::Python::initialize();
+        Python::attach(|py| {
+            // Sun: full dict with all 7 keys.
+            let obj = planet_position(py, 2_451_545.0, 0, false, 0).expect("sun position");
+            let d = obj.bind(py).cast::<PyDict>().expect("dict");
+            for k in [
+                "longitude",
+                "latitude",
+                "distance",
+                "lon_speed",
+                "lat_speed",
+                "dist_speed",
+                "is_retrograde",
+            ] {
+                assert!(d.contains(k).unwrap(), "planet_position missing key {k}");
+            }
+            let retro: bool = d
+                .get_item("is_retrograde")
+                .unwrap()
+                .unwrap()
+                .extract()
+                .unwrap();
+            assert!(!retro, "Sun not retrograde");
+
+            // Ketu (13): longitude = Rahu+180, retrograde shared with Rahu.
+            let rahu = planet_position(py, 2_451_545.0, 9, false, 0).unwrap();
+            let rahu_d = rahu.bind(py).cast::<PyDict>().unwrap();
+            let rahu_lon: f64 = rahu_d
+                .get_item("longitude")
+                .unwrap()
+                .unwrap()
+                .extract()
+                .unwrap();
+            let rahu_retro: bool = rahu_d
+                .get_item("is_retrograde")
+                .unwrap()
+                .unwrap()
+                .extract()
+                .unwrap();
+
+            let ketu = planet_position(py, 2_451_545.0, 13, false, 0).unwrap();
+            let ketu_d = ketu.bind(py).cast::<PyDict>().unwrap();
+            let ketu_lon: f64 = ketu_d
+                .get_item("longitude")
+                .unwrap()
+                .unwrap()
+                .extract()
+                .unwrap();
+            let ketu_retro: bool = ketu_d
+                .get_item("is_retrograde")
+                .unwrap()
+                .unwrap()
+                .extract()
+                .unwrap();
+            let expected = (rahu_lon + 180.0).rem_euclid(360.0);
+            assert!(
+                (ketu_lon - expected).abs() < 1e-9,
+                "Ketu lon {ketu_lon} must be Rahu+180 = {expected}"
+            );
+            assert_eq!(
+                ketu_retro, rahu_retro,
+                "Ketu shares Rahu's retrograde state"
+            );
+        });
+    }
+
+    #[test]
+    fn test_planet_position_rejects_non_finite_and_bad_id() {
+        pyo3::Python::initialize();
+        Python::attach(|py| {
+            assert!(planet_position(py, f64::NAN, 0, false, 0).is_err());
+            assert!(planet_position(py, 2_451_545.0, 99, false, 0).is_err());
+            // Sidereal with an invalid ayanamsa id must error.
+            assert!(planet_position(py, 2_451_545.0, 0, true, 99).is_err());
         });
     }
 

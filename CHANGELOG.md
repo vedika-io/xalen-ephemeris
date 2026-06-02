@@ -5,6 +5,243 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-06-02
+
+This entry consolidates Wave B (accuracy / breadth) and Wave C (bindings parity +
+new computational surfaces) on top of the 0.4.3 licensing-hygiene cleanup. All
+figures below are reproducible from this repo's test suite; nothing here is
+published to crates.io / PyPI / npm yet (publishing is gated — see *Distribution*).
+
+### Added
+
+#### New astronomical / chart surfaces (`xalen-ephem`, `xalen-western`)
+- **Optional automatic DE440 kernel provisioning** (`kernel-autodownload` cargo
+  feature, **off by default**). New `kernel_cache` module with
+  `ensure_de440s_kernel()` / `KernelFetch` and a one-call
+  `De440Provider::from_auto_cache()`: on first use it fetches the public NASA
+  NAIF `de440s.bsp` (~32 MB) into the per-OS cache directory, verifies it
+  (structural DE440 provenance via the existing DAF/SPK parser, plus an optional
+  SHA-256 when `XALEN_DE440S_SHA256` is set), and reuses the cached copy with no
+  network access thereafter. With the feature enabled the apparent Moon — and
+  every body the kernel covers — is sub-arcsecond out of the box. The feature is
+  off by default so the base crate stays offline and crates.io-clean; without it
+  the analytical Moon is the measured RMS ~2.9″ / max ~12″ vs pyswisseph 2.10.03
+  over AD 1600–2100 (growing toward antiquity: RMS ~4.2″ by AD 1000, ~9.6″ by
+  AD 1). Cache location is overridable with `XALEN_KERNEL_CACHE_DIR`.
+- **Equatorial (RA/Dec), heliocentric, and rectangular (XYZ) output frames** on
+  `Almanac` (new `output` module), mirroring Swiss `SEFLG_EQUATORIAL` /
+  `SEFLG_HELCTR` / `SEFLG_XYZ`. `geocentric_equatorial[_tt]` rotates the apparent
+  ecliptic-of-date place by the **true** obliquity (mean + nutation-in-obliquity)
+  so RA/Dec carry the same nutation / aberration / light-time as the ecliptic
+  place; `heliocentric_ecliptic[_tt]` / `*_rectangular` expose the provider's
+  heliocentric place and the Cartesian forms of each spherical place. Validated
+  against pyswisseph 2.10.03 at J2000 (Sun/Moon/Mars RA & Dec) — the equatorial
+  rotation itself is exact (< 0.001″); residuals are the underlying
+  analytical-place error only. Geometric points (nodes, Lilith) have no
+  heliocentric place and return `BodyNotAvailable`.
+- **True (osculating) Black Moon Lilith**: `lilith::true_lilith` (+ provider body
+  `Body::OsculatingApogee` and compat `SE_OSCU_APOG` = 13), the apogee of the
+  Moon's *instantaneous* orbit. Derived from the same geocentric Moon state vector
+  used for the true node, via the Laplace–Runge–Lenz (eccentricity) vector with
+  the Earth–Moon GM; the apogee is the +180° flip of the perigee direction.
+  Validated vs pyswisseph `SE_OSCU_APOG` at committed spot fixtures (J2000 and
+  the 1992-04-12 Meeus epoch), each within 0.5° — at the level of the osculating
+  apogee's intrinsic, documented model spread. The existing mean Lilith is
+  unchanged.
+- **Exact return finders** (`returns` module): `find_return` / `find_return_tt`
+  for `ReturnBody::{Sun, Moon, Mars, Jupiter, Saturn}`. Each roots the body's
+  natal longitude on the **real `Almanac` longitude** — bracketing the first
+  crossing forward from the search start (with ±180° wrap-discontinuity rejection
+  so a body ~opposite its natal degree is never mistaken for a crossing), then a
+  safeguarded Newton–Raphson (bisection on any out-of-bracket step or retrograde
+  station) that pins the crossing on the engine's own longitude to ≈1e−7°.
+  Previously only the **solar** return was exact (analytic Sun, in `xalen-western`);
+  the others used a mean period that can be weeks off because real motion is far
+  from uniform. Validated vs pyswisseph 2.10.03: a Saturn return to 294.0° lands at
+  JD 2458871.555 UT (2020-01-23), matching the independent Swiss search to within
+  the committed test bound of 0.1 day (the timing precision vs. an external
+  ephemeris is set by the longitude-model agreement, not by the root-finder). The
+  `solar_return` example now uses the exact finder + the almanac Sun.
+  (`xalen-western::returns` mean-period helpers are retained, unchanged.)
+- **Declination aspects (parallel / contraparallel)** in `xalen-western`: a new
+  `declination` module computes a body's declination from ecliptic
+  longitude/latitude and obliquity via the standard ecliptic→equatorial rotation
+  (Meeus, *Astronomical Algorithms* 2nd ed., eq. 13.4, reusing
+  `xalen-coords::ecliptic_to_equatorial`) and detects parallels (same-sign
+  declination within orb, conjunction-like) and contraparallels (opposite-sign,
+  opposition-like). Validated against pyswisseph equatorial output (< 0.002°).
+- **Antiscia and contra-antiscia** in `xalen-western`: a new `antiscia` module
+  reflects longitudes across the 0° Cancer / 0° Capricorn solstitial axis
+  (`antiscion = 180° − λ`) and the equinoctial axis (`contra = 360° − λ`), and
+  detects antiscion/contra-antiscion contacts. Pure longitude geometry; canonical
+  sign pairs match Brennan (*Hellenistic Astrology*) and Lilly
+  (*Christian Astrology*).
+- **Chart patterns Grand Cross, Kite, and Mystic Rectangle** are now detected by
+  `patterns::detect_patterns` (previously dead enum variants): Grand Cross = two
+  oppositions with four squares; Kite = Grand Trine plus a body opposing one apex
+  and sextile to the other two; Mystic Rectangle = two oppositions joined by two
+  trines and two sextiles.
+
+#### Houses (`xalen-houses`)
+- **Auxiliary ascendant points** — every `HouseCusps` now carries the four Swiss
+  `ascmc[4..8]` angles: `equatorial_ascendant` (East Point), `co_ascendant_koch`,
+  `co_ascendant_munkasey`, and `polar_ascendant_munkasey`, also exposed standalone
+  via `compute_auxiliary_ascmc` / the `AuxiliaryAscendants` struct. Pure spherical
+  math from RAMC/ε/φ through a faithful Swiss `Asc1`/`Asc2` oblique-ascension
+  primitive (the literal `atan(sin x / D)` + sign-of-`D` half-turn, distinct from
+  the `atan2` form the quadrant cusps use). Validated bit-for-bit (worst Δ 0.0°)
+  against pyswisseph 2.10.03 `swe.houses_armc(..., b'P')[1]` across 22
+  latitude/date cases spanning −80°…+80°.
+- **Sidereal house path** — `compute_houses_sidereal` and
+  `HouseCusps::to_sidereal(ayanamsa_rad)` produce the
+  `swe_houses_ex(SEFLG_SIDEREAL)` equivalent (the dominant Vedic path) by
+  subtracting the ayanamsa from every cusp and every angle. Cross-checked against
+  pyswisseph `swe.houses_ex(..., FLG_SIDEREAL)` with the Lahiri ayanamsa.
+- **Gauquelin sectors — real 36-fold mundane division** (replaces the former
+  placeholder that returned Placidus cusps). New `gauquelin_sectors(ramc, eps,
+  phi) -> [f64; 36]` returns the 36 sector-boundary ecliptic longitudes counted
+  clockwise from the Ascendant, and `gauquelin_position(ramc, eps, phi, lon,
+  lat)` the continuous `[1, 37)` sector value of a body. Each boundary is the
+  point whose mundane position equals its sector index: the semi-diurnal and
+  semi-nocturnal arcs are each divided into nine, so every third boundary lands
+  on a Placidus cusp (sector 1 = ASC, 10 = MC, 19 = DSC, 28 = IC). Validated
+  against pyswisseph 2.10.03 `swe.house_pos(..., b'G')` — the continuous position
+  matches to worst Δ = 0 sector over four epochs × ten latitudes × the full
+  ecliptic, boundary longitudes to < 5e-5°, and the every-third boundary equals
+  the Placidus cusp to < 1e-4°. The `HouseSystem::Gauquelin` 12-cusp output now
+  returns those twelve every-third boundaries (genuine Gauquelin sub-boundaries,
+  identical to the Placidus cusps); inside the polar circle it falls back to a
+  nine-fold Porphyry sectoring so the 36-boundary contract never panics.
+
+#### Panchang (`xalen-vedic`)
+- **Panchang transition / end times**: a new `panchang_transitions` module
+  computes when the current tithi, nakshatra, yoga, and karana begin and end —
+  the single most-consumed panchang output (e.g. "Tithi: Dashami upto 05:11 AM"),
+  previously absent. Each element's boundary is the next instant its driving angle
+  (Moon−Sun elongation for tithi/karana, Moon longitude for nakshatra, Sun+Moon
+  for yoga) reaches an integer multiple of its span; the crossing is bracketed
+  forward (or backward for the optional start time) and bisected to sub-second
+  precision over a caller-supplied `Fn(jd) -> (sun_sidereal_deg, moon_sidereal_deg)`
+  ephemeris closure (no ephemeris is bundled in this crate). Re-exported from
+  `panchang` as `tithi_transition`, `nakshatra_transition`, `yoga_transition`,
+  `karana_transition`, and `compute_panchang_transitions`. Validated against an
+  independent pyswisseph 2.10.03 computation: tithi-10 end on 25 May 2026
+  reproduces pyswisseph's JD 2461186.4871 (26 May 2026 05:11 IST) to within a few
+  minutes (limited by ephemeris differences, not the solver).
+
+#### I Ching (`xalen-iching`)
+- **All 384 per-line (yao ci / changing-line) texts** — the full line text for
+  every hexagram (64 × 6 = 384 lines), verbatim from James Legge, *The Yî King*,
+  Sacred Books of the East Vol. XVI (1882), public domain. Transcribed from the
+  Internet Sacred Text Archive edition (`sacred-texts.com/ich/ic01.htm` …
+  `ic64.htm`) and cross-checked against a second independent public-domain
+  transcription; **384 / 384 fetched, 0 MISSING**. New API: `line_texts(n)`,
+  `line_text(n, line)`, `use_line_text(n)` (Legge's two supplementary "use of the
+  number" statements for Hexagrams 1 & 2), plus `Hexagram::line_texts` /
+  `Hexagram::line_text` / `Hexagram::use_line_text` methods. `HexagramReading`
+  gains a `changing_line_text` field carrying the moving line's text. Legge's
+  parentheticals and romanisation diacritics (â, î, Î, Ž) are preserved; only
+  page-break markers and a few obvious scan artifacts in the line *numbering* were
+  corrected. The interpretive content is the verbatim public-domain Legge 1882 text.
+
+#### Burmese Mahabote (`xalen-world`)
+- **The deterministic 7-house square** (`mahabote_house_square`,
+  `mahabote_house_square_from_jd`) — the positional cast that the existing
+  weekday profile previously only described in a scope note. The seven houses
+  `MahaboteHouse` (Binga, Ahtun, Yaza, Adipati, Marana, Thike, Puti) are seated
+  by the deterministic rule: the birth-weekday lord opens the square in Binga and
+  the remaining lords follow the fixed Burmese weekday sequence (Sun, Moon, Mars,
+  Mercury, Jupiter, Venus, Saturn) clockwise — the lord of weekday
+  `(birth + h) mod 7` occupies house `h`. The Wednesday-PM (Rahu) variant
+  substitutes Rahu for the Wednesday lord. New `MahaboteSeat` /
+  `MahaboteHouseSquare` types with `house_of_weekday`. The structural placement
+  is the attested deterministic core; lineage-specific house *interpretation* is
+  out of scope and the canonical short gloss only is returned (`meaning()`).
+
+#### Qi Men Dun Jia (`xalen-chinese`)
+- **Time-chart Ju determination by the San Yuan rule** (`qimen_ju`), replacing
+  the former coarse civil-month bucketing. The Ju is read from the canonical San
+  Yuan table at the instant's solar term (indexed from Dong Zhi via the Sun's
+  longitude) and the upper/middle/lower yuan is chosen by the day pillar's
+  Fu Tou (符头) — the 5-day run head's branch group. Yang Dun stores Ju 1–9,
+  Yin Dun 10–18.
+- **`compute_qimen` now casts the San Yuan time chart** (時家奇門) instead of the
+  former experimental demo: the Earth Plate seats the six Yi + three Qi from the
+  Jia palace along the Yang/Yin flight, and **Zhi Fu (值符) / Zhi Shi (值使) are
+  anchored to the hour's Xun-head Yi (旬首)** — the palace where the Six-Yi stem
+  hiding the hour's leading Jia sits — leading the Heaven-Plate stars, doors, and
+  the eight Deities along the dun direction. `QiMenChart::zhi_fu_palace()` exposes
+  the presiding palace; the type is no longer `#[doc(hidden)]`. Qi Men has genuine
+  school variation, so this is documented as the San Yuan time-chart school
+  implemented consistently, not a universal claim.
+
+### Changed
+
+- **True Chitrapaksha ayanamsa (SE 27) now < 1″ vs Swiss across 1900–2100.** Its
+  Spica apparent-place reduction now precesses Spica's J2000 (longitude, latitude)
+  with the rigorous IAU 2006/P03 Cartesian rotation
+  (`precess_ecliptic_to_of_date` + `precession_matrix_p03_nobias`) instead of the
+  scalar pure-longitude `general_precession_longitude` term. Spica lies ~2.05° off
+  the ecliptic, so its longitude precession is latitude-coupled; the scalar term
+  could not represent that coupling and left a ~1.5″/century span residual
+  (1.514″ at 1900/2100). The Cartesian rotation removes it: cross-validated
+  against pyswisseph 2.10.03 `SE_SIDM_TRUE_CITRA` to **0.038″** at the 1900–2100
+  oracle epochs and **≤ 0.04″** at off-grid (non-Jan-1) dates. The ayanamsa Swiss
+  oracle now holds SE 27 under a 0.5″ guard and a dedicated off-grid guard, and
+  removes it from the documented-2″ exception list. **46 of 47 SE systems are now
+  < 1″ vs Swiss**; the single remaining documented exception is
+  `GalCenterMulaWilhelm` (SE 36, ≤ 1.42″ — its Swiss-internal reduction has a
+  ~52.5″/yr precession rate combined with a moderate-latitude annual aberration
+  that no single fixed celestial direction reproduces; this is documented in code
+  and `docs/ACCURACY.md`, not hidden by tolerance widening).
+- **Krusinski-Pisa-Goelzer house cusps (Swiss `U`) — see Fixed below** for the
+  corrected great-circle construction.
+- **Empty-content honesty contract** — `xalen-numerology::number_meaning` now
+  returns `Option<&'static str>` (`None` for every number, since no interpretive
+  prose is bundled) instead of `&'static str` returning `""`; and
+  `xalen-lalkitab`'s `LalKitabRemedy::remedies` / `items` are now
+  `Option<Vec<String>>`, reporting absent (stripped, not-yet-backfilled) content
+  as `None` rather than `Some(vec![])`. Callers can now distinguish "no content
+  bundled" from genuinely empty content. No numerology/Lal Kitab interpretive
+  prose is bundled.
+- **Cosmobiology empty-API honesty contract**: `cosmobiology::lookup_midpoint_key`
+  now returns `None` for stripped (empty-text) interpretation entries instead of
+  `Some("")`, and planetary pictures built by `cosmobiology_chart` carry `None`
+  for stripped entries. No fabricated interpretive text is ever surfaced — an
+  absent entry is reported as absent.
+- **Nadi empty-API honesty contract**: `nadi::NadiRule.indication` is now
+  `Option<&'static str>` and `nadi_indications` returns `None` for the unbundled
+  (copyrighted, not-shipped) BNN interpretive readings instead of `Some("")`. An
+  absent reading is reported as genuinely absent, never as a misleading empty
+  string; the life-`domain` classification remains the only interpretive data
+  this crate provides.
+
+### Fixed
+
+- **Krusinski-Pisa-Goelzer house cusps (Swiss `U`) now match Swiss Ephemeris.**
+  The previous projection divided the inclined house circle into equal 30° arcs
+  and mapped them back through a `swe_cotrans` rotation chain; cusp 10 no longer
+  landed on the MC and the intermediate cusps were 13–37° off Swiss. Replaced
+  with the correct ASC-centred great-circle construction — the great circle
+  through the Ascendant and the local Zenith, stepped 30° toward the MC, each
+  division's hour circle intersected with the ecliptic — so cusp 1 = ASC,
+  cusp 4 = IC, cusp 7 = DSC, cusp 10 = MC exactly, and all twelve cusps match
+  pyswisseph 2.10.03 `swe.houses_armc(..., b'U')` bit-for-bit (worst Δ 0.0°)
+  across −66°…+66° and both J2000.0 and JD 2460000.5. The `KrusinskiPisa` row of
+  the `swiss_houses_oracle` integration test is re-enabled at the tight 0.01°
+  tolerance (the prior `continue` skip is removed).
+
+### Distribution / availability
+
+- **Not yet published.** The Rust crates on crates.io are at **0.3.1** (leaf
+  crates); the 0.4.x / 0.5.x / this candidate are **not** published — publishing
+  is founder-gated and pending. The Node.js (`xalen` on npm) and Python
+  (`xalen` / `xalen-python` on PyPI) packages are **not yet published** either;
+  the `npm install xalen` / `pip install xalen` / "prebuilt binaries" lines in
+  the docs describe the *intended* distribution and are labelled **forthcoming /
+  alpha** until those packages are actually live. Build the bindings from source
+  in the meantime (`maturin develop`, `wasm-pack build`, `napi build`).
+
 ## [0.5.0] - 2026-06-01
 
 ### Added
@@ -183,9 +420,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   coefficients verbatim from ERFA `pfw06.c`), `fw2m`, `precession_bias_matrix_iau2006`
   (`pmat06`, GCRS→mean-of-date incl. frame bias), and `frame_bias_matrix` (`bp00`).
   Validated element-wise to **1e-12** against the ERFA/SOFA `t_erfa_c.c` golden
-  vectors (`pfw06`, `pmat06`, `bp00`). NOTE: a research-supplied "golden" set of
-  `pfw06` angle values was found to be hallucinated — the error was caught by the
-  end-to-end `pmat06` matrix golden (which the code matches) and resolved by
+  vectors (`pfw06`, `pmat06`, `bp00`). NOTE: an externally-sourced "golden" set of
+  `pfw06` angle values turned out to be incorrect — the discrepancy was caught by
+  the end-to-end `pmat06` matrix golden (which the code matches) and resolved by
   verifying the source coefficients directly against ERFA `pfw06.c`. The matrix is
   not yet wired into the position pipeline (which uses general-precession-in-
   longitude; measured latitude-coupling residual 0″ on the ecliptic, ≤4″ Moon,

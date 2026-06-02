@@ -14,9 +14,14 @@ pub enum Body {
     Uranus,
     Neptune,
     Pluto,
-    MeanNode,   // Rahu (mean)
-    TrueNode,   // Rahu (true/osculating)
-    MeanApogee, // Lilith (mean)
+    /// Rahu — mean ascending node.
+    MeanNode,
+    /// Rahu — true (osculating) ascending node.
+    TrueNode,
+    /// Lilith — mean lunar apogee (Swiss `SE_MEAN_APOG`, 12).
+    MeanApogee,
+    /// Lilith — true (osculating) lunar apogee (Swiss `SE_OSCU_APOG`, 13).
+    OsculatingApogee,
     Chiron,
 }
 
@@ -95,6 +100,7 @@ impl std::fmt::Display for Body {
             Body::MeanNode => write!(f, "Rahu (Mean Node)"),
             Body::TrueNode => write!(f, "Rahu (True Node)"),
             Body::MeanApogee => write!(f, "Lilith (Mean Apogee)"),
+            Body::OsculatingApogee => write!(f, "Lilith (Osculating Apogee)"),
             Body::Chiron => write!(f, "Chiron"),
         }
     }

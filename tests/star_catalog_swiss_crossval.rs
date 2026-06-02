@@ -10,11 +10,12 @@
 //!   SE_EPHE_PATH=<dir with sefstars.txt> \
 //!     python3 tools/gen-star-catalog/validate_vs_swiss.py
 //!
-//! Verified 2026-06-01 with pyswisseph 2.10.03: across all 99 named stars found in
-//! Swiss, median separation 0.032", max 5.965". The two stars >1" are documented
-//! multiple-star Swiss-component artifacts (Rigil Kentaurus = alpha Cen,
-//! Algieba = gamma Leo); Menkar is validated against Swiss ",alCet" (alpha Cet,
-//! HIP 14135) because Swiss prefix-matches lambda Cet under the bare name.
+//! Verified with pyswisseph 2.10.03: across all 106 named stars, median
+//! separation 0.031", max 5.965". The two stars >1" are documented multiple-star
+//! Swiss-component artifacts (Rigil Kentaurus = alpha Cen, Algieba = gamma Leo).
+//! Where the catalog's traditional spelling is not the name Swiss indexes, the
+//! validator queries the Bayer/Flamsteed designation (e.g. Menkar = alpha Cet
+//! ",alCet"; Bharani 41 = 41 Arietis ",41Ari"; Al Jabhah = eta Leonis ",etLeo").
 
 use xalen_stars::{GENERATED_CATALOG, GENERATED_STAR_COUNT, GeneratedStar, find_generated_by_hip};
 

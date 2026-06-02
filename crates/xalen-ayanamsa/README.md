@@ -33,7 +33,7 @@ assert_eq!(Ayanamsa::from_swiss_ephem_id(5), Some(Ayanamsa::KPKrishnamurti));
 ```
 
 ## Accuracy & sources
-Values use the Vondrák et al. (2011) general-precession rate anchored to Swiss Ephemeris `sweph.h` reference data and cross-validated at J2000 (1 arcsec tolerance for epoch-based systems). **True Chitra** is a full dynamic apparent-place reduction (Spica + proper motion + IAU 2006 precession + IAU 2000B nutation + aberration; 0.015″ at J2000, ≤1.6″ across 1900–2100). The remaining star-anchored systems (e.g. True Revati) still use a linear approximation. See [ACCURACY.md](../../docs/ACCURACY.md) and [CREDITS.md](../../CREDITS.md).
+Epoch-anchored systems accumulate the full IAU 2006 general precession from their Swiss `sweph.h` reference epoch plus IAU 2000B nutation, cross-validated against Swiss `get_ayanamsa_ex(jd, 0)` to < 1″ across 1900–2100. **True Chitra** is a full dynamic apparent-place reduction (Spica J2000 catalog position + proper motion + rigorous IAU 2006/P03 Cartesian precession + IAU 2000B nutation + aberration), matching Swiss `SE_SIDM_TRUE_CITRA` to **0.038″** across 1900–2100 (≤ 0.04″ at off-grid dates). The other star-anchored and galactic frames (e.g. True Revati, the galactic-centre/equator systems) use the same fixed-direction Cartesian reduction. **46 of 47 SE systems are < 1″ vs Swiss; the single documented exception is `GalCenterMulaWilhelm` (SE 36, ≤ 1.42″)** — its Swiss-internal reduction has a precession rate no single fixed celestial direction reproduces under the aberration constraint. See [ACCURACY.md](../../docs/ACCURACY.md) and [CREDITS.md](../../CREDITS.md).
 
 ## License
 Licensed under Apache-2.0. See [LICENSE](../../LICENSE).

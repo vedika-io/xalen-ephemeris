@@ -9,9 +9,9 @@ keywords = ["ayanamsa", "sidereal", "precession", "lahiri", "vedic"]
 categories = ["science", "mathematics"]
 
 [dependencies]
-xalen-time = { version = "0.5.0", path = "../xalen-time" }
-xalen-coords = { version = "0.5.0", path = "../xalen-coords" }
-xalen-stars = { version = "0.5.0", path = "../xalen-stars" }
+xalen-time = { version = "0.6.0", path = "../xalen-time" }
+xalen-coords = { version = "0.6.0", path = "../xalen-coords" }
+xalen-stars = { version = "0.6.0", path = "../xalen-stars" }
 serde.workspace = true
 
 [lints]

@@ -1,9 +1,19 @@
 {
   "name": "xalen-ephemeris",
-  "version": "0.1.0",
-  "description": "Pure-Rust astronomical ephemeris for astrology — runs in browser via WASM",
+  "version": "0.6.0",
+  "description": "Pure-Rust astronomical ephemeris for astrology — Vedic charts, panchang, houses, dasha; runs in any browser or Node.js via WebAssembly",
   "license": "Apache-2.0",
-  "repository": "https://github.com/vedika-io/xalen-ephemeris",
+  "author": "XALEN Technology Pvt Ltd",
+  "homepage": "https://github.com/vedika-io/xalen-ephemeris#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vedika-io/xalen-ephemeris.git",
+    "directory": "crates/xalen-wasm"
+  },
+  "bugs": {
+    "url": "https://github.com/vedika-io/xalen-ephemeris/issues"
+  },
+  "types": "xalen_wasm.d.ts",
   "keywords": [
     "ephemeris",
     "astrology",
@@ -11,12 +21,16 @@
     "vedic",
     "jyotish",
     "wasm",
+    "webassembly",
     "horoscope",
-    "planetary"
+    "planetary",
+    "panchang",
+    "nakshatra"
   ],
   "files": [
     "xalen_wasm_bg.wasm",
     "xalen_wasm.js",
-    "xalen_wasm.d.ts"
+    "xalen_wasm.d.ts",
+    "README.md"
   ]
 }

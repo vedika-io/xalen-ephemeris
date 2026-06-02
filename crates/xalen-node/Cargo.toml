@@ -12,20 +12,23 @@ categories = ["science", "api-bindings"]
 crate-type = ["cdylib"]
 
 [dependencies]
-napi = { version = "2", features = ["serde-json"] }
-napi-derive = "2"
+napi = { version = "3", features = ["serde-json"] }
+napi-derive = "3"
 serde_json = "1"
-xalen-ephem = { version = "0.5.0", path = "../xalen-ephem" }
-xalen-time = { version = "0.5.0", path = "../xalen-time" }
-xalen-ayanamsa = { version = "0.5.0", path = "../xalen-ayanamsa" }
-xalen-vedic = { version = "0.5.0", path = "../xalen-vedic" }
-xalen-houses = { version = "0.5.0", path = "../xalen-houses" }
-xalen-stars = { version = "0.5.0", path = "../xalen-stars" }
-xalen-numerology = { version = "0.5.0", path = "../xalen-numerology" }
-xalen-coords = { version = "0.5.0", path = "../xalen-coords" }
+xalen-ephem = { version = "0.6.0", path = "../xalen-ephem" }
+xalen-time = { version = "0.6.0", path = "../xalen-time" }
+xalen-ayanamsa = { version = "0.6.0", path = "../xalen-ayanamsa" }
+xalen-vedic = { version = "0.6.0", path = "../xalen-vedic" }
+xalen-houses = { version = "0.6.0", path = "../xalen-houses" }
+xalen-stars = { version = "0.6.0", path = "../xalen-stars" }
+xalen-numerology = { version = "0.6.0", path = "../xalen-numerology" }
+xalen-coords = { version = "0.6.0", path = "../xalen-coords" }
 
 [build-dependencies]
 napi-build = "2"
+# napi-build 2.x is the current build crate and is compatible with both the v2
+# and v3 macro/runtime; the binding GENERATION (index.js + index.d.ts) is driven
+# by @napi-rs/cli v3, which the v3 `napi`/`napi-derive` runtime metadata feeds.
 
 [lints]
 workspace = true

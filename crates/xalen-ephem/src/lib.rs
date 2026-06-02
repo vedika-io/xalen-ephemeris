@@ -12,13 +12,22 @@ mod de440;
 pub mod eclipse;
 /// Numerical root-finding for sign ingresses, crossings, and planetary stations.
 pub mod event_search;
-/// Black Moon Lilith (mean lunar apogee) and Priapus.
+/// Optional automatic provisioning of the public NASA NAIF `de440s.bsp` kernel.
+/// Compiled only with the `kernel-autodownload` feature.
+#[cfg(feature = "kernel-autodownload")]
+pub mod kernel_cache;
+/// Black Moon Lilith (mean lunar apogee), True (osculating) Lilith, and Priapus.
 pub mod lilith;
 /// Local (per-observer) solar-eclipse circumstances on the Besselian engine.
 pub mod local_eclipse;
 mod moon;
+/// Alternative output frames / coordinate types for the [`Almanac`]
+/// (equatorial RA/Dec, heliocentric, rectangular XYZ — Swiss SEFLG_* parity).
+mod output;
 mod pluto;
 mod provider;
+/// Exact return finders (Solar/Lunar/Saturn/Jupiter/Mars) on the real almanac.
+pub mod returns;
 /// Rise, transit (culmination), and set times for a body and observer.
 pub mod rise_set;
 /// Topocentric (observer-centered) position correction via diurnal parallax.
@@ -38,11 +47,16 @@ pub use eclipse::{
     find_solar_eclipses,
 };
 pub use event_search::{EventSearchResult, find_crossing, find_sign_ingress, find_station};
-pub use lilith::{mean_lilith, mean_perigee_longitude, priapus};
+#[cfg(feature = "kernel-autodownload")]
+pub use kernel_cache::{
+    CACHE_DIR_ENV, DE440S_FILENAME, DE440S_URL, KernelFetch, SHA256_ENV, ensure_de440s_kernel,
+};
+pub use lilith::{mean_lilith, mean_perigee_longitude, priapus, true_lilith};
 pub use local_eclipse::{
     Contact, LocalCircumstances, LocalSolarType, contact_ut1, local_circumstances,
 };
 pub use provider::{EphemerisError, EphemerisProvider};
+pub use returns::{ReturnBody, find_return, find_return_tt};
 pub use rise_set::{RiseTransitSet, Twilight, TwilightTimes};
 pub use true_node::{mean_lunar_node, south_node, true_lunar_node};
 pub use vsop::Vsop87Provider;

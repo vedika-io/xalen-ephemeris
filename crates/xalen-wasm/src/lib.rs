@@ -27,6 +27,77 @@ impl Default for XalenWasm {
     }
 }
 
+/// Serializable full position of a body — the six components pyswisseph returns
+/// from `swe.calc_ut(..., FLG_SPEED)` plus a retrograde flag. Emitted as JSON by
+/// [`XalenWasm::planet_position_json`]. Speeds are daily motion (deg/day for
+/// longitude/latitude, AU/day for distance); `longitude` is wrapped to [0, 360).
+#[derive(serde::Serialize)]
+pub struct WasmPlanetPosition {
+    pub longitude: f64,
+    pub latitude: f64,
+    pub distance: f64,
+    pub lon_speed: f64,
+    pub lat_speed: f64,
+    pub dist_speed: f64,
+    pub is_retrograde: bool,
+}
+
+// Internal (NOT wasm-exported) helpers. Kept in a separate `impl` block so they
+// are callable from Rust unit tests and from the wasm-exported methods without
+// being part of the JS surface.
+impl XalenWasm {
+    /// Compute the full 6-tuple (+ retrograde) for a real `Body`. The optional
+    /// `ayanamsa` makes the longitude sidereal (and removes the ayanamsa's own
+    /// rate from `lon_speed`, matching Swiss `SEFLG_SIDEREAL | SEFLG_SPEED`).
+    /// Ketu is handled by the caller (Rahu + 180°, sharing Rahu's speed/retro).
+    fn position_full(
+        &self,
+        body: Body,
+        jd_ut1: f64,
+        ayanamsa: Option<Ayanamsa>,
+    ) -> Result<WasmPlanetPosition, String> {
+        let jd = JdUT1(jd_ut1);
+        let pos = self
+            .almanac
+            .geocentric_ecliptic(body, jd)
+            .map_err(|e| e.to_string())?;
+        let speed = self
+            .almanac
+            .geocentric_speed(body, jd)
+            .map_err(|e| e.to_string())?;
+
+        let is_retrograde = speed.longitude < 0.0;
+        let tropical_lon = pos.longitude.to_degrees();
+        let tropical_lon_speed = speed.longitude_deg_per_day();
+
+        let (longitude, lon_speed) = match ayanamsa {
+            Some(aya) => {
+                let model = DeltaTModel::StephensonMorrisonHohenkerk2016;
+                let aya_deg = aya.compute_deg(jd.to_tt(&model).as_f64());
+                // ±0.5-day finite difference of the ayanamsa => its own deg/day rate.
+                let jd_tt0 = JdUT1(jd_ut1 - 0.5).to_tt(&model).as_f64();
+                let jd_tt1 = JdUT1(jd_ut1 + 0.5).to_tt(&model).as_f64();
+                let ayanamsa_rate = aya.compute_deg(jd_tt1) - aya.compute_deg(jd_tt0);
+                (
+                    (tropical_lon - aya_deg).rem_euclid(360.0),
+                    tropical_lon_speed - ayanamsa_rate,
+                )
+            }
+            None => (tropical_lon.rem_euclid(360.0), tropical_lon_speed),
+        };
+
+        Ok(WasmPlanetPosition {
+            longitude,
+            latitude: pos.latitude.to_degrees(),
+            distance: pos.distance,
+            lon_speed,
+            lat_speed: speed.latitude_deg_per_day(),
+            dist_speed: speed.distance,
+            is_retrograde,
+        })
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Input validation (matches the FFI layer: reject NaN/Inf and out-of-range lat)
 // ---------------------------------------------------------------------------
@@ -83,6 +154,50 @@ impl XalenWasm {
             .map_err(|e| e.to_string())
     }
 
+    /// Full geocentric position of a body as a JSON object: the six components
+    /// pyswisseph returns from `swe.calc_ut(..., FLG_SPEED)` plus a retrograde
+    /// flag. This is the high-fidelity counterpart to `tropicalLongitude` /
+    /// `siderealLongitude`, which discard everything but longitude.
+    ///
+    /// `ayanamsa_id` is honoured only when `sidereal` is true: the longitude is
+    /// made sidereal (tropical − ayanamsa) and the ayanamsa's own precession rate
+    /// is removed from `lon_speed`, matching Swiss `SEFLG_SIDEREAL | SEFLG_SPEED`.
+    /// `is_retrograde` is taken from the frame-independent tropical longitude rate.
+    ///
+    /// Returns JSON: `{ "longitude", "latitude", "distance", "lon_speed",
+    /// "lat_speed", "dist_speed", "is_retrograde" }`. Ketu (id 13) = Rahu + 180°,
+    /// sharing Rahu's speed and retrograde state.
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen(js_name = "planetPositionJson"))]
+    pub fn planet_position_json(
+        &self,
+        jd_ut1: f64,
+        body_id: u8,
+        sidereal: bool,
+        ayanamsa_id: u8,
+    ) -> Result<String, String> {
+        check_jd(jd_ut1)?;
+        let aya = if sidereal {
+            Some(ayanamsa_from_id(ayanamsa_id)?)
+        } else {
+            None
+        };
+
+        // Ketu (id 13) = Rahu position + 180°, sharing Rahu's speed/retrograde.
+        let (body, ketu_shift) = if body_id == 13 {
+            (Body::MeanNode, true)
+        } else {
+            (body_from_id(body_id)?, false)
+        };
+
+        let mut p = self.position_full(body, jd_ut1, aya)?;
+        if ketu_shift {
+            p.longitude = (p.longitude + 180.0).rem_euclid(360.0);
+            p.latitude = -p.latitude; // Ketu's latitude is opposite Rahu's
+        }
+
+        serde_json::to_string(&p).map_err(|e| e.to_string())
+    }
+
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen(js_name = "siderealLongitude"))]
     pub fn sidereal_longitude(
         &self,
@@ -116,6 +231,23 @@ impl XalenWasm {
         let nak = Nakshatra::from_longitude_deg(moon_sidereal_deg);
         let pada = Nakshatra::pada(moon_sidereal_deg);
         format!("{} Pada {}", nak, pada)
+    }
+
+    /// Structured nakshatra detail as JSON — the unified shape shared with the
+    /// Python (`nakshatra()` dict) and Node (`nakshatraInfo()`) bindings:
+    /// `{ "name", "pada", "lord", "deity", "index" }`. The legacy `getNakshatra`
+    /// string method is retained for backward compatibility.
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen(js_name = "nakshatraInfoJson"))]
+    pub fn nakshatra_info_json(&self, sidereal_deg: f64) -> String {
+        let nak = Nakshatra::from_longitude_deg(sidereal_deg);
+        let obj = serde_json::json!({
+            "name": nak.to_string(),
+            "pada": Nakshatra::pada(sidereal_deg),
+            "lord": nak.lord().to_string(),
+            "deity": nak.deity(),
+            "index": nak.index(),
+        });
+        obj.to_string()
     }
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen(js_name = "getRashi"))]
@@ -497,6 +629,22 @@ mod tests {
     }
 
     #[test]
+    fn wasm_nakshatra_info_unified_shape() {
+        let w = XalenWasm::new();
+        let json = w.nakshatra_info_json(0.0); // 0° sidereal => Ashwini, pada 1, lord Ketu
+        let v: serde_json::Value = serde_json::from_str(&json).unwrap();
+        for k in ["name", "pada", "lord", "deity", "index"] {
+            assert!(v.get(k).is_some(), "nakshatra_info_json missing key {k}");
+        }
+        assert_eq!(v["index"].as_u64().unwrap(), 0, "0° => nakshatra index 0");
+        assert_eq!(v["pada"].as_u64().unwrap(), 1, "0° => pada 1");
+        assert!(
+            v["name"].as_str().unwrap().contains("Ashwini"),
+            "0° => Ashwini"
+        );
+    }
+
+    #[test]
     fn wasm_panchang() {
         let w = XalenWasm::new();
         let json = w.panchang_json(2451545.0, 0).unwrap();
@@ -520,6 +668,95 @@ mod tests {
         assert!(json.contains("planets"), "Chart should contain planets");
         assert!(json.contains("Sun"), "Chart should contain Sun");
         assert!(json.contains("Moon"), "Chart should contain Moon");
+    }
+
+    #[test]
+    fn wasm_planet_position_full_tuple_and_speed() {
+        let w = XalenWasm::new();
+        let json = w.planet_position_json(2451545.0, 0, false, 0).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&json).unwrap();
+        for k in [
+            "longitude",
+            "latitude",
+            "distance",
+            "lon_speed",
+            "lat_speed",
+            "dist_speed",
+            "is_retrograde",
+        ] {
+            assert!(v.get(k).is_some(), "planet_position_json missing key {k}");
+        }
+        // Validated vs pyswisseph swe.calc_ut(J2000, SUN, FLG_SWIEPH|FLG_SPEED):
+        //   lon_speed = 1.019432 deg/day, distance = 0.98332764 AU.
+        let lon_speed = v["lon_speed"].as_f64().unwrap();
+        let distance = v["distance"].as_f64().unwrap();
+        assert!(
+            (lon_speed - 1.019432).abs() < 0.01,
+            "Sun lon_speed {lon_speed}"
+        );
+        assert!(
+            (distance - 0.98332764).abs() < 1e-3,
+            "Sun distance {distance}"
+        );
+        assert_eq!(
+            v["is_retrograde"].as_bool().unwrap(),
+            false,
+            "Sun not retrograde"
+        );
+    }
+
+    #[test]
+    fn wasm_planet_position_node_retrograde_and_ketu() {
+        let w = XalenWasm::new();
+        // Mean node (id 9): always retrograde.
+        let rahu_json = w.planet_position_json(2451545.0, 9, false, 0).unwrap();
+        let rahu: serde_json::Value = serde_json::from_str(&rahu_json).unwrap();
+        assert_eq!(
+            rahu["is_retrograde"].as_bool().unwrap(),
+            true,
+            "node retrograde"
+        );
+        assert!(
+            rahu["lon_speed"].as_f64().unwrap() < 0.0,
+            "node lon_speed < 0"
+        );
+
+        // Ketu (id 13) = Rahu+180, sharing retrograde state.
+        let ketu_json = w.planet_position_json(2451545.0, 13, false, 0).unwrap();
+        let ketu: serde_json::Value = serde_json::from_str(&ketu_json).unwrap();
+        let expected = (rahu["longitude"].as_f64().unwrap() + 180.0).rem_euclid(360.0);
+        assert!(
+            (ketu["longitude"].as_f64().unwrap() - expected).abs() < 1e-9,
+            "Ketu lon != Rahu+180"
+        );
+        assert_eq!(
+            ketu["is_retrograde"].as_bool().unwrap(),
+            rahu["is_retrograde"].as_bool().unwrap(),
+            "Ketu shares Rahu retrograde state"
+        );
+    }
+
+    #[test]
+    fn wasm_planet_position_sidereal_subtracts_ayanamsa() {
+        let w = XalenWasm::new();
+        let trop: serde_json::Value =
+            serde_json::from_str(&w.planet_position_json(2451545.0, 0, false, 0).unwrap()).unwrap();
+        let sid: serde_json::Value =
+            serde_json::from_str(&w.planet_position_json(2451545.0, 0, true, 0).unwrap()).unwrap();
+        let offset = (trop["longitude"].as_f64().unwrap() - sid["longitude"].as_f64().unwrap())
+            .rem_euclid(360.0);
+        assert!(offset > 23.0 && offset < 25.0, "Lahiri offset {offset}");
+        // Sidereal speed is slightly slower than tropical but still ~1°/day.
+        let sid_speed = sid["lon_speed"].as_f64().unwrap();
+        assert!(sid_speed > 0.9 && sid_speed < trop["lon_speed"].as_f64().unwrap());
+    }
+
+    #[test]
+    fn wasm_planet_position_rejects_bad_input() {
+        let w = XalenWasm::new();
+        assert!(w.planet_position_json(f64::NAN, 0, false, 0).is_err());
+        assert!(w.planet_position_json(2451545.0, 99, false, 0).is_err());
+        assert!(w.planet_position_json(2451545.0, 0, true, 99).is_err());
     }
 
     #[test]

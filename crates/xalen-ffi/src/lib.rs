@@ -23,6 +23,24 @@ pub struct XalenPosition {
     pub status: c_int,
 }
 
+/// Full geocentric position: the six components Swiss Ephemeris returns from
+/// `swe_calc_ut(..., SEFLG_SPEED)` plus a retrograde flag. A NEW struct (not an
+/// extension of [`XalenPosition`]) so the existing `xalen_planet_position` ABI is
+/// untouched. Speeds are daily motion — degrees/day for longitude/latitude,
+/// AU/day for distance. `is_retrograde` is `1` when the (tropical) longitude rate
+/// is negative, else `0`.
+#[repr(C)]
+pub struct XalenPositionFull {
+    pub longitude_deg: c_double,
+    pub latitude_deg: c_double,
+    pub distance_au: c_double,
+    pub lon_speed_deg: c_double,
+    pub lat_speed_deg: c_double,
+    pub dist_speed_au: c_double,
+    pub is_retrograde: c_int,
+    pub status: c_int,
+}
+
 #[repr(C)]
 pub struct XalenHouses {
     pub cusps: [c_double; 12],
@@ -186,7 +204,10 @@ pub unsafe extern "C" fn xalen_planet_position(
             return -2;
         }
 
-        // Handle Ketu (id 13) as Rahu + 180
+        // Handle Ketu (id 13) as Rahu + 180°. Ketu's ecliptic latitude is the
+        // NEGATION of Rahu's (the South Node sits opposite the North Node on the
+        // ecliptic), so negate it here to stay consistent with the full path in
+        // `xalen_planet_position_full`.
         if body_id == 13 {
             let almanac = get_almanac();
             return match almanac.geocentric_ecliptic(Body::MeanNode, JdUT1(jd_ut1)) {
@@ -194,7 +215,7 @@ pub unsafe extern "C" fn xalen_planet_position(
                     unsafe {
                         (*out).longitude_deg =
                             (pos.longitude.to_degrees() + 180.0).rem_euclid(360.0);
-                        (*out).latitude_deg = pos.latitude.to_degrees();
+                        (*out).latitude_deg = -pos.latitude.to_degrees();
                         (*out).distance_au = pos.distance;
                         (*out).status = 0;
                     }
@@ -243,6 +264,111 @@ pub unsafe extern "C" fn xalen_planet_position(
         Ok(code) => code,
         Err(_) => {
             // Panic was caught: record it in the (non-null, already-zeroed) struct.
+            unsafe {
+                (*out).status = XALEN_FFI_PANIC;
+            }
+            XALEN_FFI_PANIC
+        }
+    }
+}
+
+/// Compute the FULL geocentric position of a planet: the six components Swiss
+/// Ephemeris returns from `swe_calc_ut(..., SEFLG_SPEED)` plus a retrograde flag.
+/// This is the high-fidelity counterpart to [`xalen_planet_position`], which
+/// fills only longitude/latitude/distance.
+///
+/// body: 0=Sun .. 12=Chiron, 13=Ketu (Rahu+180). Speeds are daily motion
+/// (degrees/day for longitude/latitude, AU/day for distance). `is_retrograde` is
+/// `1` when the tropical longitude rate is negative, else `0`. For Ketu the speed
+/// and retrograde state are inherited from Rahu (the node it shadows).
+///
+/// # Safety
+/// `out` must be a valid, writable pointer to a `XalenPositionFull` (or null,
+/// which returns -1). The function zero-initializes `*out` before use.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn xalen_planet_position_full(
+    jd_ut1: c_double,
+    body_id: c_int,
+    out: *mut XalenPositionFull,
+) -> c_int {
+    if out.is_null() {
+        return -1;
+    }
+
+    // Zero-initialize so callers never see stale data on error paths.
+    unsafe {
+        std::ptr::write_bytes(out, 0, 1);
+    }
+
+    let out_guard = std::panic::AssertUnwindSafe(out);
+    let result = std::panic::catch_unwind(move || {
+        let out = out_guard.0;
+        if !jd_ut1.is_finite() {
+            unsafe {
+                (*out).status = -2;
+            }
+            return -2;
+        }
+
+        // Ketu (id 13) = Rahu position + 180°, sharing Rahu's speed/retrograde.
+        let (body, ketu_shift) = if body_id == 13 {
+            (Body::MeanNode, true)
+        } else {
+            match body_from_id(body_id) {
+                Some(b) => (b, false),
+                None => {
+                    unsafe {
+                        (*out).status = -2;
+                    }
+                    return -2;
+                }
+            }
+        };
+
+        let almanac = get_almanac();
+        let jd = JdUT1(jd_ut1);
+        let pos = match almanac.geocentric_ecliptic(body, jd) {
+            Ok(p) => p,
+            Err(_) => {
+                unsafe {
+                    (*out).status = -3;
+                }
+                return -3;
+            }
+        };
+        let speed = match almanac.geocentric_speed(body, jd) {
+            Ok(s) => s,
+            Err(_) => {
+                unsafe {
+                    (*out).status = -3;
+                }
+                return -3;
+            }
+        };
+
+        let mut longitude = pos.longitude.to_degrees().rem_euclid(360.0);
+        let mut latitude = pos.latitude.to_degrees();
+        if ketu_shift {
+            longitude = (longitude + 180.0).rem_euclid(360.0);
+            latitude = -latitude; // Ketu's ecliptic latitude is opposite Rahu's
+        }
+
+        unsafe {
+            (*out).longitude_deg = longitude;
+            (*out).latitude_deg = latitude;
+            (*out).distance_au = pos.distance;
+            (*out).lon_speed_deg = speed.longitude_deg_per_day();
+            (*out).lat_speed_deg = speed.latitude_deg_per_day();
+            (*out).dist_speed_au = speed.distance;
+            (*out).is_retrograde = c_int::from(speed.longitude < 0.0);
+            (*out).status = 0;
+        }
+        0
+    });
+
+    match result {
+        Ok(code) => code,
+        Err(_) => {
             unsafe {
                 (*out).status = XALEN_FFI_PANIC;
             }
@@ -490,6 +616,133 @@ mod tests {
             "Ketu should be Rahu+180: expected {expected}, got {}",
             ketu_pos.longitude_deg
         );
+        // Ketu's ecliptic latitude must be the NEGATION of Rahu's — the South
+        // Node sits opposite the North Node. This legacy path used to copy
+        // Rahu's latitude unchanged (sign bug), diverging from the full path.
+        assert!(
+            (ketu_pos.latitude_deg + rahu_pos.latitude_deg).abs() < 1e-10,
+            "Ketu latitude {} should be −Rahu latitude {}",
+            ketu_pos.latitude_deg,
+            rahu_pos.latitude_deg
+        );
+    }
+
+    #[test]
+    fn planet_position_full_six_tuple_and_speed() {
+        xalen_init();
+        let mut p = XalenPositionFull {
+            longitude_deg: 0.0,
+            latitude_deg: 0.0,
+            distance_au: 0.0,
+            lon_speed_deg: 0.0,
+            lat_speed_deg: 0.0,
+            dist_speed_au: 0.0,
+            is_retrograde: -1,
+            status: -1,
+        };
+        let ret = unsafe { xalen_planet_position_full(2451545.0, 0, &mut p) }; // Sun
+        assert_eq!(ret, 0);
+        assert_eq!(p.status, 0);
+        assert!(p.longitude_deg >= 0.0 && p.longitude_deg < 360.0);
+        // Validated vs pyswisseph swe.calc_ut(J2000, SUN, FLG_SWIEPH|FLG_SPEED):
+        //   lon_speed = 1.019432 deg/day, distance = 0.98332764 AU.
+        assert!(
+            (p.lon_speed_deg - 1.019432).abs() < 0.01,
+            "Sun lon_speed {} vs pyswisseph 1.019432",
+            p.lon_speed_deg
+        );
+        assert!(
+            (p.distance_au - 0.98332764).abs() < 1e-3,
+            "Sun distance {} vs pyswisseph 0.98332764",
+            p.distance_au
+        );
+        assert_eq!(p.is_retrograde, 0, "Sun is never retrograde");
+    }
+
+    #[test]
+    fn planet_position_full_node_retrograde_and_ketu() {
+        xalen_init();
+        // Mean node (id 9): always retrograde, negative lon_speed.
+        let mut rahu = XalenPositionFull {
+            longitude_deg: 0.0,
+            latitude_deg: 0.0,
+            distance_au: 0.0,
+            lon_speed_deg: 0.0,
+            lat_speed_deg: 0.0,
+            dist_speed_au: 0.0,
+            is_retrograde: -1,
+            status: -1,
+        };
+        let ret = unsafe { xalen_planet_position_full(2451545.0, 9, &mut rahu) };
+        assert_eq!(ret, 0);
+        assert_eq!(rahu.is_retrograde, 1, "mean node is always retrograde");
+        assert!(
+            rahu.lon_speed_deg < 0.0,
+            "node lon_speed {} should be < 0",
+            rahu.lon_speed_deg
+        );
+
+        // Ketu (id 13) = Rahu + 180, sharing Rahu's speed/retrograde state.
+        let mut ketu = XalenPositionFull {
+            longitude_deg: 0.0,
+            latitude_deg: 0.0,
+            distance_au: 0.0,
+            lon_speed_deg: 0.0,
+            lat_speed_deg: 0.0,
+            dist_speed_au: 0.0,
+            is_retrograde: -1,
+            status: -1,
+        };
+        let ret = unsafe { xalen_planet_position_full(2451545.0, 13, &mut ketu) };
+        assert_eq!(ret, 0);
+        let expected = (rahu.longitude_deg + 180.0).rem_euclid(360.0);
+        assert!(
+            (ketu.longitude_deg - expected).abs() < 1e-9,
+            "Ketu lon {} != Rahu+180 {}",
+            ketu.longitude_deg,
+            expected
+        );
+        // Ketu's ecliptic latitude is the negation of Rahu's; both FFI paths
+        // (this full one and the legacy xalen_planet_position) must agree.
+        assert!(
+            (ketu.latitude_deg + rahu.latitude_deg).abs() < 1e-9,
+            "Ketu latitude {} should be −Rahu latitude {}",
+            ketu.latitude_deg,
+            rahu.latitude_deg
+        );
+        assert_eq!(
+            ketu.is_retrograde, rahu.is_retrograde,
+            "Ketu shares Rahu retrograde"
+        );
+    }
+
+    #[test]
+    fn planet_position_full_rejects_bad_input() {
+        xalen_init();
+        // Null pointer.
+        let ret = unsafe { xalen_planet_position_full(2451545.0, 0, std::ptr::null_mut()) };
+        assert_eq!(ret, -1);
+        // Non-finite jd and invalid body id.
+        let mut p = XalenPositionFull {
+            longitude_deg: 0.0,
+            latitude_deg: 0.0,
+            distance_au: 0.0,
+            lon_speed_deg: 0.0,
+            lat_speed_deg: 0.0,
+            dist_speed_au: 0.0,
+            is_retrograde: -1,
+            status: 0,
+        };
+        assert_eq!(
+            unsafe { xalen_planet_position_full(f64::NAN, 0, &mut p) },
+            -2
+        );
+        assert_eq!(p.status, -2);
+        assert_eq!(
+            unsafe { xalen_planet_position_full(2451545.0, 99, &mut p) },
+            -2
+        );
+        assert_eq!(p.status, -2);
     }
 
     #[test]

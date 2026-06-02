@@ -168,6 +168,86 @@ fn panchang_at_j2000() {
     assert_eq!(panchang.vara, Vara::Saturday);
 }
 
+/// End-to-end transition cross-check against an INDEPENDENT pyswisseph 2.10.03
+/// computation (DE431 + Lahiri sidereal).
+///
+/// Reference instant: 25 May 2026 00:30 UTC (= 06:00 IST), the same date the
+/// `panchang_today` example uses. pyswisseph reports:
+///   sun_sid    = 39.6144887510835°
+///   moon_sid   = 148.3420540261929°
+///   elongation = 108.7275652751094° → tithi 10 (Dashami)
+///   tithi-10 end (elongation → 120°) = JD_UT 2461186.4871043526
+///                                    = 26 May 2026 05:11:26 IST
+///
+/// Here the root-finder runs over the crate's OWN ephemeris (`Almanac`), so the
+/// only discrepancy vs pyswisseph is the underlying ephemeris/ΔT/ayanamsa model
+/// difference — the bisection adds no error. We require agreement to within a
+/// few minutes, which is dominated by the two ephemerides' own differences, not
+/// by the transition solver.
+#[test]
+fn panchang_tithi_end_vs_pyswisseph_ref() {
+    // 25 May 2026 00:30 UTC as a raw Julian Day (UT). pyswisseph: 2461185.5208333.
+    const JD_REF: f64 = 2_461_185.520_833_333_5;
+    // pyswisseph tithi-10 end (independent oracle).
+    const PYSWE_TITHI_END_JD: f64 = 2_461_186.487_104_352_6;
+
+    let a = almanac();
+
+    // positions(jd) -> (sun_sidereal_deg, moon_sidereal_deg) using the SAME
+    // path the panchang example uses (Lahiri + SMH-2016 ΔT). The transition
+    // solver only ever needs these two numbers.
+    let positions = |jd: f64| -> (f64, f64) {
+        let j = JdUT1(jd);
+        let tt = j.to_tt(&xalen_time::DeltaTModel::StephensonMorrisonHohenkerk2016);
+        let aya_deg = Ayanamsa::Lahiri.compute_deg(tt.as_f64());
+        let sun = a.sidereal_longitude_deg(Body::Sun, j, aya_deg).unwrap();
+        let moon = a.sidereal_longitude_deg(Body::Moon, j, aya_deg).unwrap();
+        (sun, moon)
+    };
+
+    // Sanity: our ephemeris agrees with pyswisseph at the reference instant.
+    let (sun0, moon0) = positions(JD_REF);
+    assert!(
+        (sun0 - 39.6144887510835).abs() < 0.05,
+        "sun_sid {sun0} vs pyswisseph 39.614°"
+    );
+    assert!(
+        (moon0 - 148.3420540261929).abs() < 0.1,
+        "moon_sid {moon0} vs pyswisseph 148.342°"
+    );
+
+    let it = xalen_vedic::panchang::tithi_transition(&positions, JD_REF, true)
+        .expect("tithi transition should be found");
+    assert_eq!(
+        it.value.number, 10,
+        "reference tithi should be 10 (Dashami)"
+    );
+
+    // The solved end must reproduce pyswisseph's 05:11 IST end-time to within a
+    // few minutes (limited by the two ephemerides, not the solver).
+    let diff_min = (it.end_jd - PYSWE_TITHI_END_JD).abs() * 1440.0;
+    assert!(
+        diff_min < 5.0,
+        "tithi-10 end JD {} differs from pyswisseph {} by {:.2} min",
+        it.end_jd,
+        PYSWE_TITHI_END_JD,
+        diff_min
+    );
+
+    // The end is after the reference; the start is before it.
+    assert!(it.end_jd > JD_REF, "end must be after reference instant");
+    let start = it.start_jd.expect("start requested");
+    assert!(start <= JD_REF, "start must be at/before reference instant");
+
+    // The elongation at the solved end is the exact 120° boundary.
+    let (s_end, m_end) = positions(it.end_jd);
+    let elong_end = (m_end - s_end).rem_euclid(360.0);
+    assert!(
+        (elong_end - 120.0).abs() < 0.01,
+        "elongation at solved end is {elong_end}, expected 120.0°"
+    );
+}
+
 #[test]
 fn nakshatra_at_known_position() {
     // Moon at 0° sidereal = Ashwini

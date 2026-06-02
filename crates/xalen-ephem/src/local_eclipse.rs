@@ -125,17 +125,16 @@ fn observer_rho(lat_deg: f64, elevation_m: f64) -> (f64, f64) {
 }
 
 /// Greenwich APPARENT sidereal time (radians) for a UT1 Julian Day: GMST (IAU
-/// 1982, matching `topocentric::gmst_deg`) plus the equation of the equinoxes
-/// `Δψ·cos ε_true` (Meeus eq. 12.4 + the nutation correction).
+/// 1982) plus the equation of the equinoxes `Δψ·cos ε_true`.
+///
+/// Delegates to the canonical [`xalen_coords::gast_rad`] (the single source of
+/// truth for sidereal time). The equation-of-equinoxes argument `t` is derived
+/// from UT1 here, preserving this engine's historical behaviour exactly — the
+/// UT1-vs-TT difference in the slow-varying nutation terms is far below the
+/// sub-millisecond precision the eclipse contact search resolves.
 fn gast_rad(jd_ut1: f64) -> f64 {
     let t = (jd_ut1 - 2_451_545.0) / 36525.0;
-    let gmst_deg =
-        280.460_618_37 + 360.985_647_366_29 * (jd_ut1 - 2_451_545.0) + 0.000_387_933 * t * t
-            - t * t * t / 38_710_000.0;
-    let nut = nutation_2000b(t);
-    let eps_true = mean_obliquity(t) + nut.delta_epsilon;
-    let eq_equinox = nut.delta_psi * eps_true.cos(); // radians
-    gmst_deg.to_radians().rem_euclid(TAU) + eq_equinox
+    xalen_coords::gast_rad(jd_ut1, t)
 }
 
 /// Right ascension `a` of the shadow axis (Sun−Moon direction) at a TT instant.

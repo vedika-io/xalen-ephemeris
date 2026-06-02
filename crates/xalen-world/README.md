@@ -8,7 +8,7 @@ Part of the [XALEN Ephemeris](https://github.com/vedika-io/xalen-ephemeris) suit
 - **Tibetan** — Rabjung 60-year cycle: animal, element, gender, and approximate Losar JD for a Western year.
 - **Korean Saju** (사주) — Four Pillars chart (year/month/day/hour), Daeun major-luck cycles, and Gunghap compatibility.
 - **Japanese Nine Star Ki** (九星気学) — year and month stars from the Lo Shu square, plus elemental compatibility.
-- **Burmese Mahabote** (မဟာဘုတ်) — weekday-based profiles (incl. the Wednesday AM/PM split) and compatibility.
+- **Burmese Mahabote** (မဟာဘုတ်) — weekday-based profiles (incl. the Wednesday AM/PM split) and compatibility, plus the deterministic 7-house square (`mahabote_house_square`): the birth-lord seated in Binga with the seven planet-lords laid out in the Burmese weekday sequence around Binga..Puti.
 - **Persian/Arabic** — Jarbakhtar chronocrator periods (129-year cycle) and an ecliptic-longitude Tasyir arc (`ecliptic_tasyir_arc`, a first-order approximation — not a true right-ascension primary direction).
 - **Egyptian** — the 36 decans with Chaldean planetary rulers, looked up by ecliptic degree.
 - **Celtic** — 13-month Beth-Luis-Nion tree calendar and birth-year tree.

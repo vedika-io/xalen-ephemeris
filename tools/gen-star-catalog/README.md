@@ -40,9 +40,14 @@ python3 gen_catalog.py \
    populated from the measured pmRA/pmDE.
 6. **LEFT-JOIN traditional names** via the **IAU Catalog of Star Names (IAU-CSN)**
    authority: curated name → HIP (from IAU-CSN) → generated star. A real,
-   sourced crossmatch — never an invented HIP↔name table. 100/108 curated names
-   join; the 8 misses are asterisms (Pleiades, Praesepe), alternate spellings,
-   or Bayer-only designations the IAU did not formally adopt.
+   sourced crossmatch — never an invented HIP↔name table. 106/108 curated names
+   join. A few curated names use a traditional spelling that differs from the
+   IAU-WGSN name (e.g. `Zuben Elgenubi`→`Zubenelgenubi`, `Lambda Orionis`→`Meissa`,
+   `Hyadum II`→`Secunda Hyadum`, `Bharani 41`→`Bharani`); these are resolved via
+   the sourced `CURATED_TO_IAU` alias map. `Al Jabhah` (η Leonis) has no IAU-WGSN
+   proper name, so it is joined by its documented `CURATED_TO_HIP` designation
+   (HIP 49583). The only two remaining misses are the open clusters **Pleiades**
+   and **Praesepe**, which have no single HIP star.
 
 ## Validation
 
@@ -54,11 +59,15 @@ Ephemeris** (`pyswisseph`, `swe_fixstar2`) at J2000.0 with astrometric flags
 SE_EPHE_PATH=/path/to/sefstars.txt python3 validate_vs_swiss.py
 ```
 
-Result (pyswisseph 2.10.03, 2026-06-01): **median 0.032″**, max 5.965″. The only
-stars over 1″ are documented multiple-star Swiss name-component artifacts
-(Rigil Kentaurus = α Cen, Algieba = γ Leo). Menkar is validated against Swiss
-`,alCet` (α Cet, HIP 14135). A baked-in subset of these Swiss-verified anchors
-is enforced at build time by `tests/star_catalog_swiss_crossval.rs`.
+Result (pyswisseph 2.10.03): all **106 named stars** validate, **median 0.031″**,
+max 5.965″. The only stars over 1″ are documented multiple-star Swiss
+name-component artifacts (Rigil Kentaurus = α Cen, Algieba = γ Leo). Where the
+catalog's traditional spelling is not the name Swiss indexes, the validator
+queries the Bayer/Flamsteed designation instead (`BAYER_OVERRIDE` — same body,
+e.g. Menkar = α Cet `,alCet`, Bharani 41 = 41 Arietis `,41Ari`, Lambda Orionis =
+λ Ori `,laOri`, Al Jabhah = η Leo `,etLeo`). A baked-in subset of these
+Swiss-verified anchors is enforced at build time by
+`tests/star_catalog_swiss_crossval.rs`.
 
 ## Data & license
 

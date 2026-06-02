@@ -9,17 +9,39 @@ keywords = ["ephemeris", "vsop87", "planets", "astronomy", "astrology"]
 categories = ["science", "mathematics"]
 
 [dependencies]
-xalen-time = { version = "0.5.0", path = "../xalen-time" }
-xalen-coords = { version = "0.5.0", path = "../xalen-coords" }
-xalen-ayanamsa = { version = "0.5.0", path = "../xalen-ayanamsa" }
-xalen-houses = { version = "0.5.0", path = "../xalen-houses" }
-xalen-stars = { version = "0.5.0", path = "../xalen-stars" }
+xalen-time = { version = "0.6.0", path = "../xalen-time" }
+xalen-coords = { version = "0.6.0", path = "../xalen-coords" }
+xalen-ayanamsa = { version = "0.6.0", path = "../xalen-ayanamsa" }
+xalen-houses = { version = "0.6.0", path = "../xalen-houses" }
+xalen-stars = { version = "0.6.0", path = "../xalen-stars" }
 thiserror.workspace = true
 serde.workspace = true
 vsop87 = "3.0.0"
 
+# Optional dependencies for the `kernel-autodownload` feature. They are compiled
+# ONLY when that feature is enabled, so the default build stays network-free and
+# pulls in no extra transitive dependencies.
+#   ureq  — small blocking HTTP client with bundled pure-Rust TLS (rustls); no
+#           system OpenSSL needed.
+#   sha2  — SHA-256 for optional kernel integrity verification.
+#   dirs  — resolve the per-OS cache directory for the kernel store.
+ureq = { version = "2.10", optional = true }
+sha2 = { version = "0.10", optional = true }
+dirs = { version = "5", optional = true }
+
+[features]
+default = []
+# Opt-in convenience path that fetches the public NASA NAIF `de440s.bsp` kernel
+# (~32 MB) into the OS cache directory on first use and memo-caches it on disk.
+# OFF by default: enabling it adds a network-capable dependency (`ureq`), so the
+# base crate remains offline and crates.io-clean. With this feature the
+# apparent-place Moon (and every body the kernel covers) comes from DE440 =
+# sub-arcsecond, with zero manual kernel handling. See
+# `De440Provider::from_auto_cache` and `ensure_de440s_kernel`.
+kernel-autodownload = ["dep:ureq", "dep:sha2", "dep:dirs"]
+
 [dev-dependencies]
-xalen-vedic = { version = "0.5.0", path = "../xalen-vedic" }
+xalen-vedic = { version = "0.6.0", path = "../xalen-vedic" }
 
 [lints]
 workspace = true

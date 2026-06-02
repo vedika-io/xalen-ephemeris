@@ -18,13 +18,13 @@ const EARTH_RADIUS_M: f64 = 6_378_136.6;
 /// Polar/equatorial axis ratio b/a for the reference ellipsoid (Meeus Ch.11).
 const FLATTENING_BA: f64 = 0.996_647_19;
 
-/// Greenwich Mean Sidereal Time in degrees [0, 360) for a UT1 Julian Day
-/// (IAU 1982 expression, Meeus eq. 12.4).
+/// Greenwich Mean Sidereal Time in degrees [0, 360) for a UT1 Julian Day.
+///
+/// Thin re-export of the canonical [`xalen_coords::gmst_deg`] (the single
+/// source of truth for sidereal time); kept as a crate-private alias so the
+/// in-crate call sites read unchanged.
 pub(crate) fn gmst_deg(jd_ut1: f64) -> f64 {
-    let t = (jd_ut1 - 2_451_545.0) / 36525.0;
-    let g = 280.460_618_37 + 360.985_647_366_29 * (jd_ut1 - 2_451_545.0) + 0.000_387_933 * t * t
-        - t * t * t / 38_710_000.0;
-    g.rem_euclid(360.0)
+    xalen_coords::gmst_deg(jd_ut1)
 }
 
 /// Convert a geocentric ecliptic position to **topocentric** (observer-centered).

@@ -9,9 +9,9 @@ keywords = ["vedic", "jyotish", "nakshatra", "dasha", "panchang"]
 categories = ["science", "mathematics"]
 
 [dependencies]
-xalen-time = { version = "0.5.0", path = "../xalen-time" }
-xalen-coords = { version = "0.5.0", path = "../xalen-coords" }
-xalen-ayanamsa = { version = "0.5.0", path = "../xalen-ayanamsa" }
+xalen-time = { version = "0.6.0", path = "../xalen-time" }
+xalen-coords = { version = "0.6.0", path = "../xalen-coords" }
+xalen-ayanamsa = { version = "0.6.0", path = "../xalen-ayanamsa" }
 serde.workspace = true
 
 [lints]
