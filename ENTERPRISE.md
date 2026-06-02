@@ -53,8 +53,8 @@ your deployment — get in touch and we'll put together a proposal.
 
 ## Get in touch
 
-- **Email:** hello@xalen.ai
-- **Web:** https://xalen.ai
+- **Email:** hello@xalen.io
+- **Web:** https://xalen.io
 
 ---
 

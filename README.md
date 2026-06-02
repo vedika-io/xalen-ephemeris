@@ -297,7 +297,7 @@ Licensed under the [Apache License, Version 2.0](LICENSE).
 Copyright 2024-2026 XALEN Technology Pvt Ltd.
 ```
 
-For commercial licensing inquiries, contact [hello@xalen.ai](mailto:hello@xalen.ai).
+For commercial licensing inquiries, contact [hello@xalen.io](mailto:hello@xalen.io).
 
 ---
 
@@ -306,7 +306,7 @@ For commercial licensing inquiries, contact [hello@xalen.ai](mailto:hello@xalen.
 XALEN Ephemeris is free and open source (Apache-2.0) — and always will be. For
 production use that needs an **SLA, IP indemnification, a managed/hosted API,
 certified-accuracy reports, white-label, or on-premise support**, see
-**[ENTERPRISE.md](ENTERPRISE.md)** or reach us at **hello@xalen.ai**. The
+**[ENTERPRISE.md](ENTERPRISE.md)** or reach us at **hello@xalen.io**. The
 open-source core stays Apache-2.0; Enterprise only adds services and optional
 proprietary modules on top.
 
