@@ -19,6 +19,7 @@ members = [
     "crates/xalen-lalkitab",
     "crates/xalen-iching",
     "crates/xalen-chart",
+    "crates/xalen-cloud",
     "validation",
 ]
 # xalen-python is a PyO3 extension-module — its cdylib needs Python at link
@@ -44,6 +45,7 @@ default-members = [
     "crates/xalen-lalkitab",
     "crates/xalen-iching",
     "crates/xalen-chart",
+    "crates/xalen-cloud",
     "validation",
 ]
 

@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **`xalen-cloud`** crate — a local-first interpretation shim. The chart is
+  computed entirely on-device (`compute_chart`, no network), and only the
+  optional interpretation step is delegated to a pluggable
+  `InterpretationProvider`. Ships an offline, network-free `OfflineInterpreter`
+  and an optional `RemoteInterpreter` (behind the `remote-http` feature) that
+  POSTs the computed chart to a configurable endpoint. The base crate is fully
+  offline and pulls in no network dependency by default.
+
 ## [0.6.0] - 2026-06-02
 
 This entry consolidates Wave B (accuracy / breadth) and Wave C (bindings parity +

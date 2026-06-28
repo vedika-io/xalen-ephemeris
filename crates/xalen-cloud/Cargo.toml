@@ -1,0 +1,32 @@
+[package]
+name = "xalen-cloud"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Local-first interpretation shim for XALEN Ephemeris: the chart is computed entirely on-device; only the (optional) interpretation step is delegated to a pluggable provider"
+keywords = ["astrology", "ephemeris", "interpretation", "vedic", "horoscope"]
+categories = ["science", "api-bindings"]
+
+[dependencies]
+xalen-time = { version = "0.6.0", path = "../xalen-time" }
+xalen-coords = { version = "0.6.0", path = "../xalen-coords" }
+xalen-ephem = { version = "0.6.0", path = "../xalen-ephem" }
+xalen-houses = { version = "0.6.0", path = "../xalen-houses" }
+xalen-ayanamsa = { version = "0.6.0", path = "../xalen-ayanamsa" }
+xalen-vedic = { version = "0.6.0", path = "../xalen-vedic" }
+serde = { workspace = true }
+serde_json = "1"
+
+# `remote-http` adds a small blocking HTTP client so `RemoteInterpreter` can POST
+# the locally-computed chart to an interpretation endpoint. OFF by default: the
+# base crate is fully offline (chart computation needs no network) and pulls in
+# no network-capable dependency.
+ureq = { version = "2.10", optional = true, features = ["json"] }
+
+[features]
+default = []
+remote-http = ["dep:ureq"]
+
+[lints]
+workspace = true
