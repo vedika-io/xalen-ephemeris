@@ -43,6 +43,20 @@ fn polar_to_xy(angle_deg: f64, radius: f64) -> (f64, f64) {
     (CENTER + radius * rad.cos(), CENTER - radius * rad.sin())
 }
 
+/// Map an ecliptic longitude to the on-screen wheel angle.
+///
+/// The Ascendant (`asc_cusp` longitude) sits at screen-left (angle 180°) and
+/// ecliptic longitude increases **counter-clockwise** — the standard Western
+/// natal-wheel orientation, where the 2nd house / Asc+30° falls *below* the
+/// Ascendant. With [`polar_to_xy`] (SVG y inverted) that means the screen angle
+/// must increase with longitude: `180 + (lon − asc)`.
+///
+/// (Previously this was `180 + asc − lon`, which rendered the zodiac and houses
+/// reversed — clockwise — placing the 2nd house above the Ascendant.)
+fn lon_to_angle(lon_deg: f64, asc_cusp_deg: f64) -> f64 {
+    180.0 - asc_cusp_deg + lon_deg
+}
+
 fn arc_segment(start_deg: f64, end_deg: f64, outer_r: f64, inner_r: f64, fill: &str) -> String {
     let (x1o, y1o) = polar_to_xy(start_deg, outer_r);
     let (x2o, y2o) = polar_to_xy(end_deg, outer_r);
@@ -91,8 +105,8 @@ pub(crate) fn render(data: &ChartData) -> String {
 
     for i in 0..12usize {
         let sign_start = (i as f64) * 30.0;
-        let offset_start = 180.0 + asc_cusp - sign_start;
-        let offset_end = offset_start - 30.0;
+        let offset_start = lon_to_angle(sign_start, asc_cusp);
+        let offset_end = offset_start + 30.0;
 
         let color = sign_color(i);
         svg.push_str(&arc_segment(
@@ -104,7 +118,7 @@ pub(crate) fn render(data: &ChartData) -> String {
         ));
 
         // Sign label at midpoint
-        let mid_angle = offset_start - 15.0;
+        let mid_angle = offset_start + 15.0;
         let label_r = (OUTER_R + ZODIAC_R) / 2.0;
         let (lx, ly) = polar_to_xy(mid_angle, label_r);
         let abbr = SIGN_ABBREV[i];
@@ -117,7 +131,7 @@ pub(crate) fn render(data: &ChartData) -> String {
     // House cusp lines
     for i in 0..12usize {
         let cusp_deg = safe_longitude(data.house_cusps_deg[i]);
-        let angle = 180.0 + asc_cusp - cusp_deg;
+        let angle = lon_to_angle(cusp_deg, asc_cusp);
         let (x1, y1) = polar_to_xy(angle, CUSP_INNER_R);
         let (x2, y2) = polar_to_xy(angle, ZODIAC_R);
 
@@ -134,7 +148,7 @@ pub(crate) fn render(data: &ChartData) -> String {
         } else {
             ((cusp_deg + next + 360.0) / 2.0) % 360.0
         };
-        let num_angle = 180.0 + asc_cusp - mid_cusp;
+        let num_angle = lon_to_angle(mid_cusp, asc_cusp);
         let (nx, ny) = polar_to_xy(num_angle, (INNER_R + CUSP_INNER_R) / 2.0);
         let num = i + 1;
         write!(svg,
@@ -149,7 +163,7 @@ pub(crate) fn render(data: &ChartData) -> String {
         .iter()
         .map(|pp| {
             let lon = safe_longitude(pp.longitude_deg);
-            let angle = 180.0 + asc_cusp - lon;
+            let angle = lon_to_angle(lon, asc_cusp);
             (angle, svg_escape(&pp.abbreviation))
         })
         .collect();
@@ -207,6 +221,29 @@ mod tests {
         let (x, y) = polar_to_xy(90.0, 100.0);
         assert!((x - CENTER).abs() < 0.01);
         assert!((y - (CENTER - 100.0)).abs() < 0.01);
+    }
+
+    #[test]
+    fn ascendant_renders_on_the_left() {
+        // A point on the Ascendant longitude maps to screen angle 180° (left).
+        let asc = 100.0;
+        let (x, y) = polar_to_xy(lon_to_angle(asc, asc), 100.0);
+        assert!((x - (CENTER - 100.0)).abs() < 0.01, "Asc must be at screen-left");
+        assert!((y - CENTER).abs() < 0.01);
+    }
+
+    #[test]
+    fn zodiac_advances_counter_clockwise() {
+        // Standard Western wheel: longitude increases counter-clockwise, so the
+        // point 30° past the Ascendant sits BELOW it (screen y increases), not
+        // above. Guards against the previous reversed (clockwise) mapping.
+        let asc = 0.0;
+        let (_, y_asc) = polar_to_xy(lon_to_angle(asc, asc), 100.0);
+        let (_, y_next) = polar_to_xy(lon_to_angle(asc + 30.0, asc), 100.0);
+        assert!(
+            y_next > y_asc,
+            "Asc+30° (2nd house) must fall below the Ascendant, not above"
+        );
     }
 
     #[test]
