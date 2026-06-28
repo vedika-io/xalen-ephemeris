@@ -3,10 +3,15 @@ use std::collections::HashMap;
 use std::sync::LazyLock;
 
 pub mod catalog;
-#[rustfmt::skip]
-pub mod catalog_generated;
 
-pub use catalog_generated::{GENERATED_CATALOG, GENERATED_STAR_COUNT};
+/// Hipparcos catalogue data (CDS I/239, **CC BY-NC**) lives in the optional
+/// `xalen-stars-hip-data` crate and is re-exported here only when the
+/// default-on `hip-catalog` feature is enabled. Commercial builds
+/// (`--no-default-features`) link none of it. The precession / proper-motion
+/// methods for [`GeneratedStar`] are provided by the [`GeneratedStarExt`]
+/// extension trait below (Apache-2.0 math kept separate from NC data).
+#[cfg(feature = "hip-catalog")]
+pub use xalen_stars_hip_data::{GENERATED_CATALOG, GENERATED_STAR_COUNT, GeneratedStar};
 
 /// General precession in longitude — IAU 2006 J2000 linear rate
 /// (5028.796195″/century → 50.28796″/yr).
@@ -132,50 +137,65 @@ impl FixedStar {
     }
 }
 
-/// A fixed star generated from the Hipparcos Main Catalogue (CDS I/239).
+/// Epoch-propagation methods for the Hipparcos [`GeneratedStar`] data type.
 ///
-/// Every field is derived from a real `hip_main.dat` record (see
-/// `catalog_generated.rs` header for the full provenance). `name`, `constellation`
-/// and `nature` are populated ONLY where a curated traditional name joined to
-/// this HIP via the IAU Catalog of Star Names; otherwise they are `None`/`""`.
-///
-/// Positions are J2000.0 ecliptic (the Hipparcos J1991.25 epoch is propagated
-/// forward 8.75 yr by proper motion before the equatorial→ecliptic rotation).
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GeneratedStar {
-    /// Hipparcos Catalogue (HIP) identifier.
-    pub hip: u32,
-    /// Traditional name, if a curated/IAU name maps to this HIP.
-    pub name: Option<&'static str>,
-    /// Constellation (only set when a curated name is present).
-    pub constellation: &'static str,
-    pub longitude_j2000: f64, // degrees ecliptic
-    pub latitude_j2000: f64,  // degrees ecliptic
-    pub magnitude: f64,
-    /// Ptolemaic planetary nature (only set when a curated name is present).
-    pub nature: &'static str,
-    /// Proper motion in ecliptic longitude (milliarcseconds per year).
-    pub pm_lon_mas_per_year: f64,
-    /// Proper motion in ecliptic latitude (milliarcseconds per year).
-    pub pm_lat_mas_per_year: f64,
-}
-
-impl GeneratedStar {
+/// [`GeneratedStar`] is defined as **pure data** in the non-commercial
+/// `xalen-stars-hip-data` crate; the precession / proper-motion math
+/// (Apache-2.0) is attached here via this extension trait so the restricted
+/// catalogue data and the open math stay in separate packages. Bring it into
+/// scope with `use xalen_stars::GeneratedStarExt;`.
+#[cfg(feature = "hip-catalog")]
+pub trait GeneratedStarExt {
     /// Ecliptic longitude (degrees, `[0, 360)`) at a given decimal year,
     /// rigorously precessed from J2000 with the IAU 2006/P03 rotation plus
     /// proper motion. See [`precessed_ecliptic_of_date`].
-    pub fn longitude_at_epoch(&self, year: f64) -> f64 {
-        self.ecliptic_at_epoch(year).0
-    }
+    fn longitude_at_epoch(&self, year: f64) -> f64;
 
     /// Ecliptic latitude (degrees, signed) at a given decimal year, now
     /// precession-coupled (not proper-motion-only).
-    pub fn latitude_at_epoch(&self, year: f64) -> f64 {
+    fn latitude_at_epoch(&self, year: f64) -> f64;
+
+    /// Both ecliptic coordinates at once (degrees): `(longitude, latitude)`.
+    fn ecliptic_at_epoch(&self, year: f64) -> (f64, f64);
+
+    /// Ecliptic longitude at a given Julian Date.
+    fn longitude_at_jd(&self, jd: f64) -> f64;
+
+    /// Adapt a named HIP-derived star into the legacy [`FixedStar`] shape.
+    ///
+    /// Used to back the public [`find_by_name`] lookup with the validated
+    /// Hipparcos catalog (sub-arcsecond vs Swiss) while preserving the
+    /// `FixedStar` API that downstream callers depend on. The `name` argument
+    /// supplies the canonical `'static` name string. Position, latitude,
+    /// magnitude, nature, constellation and the ecliptic proper-motion
+    /// components are taken from the validated generated record.
+    fn to_fixed_star(&self, name: &'static str) -> FixedStar;
+}
+
+#[cfg(feature = "hip-catalog")]
+impl GeneratedStarExt for GeneratedStar {
+    fn to_fixed_star(&self, name: &'static str) -> FixedStar {
+        FixedStar {
+            name,
+            constellation: self.constellation,
+            longitude_j2000: self.longitude_j2000,
+            latitude_j2000: self.latitude_j2000,
+            magnitude: self.magnitude,
+            nature: self.nature,
+            pm_lon_mas_per_year: self.pm_lon_mas_per_year,
+            pm_lat_mas_per_year: self.pm_lat_mas_per_year,
+        }
+    }
+
+    fn longitude_at_epoch(&self, year: f64) -> f64 {
+        self.ecliptic_at_epoch(year).0
+    }
+
+    fn latitude_at_epoch(&self, year: f64) -> f64 {
         self.ecliptic_at_epoch(year).1
     }
 
-    /// Both ecliptic coordinates at once (degrees): `(longitude, latitude)`.
-    pub fn ecliptic_at_epoch(&self, year: f64) -> (f64, f64) {
+    fn ecliptic_at_epoch(&self, year: f64) -> (f64, f64) {
         precessed_ecliptic_of_date(
             self.longitude_j2000,
             self.latitude_j2000,
@@ -185,8 +205,7 @@ impl GeneratedStar {
         )
     }
 
-    /// Ecliptic longitude at a given Julian Date.
-    pub fn longitude_at_jd(&self, jd: f64) -> f64 {
+    fn longitude_at_jd(&self, jd: f64) -> f64 {
         let year = 2000.0 + (jd - J2000_JD) / 365.25;
         self.longitude_at_epoch(year)
     }
@@ -196,16 +215,31 @@ impl GeneratedStar {
 /// HIP-derived `GENERATED_CATALOG`. (The two overlap on the ~100 curated names
 /// that joined to a HIP; this is the raw sum, not a de-duplicated count.)
 pub fn expanded_star_count() -> usize {
-    CATALOG.len() + GENERATED_CATALOG.len()
+    #[cfg(feature = "hip-catalog")]
+    {
+        CATALOG.len() + GENERATED_CATALOG.len()
+    }
+    // Commercial build: no Hipparcos (NC) catalog linked — only the curated set.
+    #[cfg(not(feature = "hip-catalog"))]
+    {
+        CATALOG.len()
+    }
 }
 
 /// Find a generated (HIP) star by its Hipparcos identifier.
+///
+/// Only available with the `hip-catalog` feature (the Hipparcos catalogue is
+/// non-commercial and is not linked into commercial builds).
+#[cfg(feature = "hip-catalog")]
 pub fn find_generated_by_hip(hip: u32) -> Option<&'static GeneratedStar> {
     GENERATED_CATALOG.iter().find(|s| s.hip == hip)
 }
 
 /// Find a generated star by traditional name (case-insensitive). Only the
 /// IAU-joined stars carry a name.
+///
+/// Only available with the `hip-catalog` feature.
+#[cfg(feature = "hip-catalog")]
 pub fn find_generated_by_name(name: &str) -> Option<&'static GeneratedStar> {
     GENERATED_CATALOG
         .iter()
@@ -235,6 +269,7 @@ pub fn find_generated_by_name(name: &str) -> Option<&'static GeneratedStar> {
 /// γ¹ Leonis "Algieba"; η Leonis is a distinct, unnamed star), so "Al Jabhah" is
 /// a traditional designation resolved by HIP only. The position, magnitude and
 /// proper motion still come entirely from the Hipparcos record for that HIP.
+#[cfg(feature = "hip-catalog")]
 const CURATED_NAME_HIP: &[(&str, u32)] = &[
     ("zuben elgenubi", 72622),
     ("zuben eschamali", 74785),
@@ -253,6 +288,7 @@ const CURATED_NAME_HIP: &[(&str, u32)] = &[
 /// to a HIP-number lookup via [`CURATED_NAME_HIP`], so the reconciliation is
 /// correct regardless of how the generated catalog was produced. Returns `None`
 /// only for genuine clusters (Pleiades, Praesepe) with no single HIP star.
+#[cfg(feature = "hip-catalog")]
 fn find_generated_for_curated(name: &str) -> Option<&'static GeneratedStar> {
     if let Some(s) = find_generated_by_name(name) {
         return Some(s);
@@ -262,31 +298,6 @@ fn find_generated_for_curated(name: &str) -> Option<&'static GeneratedStar> {
         .iter()
         .find(|(n, _)| *n == lower.as_str())
         .and_then(|&(_, hip)| find_generated_by_hip(hip))
-}
-
-impl GeneratedStar {
-    /// Adapt a named HIP-derived star into the legacy [`FixedStar`] shape.
-    ///
-    /// Used to back the public [`find_by_name`] lookup with the validated
-    /// Hipparcos catalog (sub-arcsecond vs Swiss) while preserving the
-    /// `FixedStar` API that downstream callers depend on. The `name` argument
-    /// supplies the canonical `'static` name string (the generated catalog's
-    /// own `name` is also `'static`, but the curated spelling is authoritative
-    /// for the public surface). Position, latitude, magnitude, nature,
-    /// constellation and the ecliptic proper-motion components are taken from
-    /// the validated generated record.
-    fn to_fixed_star(&self, name: &'static str) -> FixedStar {
-        FixedStar {
-            name,
-            constellation: self.constellation,
-            longitude_j2000: self.longitude_j2000,
-            latitude_j2000: self.latitude_j2000,
-            magnitude: self.magnitude,
-            nature: self.nature,
-            pm_lon_mas_per_year: self.pm_lon_mas_per_year,
-            pm_lat_mas_per_year: self.pm_lat_mas_per_year,
-        }
-    }
 }
 
 /// The public fixed-star catalog, reconciled against the validated Hipparcos
@@ -312,17 +323,31 @@ impl GeneratedStar {
 /// integration test for the Swiss-Ephemeris ground truth this reconciliation
 /// now matches.
 static RECONCILED_CATALOG: LazyLock<Vec<FixedStar>> = LazyLock::new(|| {
-    CATALOG
-        .iter()
-        .map(|curated| {
-            match find_generated_for_curated(curated.name) {
-                // Validated HIP data exists for this name — prefer it.
-                Some(g) => g.to_fixed_star(curated.name),
-                // No HIP match (an open cluster) — keep the curated entry.
-                None => curated.clone(),
-            }
-        })
-        .collect()
+    // With the `hip-catalog` feature (open build): replace curated positions
+    // with the validated Hipparcos-derived values where a name joins to a HIP.
+    #[cfg(feature = "hip-catalog")]
+    {
+        CATALOG
+            .iter()
+            .map(|curated| {
+                match find_generated_for_curated(curated.name) {
+                    // Validated HIP data exists for this name — prefer it.
+                    Some(g) => g.to_fixed_star(curated.name),
+                    // No HIP match (an open cluster) — keep the curated entry.
+                    None => curated.clone(),
+                }
+            })
+            .collect()
+    }
+    // Commercial build (no `hip-catalog`): the non-commercial Hipparcos data is
+    // not linked, so the public fixed-star surface serves the curated Apache
+    // `CATALOG` verbatim (curated accuracy — NOT the sub-arcsecond HIP set). The
+    // core sidereal output (True Chitra) does NOT read this; it anchors Spica
+    // from `xalen-star-anchors`, so it is identical either way.
+    #[cfg(not(feature = "hip-catalog"))]
+    {
+        CATALOG.iter().cloned().collect()
+    }
 });
 
 /// Case-insensitive name → index map into [`RECONCILED_CATALOG`].
@@ -341,6 +366,10 @@ static NAME_INDEX: LazyLock<HashMap<String, usize>> = LazyLock::new(|| {
 /// Returns `(star, separation_deg)` for every generated star within `orb_deg`
 /// of `planet_lon_deg` at the given epoch year. Use this for breadth; use
 /// [`find_conjunctions_at_epoch`] for the curated astrologically-named set only.
+///
+/// Only available with the `hip-catalog` feature (the expanded set is the
+/// non-commercial Hipparcos catalogue).
+#[cfg(feature = "hip-catalog")]
 pub fn find_conjunctions_expanded(
     planet_lon_deg: f64,
     orb_deg: f64,
@@ -1754,6 +1783,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "hip-catalog")]
     #[test]
     fn latitude_changes_with_precession_and_proper_motion() {
         let sirius = find_by_name("Sirius").unwrap();
@@ -1899,6 +1929,7 @@ mod tests {
         ((a - b + 180.0).rem_euclid(360.0)) - 180.0
     }
 
+    #[cfg(feature = "hip-catalog")]
     #[test]
     fn precession_multi_epoch_matches_pyswisseph() {
         // 1 arcmin = 1/60 deg. The task target is < 1'; we measure < 0.1'.
@@ -1931,6 +1962,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "hip-catalog")]
     #[test]
     fn rotation_beats_planar_model_for_high_latitude_vega() {
         // Documents WHY the rotation was needed and proves it is strictly
@@ -2105,6 +2137,7 @@ mod tests {
 
     // ----- Generated (Hipparcos) catalog tests -----
 
+    #[cfg(feature = "hip-catalog")]
     #[test]
     fn generated_catalog_count_matches_constant() {
         assert_eq!(GENERATED_CATALOG.len(), GENERATED_STAR_COUNT);
@@ -2117,6 +2150,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "hip-catalog")]
     #[test]
     fn generated_catalog_all_within_vmag_limit() {
         for s in GENERATED_CATALOG {
@@ -2129,6 +2163,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "hip-catalog")]
     #[test]
     fn generated_catalog_sorted_by_hip_no_dupes() {
         for w in GENERATED_CATALOG.windows(2) {
@@ -2141,6 +2176,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "hip-catalog")]
     #[test]
     fn generated_positions_are_finite_and_in_range() {
         for s in GENERATED_CATALOG {
@@ -2161,6 +2197,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "hip-catalog")]
     #[test]
     fn generated_named_bright_stars_present_by_hip() {
         // HIP numbers for these bright stars come from the IAU-CSN authority
@@ -2181,6 +2218,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "hip-catalog")]
     #[test]
     fn generated_find_by_name_case_insensitive() {
         assert!(find_generated_by_name("vega").is_some());
@@ -2188,6 +2226,7 @@ mod tests {
         assert!(find_generated_by_name("definitely-not-a-star").is_none());
     }
 
+    #[cfg(feature = "hip-catalog")]
     #[test]
     fn formerly_fallback_names_resolve_to_generated_catalog() {
         // These six curated names use a traditional spelling that differs from
@@ -2235,6 +2274,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "hip-catalog")]
     #[test]
     fn bharani_41_resolves_to_validated_longitude_not_curated() {
         // Sharpest single proof of the alias bug: the curated "Bharani 41" entry
@@ -2256,6 +2296,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "hip-catalog")]
     #[test]
     fn only_clusters_remain_unreconciled() {
         // Every curated name must now resolve to a validated generated row,
@@ -2274,6 +2315,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "hip-catalog")]
     #[test]
     fn expanded_conjunction_finds_more_than_curated() {
         // At Aldebaran's longitude with a 1-deg orb, the expanded HIP catalog
@@ -2287,6 +2329,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "hip-catalog")]
     #[test]
     fn expanded_star_count_is_sum() {
         assert_eq!(

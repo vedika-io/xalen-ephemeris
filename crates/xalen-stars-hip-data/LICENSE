@@ -1,0 +1,28 @@
+xalen-stars-hip-data — DATA LICENSE (non-commercial)
+
+SPDX-License-Identifier: CC-BY-NC-3.0-IGO
+
+This crate embeds fixed-star catalogue data derived from:
+
+  - The Hipparcos Main Catalogue (CDS I/239, hip_main.dat), (C) ESA 1997,
+    published in "The Hipparcos and Tycho Catalogues" (ESA SP-1200).
+
+The catalogue compilation is distributed under the Creative Commons
+Attribution-NonCommercial 3.0 IGO licence (CC BY-NC 3.0 IGO). The full legal
+code is at:
+
+  https://creativecommons.org/licenses/by-nc/3.0/igo/legalcode
+
+KEY TERM: this data may NOT be used for commercial purposes. It is therefore
+included in XALEN Ephemeris ONLY behind the default-on `hip-catalog` Cargo
+feature; commercial builds compile with `--no-default-features`, which links
+none of this data. See the repository NOTICE (Part 3) and
+crates/xalen-stars/README.md.
+
+The surrounding XALEN Ephemeris *code* (including the analytical engine that
+consumes this data) is licensed Apache-2.0; this NON-COMMERCIAL restriction
+applies to the catalogue DATA in this crate only.
+
+NOTE (pending counsel review): the precise licence designation for this data
+(CC BY-NC 3.0 IGO vs. the specific CDS terms of use) is being confirmed. The
+restriction is non-commercial either way.

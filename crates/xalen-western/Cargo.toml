@@ -13,5 +13,13 @@ xalen-time = { version = "0.6.0", path = "../xalen-time" }
 xalen-coords = { version = "0.6.0", path = "../xalen-coords" }
 serde.workspace = true
 
+[features]
+# `hip-catalog` gates the 506-star fixed-star module, whose coordinates derive
+# from the Hipparcos catalogue (ESA 1997) + SIMBAD cross-reference (CC BY-NC for
+# commercial use). DEFAULT-ON for the open library; commercial builds
+# (`--no-default-features`) link none of it. See NOTICE Part 3.
+default = ["hip-catalog"]
+hip-catalog = []
+
 [lints]
 workspace = true
