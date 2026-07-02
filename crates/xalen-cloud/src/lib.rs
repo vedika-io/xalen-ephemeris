@@ -11,7 +11,7 @@
 //! use xalen_ayanamsa::Ayanamsa;
 //!
 //! // 1. Compute the chart locally (no network).
-//! let birth = BirthData::from_calendar(1990, 1, 15, 9.0, 28.6139, 77.2090, Ayanamsa::Lahiri);
+//! let birth = BirthData::from_calendar(1990, 1, 15, 9.0, 28.6139, 77.2090, Ayanamsa::Lahiri).unwrap();
 //! let chart = compute_chart(&birth).unwrap();
 //!
 //! // 2. Interpret it (here, fully offline; swap in a RemoteInterpreter to call out).
@@ -31,6 +31,8 @@ use xalen_vedic::rashi::Rashi;
 /// Errors from chart computation or interpretation.
 #[derive(Debug, Clone)]
 pub enum CloudError {
+    /// Caller-supplied input was out of range or malformed.
+    InvalidInput(String),
     /// The ephemeris engine failed to produce a position.
     Ephemeris(String),
     /// The interpretation provider failed (network, auth, decoding, …).
@@ -40,6 +42,7 @@ pub enum CloudError {
 impl std::fmt::Display for CloudError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            CloudError::InvalidInput(m) => write!(f, "invalid input: {m}"),
             CloudError::Ephemeris(m) => write!(f, "ephemeris error: {m}"),
             CloudError::Interpretation(m) => write!(f, "interpretation error: {m}"),
         }
@@ -66,12 +69,10 @@ impl BirthData {
     /// Build from a proleptic-Gregorian civil date and **UT** hour-of-day
     /// (already converted from local time, e.g. IST 14:30 → 9.0 UT).
     ///
-    /// This is a thin wrapper over [`xalen_time::calendar_to_jd`] and does **not**
-    /// validate the civil fields: out-of-range `month`/`day`/`ut_hour` produce an
-    /// unspecified (but finite) Julian Day rather than an error. For untrusted
-    /// input, validate the calendar fields before calling. The geographic
-    /// `lat`/`lon` and the resulting JD *are* validated later, by
-    /// [`compute_chart`], which rejects out-of-range or non-finite values.
+    /// The civil fields are validated: `month` must be 1–12, `day` must exist in
+    /// that month (proleptic-Gregorian leap rule), and `ut_hour` must be finite
+    /// and in `[0, 24)`. The geographic `lat`/`lon` and the resulting JD are
+    /// additionally validated by [`compute_chart`].
     pub fn from_calendar(
         year: i32,
         month: u32,
@@ -80,7 +81,23 @@ impl BirthData {
         lat: f64,
         lon: f64,
         ayanamsa: Ayanamsa,
-    ) -> Self {
+    ) -> Result<Self, CloudError> {
+        if !(1..=12).contains(&month) {
+            return Err(CloudError::InvalidInput(format!(
+                "month must be 1-12, got {month}"
+            )));
+        }
+        if day < 1 || day > days_in_month(year, month) {
+            return Err(CloudError::InvalidInput(format!(
+                "day must be 1-{} for {year}-{month:02}, got {day}",
+                days_in_month(year, month)
+            )));
+        }
+        if !ut_hour.is_finite() || !(0.0..24.0).contains(&ut_hour) {
+            return Err(CloudError::InvalidInput(format!(
+                "ut_hour must be finite and in [0, 24), got {ut_hour}"
+            )));
+        }
         let jd = xalen_time::calendar_to_jd(
             year,
             month,
@@ -88,11 +105,23 @@ impl BirthData {
             ut_hour,
             xalen_time::CalendarSystem::ProlepticGregorian,
         );
-        Self {
+        Ok(Self {
             jd_ut1: jd.0,
             lat,
             lon,
             ayanamsa,
+        })
+    }
+}
+
+/// Days in a proleptic-Gregorian month (`month` must already be 1–12).
+fn days_in_month(year: i32, month: u32) -> u32 {
+    match month {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        _ => {
+            let leap = (year % 4 == 0 && year % 100 != 0) || year % 400 == 0;
+            if leap { 29 } else { 28 }
         }
     }
 }
@@ -232,9 +261,11 @@ pub fn compute_chart(birth: &BirthData) -> Result<ChartSummary, CloudError> {
 pub struct InterpretationRequest {
     /// The locally-computed chart (the only data sent to a provider).
     pub chart: ChartSummary,
-    /// Optional free-text question to focus the interpretation.
+    /// Optional free-text question to focus the interpretation. Not validated
+    /// or length-limited here; providers should enforce their own limits.
     pub query: Option<String>,
-    /// BCP-47 locale, e.g. "en", "hi".
+    /// Locale tag, e.g. "en", "hi". Expected to be BCP-47 but passed through to
+    /// the provider unvalidated.
     pub locale: String,
 }
 
@@ -310,12 +341,28 @@ pub struct RemoteInterpreter {
 #[cfg(feature = "remote-http")]
 impl RemoteInterpreter {
     /// Create a remote interpreter for `endpoint` with a default 15s timeout.
-    pub fn new(endpoint: impl Into<String>) -> Self {
-        Self {
-            endpoint: endpoint.into(),
+    ///
+    /// The endpoint must be a non-empty `http://` or `https://` URL. Note that
+    /// [`interpret`](InterpretationProvider::interpret) additionally refuses to
+    /// send a bearer token over plain `http://`.
+    pub fn new(endpoint: impl Into<String>) -> Result<Self, CloudError> {
+        let endpoint: String = endpoint.into();
+        let trimmed = endpoint.trim();
+        if trimmed.is_empty() {
+            return Err(CloudError::InvalidInput(
+                "endpoint must not be empty".into(),
+            ));
+        }
+        if !(trimmed.starts_with("https://") || trimmed.starts_with("http://")) {
+            return Err(CloudError::InvalidInput(format!(
+                "endpoint must start with http:// or https://, got {trimmed:?}"
+            )));
+        }
+        Ok(Self {
+            endpoint: trimmed.to_string(),
             api_key: None,
             timeout: std::time::Duration::from_secs(15),
-        }
+        })
     }
 
     /// Set a bearer token.
@@ -328,6 +375,11 @@ impl RemoteInterpreter {
 #[cfg(feature = "remote-http")]
 impl InterpretationProvider for RemoteInterpreter {
     fn interpret(&self, request: &InterpretationRequest) -> Result<Interpretation, CloudError> {
+        if self.api_key.is_some() && !self.endpoint.starts_with("https://") {
+            return Err(CloudError::InvalidInput(
+                "refusing to send a bearer token over non-https endpoint".into(),
+            ));
+        }
         let agent = ureq::AgentBuilder::new().timeout(self.timeout).build();
         let mut req = agent.post(&self.endpoint);
         if let Some(key) = &self.api_key {
@@ -361,7 +413,42 @@ mod tests {
 
     fn sample() -> BirthData {
         // 1990-01-15 14:30 IST (UT 9.0), New Delhi.
-        BirthData::from_calendar(1990, 1, 15, 9.0, 28.6139, 77.2090, Ayanamsa::Lahiri)
+        BirthData::from_calendar(1990, 1, 15, 9.0, 28.6139, 77.2090, Ayanamsa::Lahiri).unwrap()
+    }
+
+    #[test]
+    fn from_calendar_rejects_invalid_civil_input() {
+        let ok = |y, m, d, h| BirthData::from_calendar(y, m, d, h, 0.0, 0.0, Ayanamsa::Lahiri);
+        assert!(matches!(
+            ok(1990, 0, 1, 0.0),
+            Err(CloudError::InvalidInput(_))
+        ));
+        assert!(matches!(
+            ok(1990, 13, 1, 0.0),
+            Err(CloudError::InvalidInput(_))
+        ));
+        assert!(matches!(
+            ok(1990, 2, 29, 0.0),
+            Err(CloudError::InvalidInput(_))
+        )); // 1990 not leap
+        assert!(ok(2000, 2, 29, 0.0).is_ok()); // 2000 is leap (÷400)
+        assert!(matches!(
+            ok(1900, 2, 29, 0.0),
+            Err(CloudError::InvalidInput(_))
+        )); // 1900 not leap (÷100)
+        assert!(matches!(
+            ok(1990, 4, 31, 0.0),
+            Err(CloudError::InvalidInput(_))
+        ));
+        assert!(matches!(
+            ok(1990, 1, 1, 24.0),
+            Err(CloudError::InvalidInput(_))
+        ));
+        assert!(matches!(
+            ok(1990, 1, 1, f64::NAN),
+            Err(CloudError::InvalidInput(_))
+        ));
+        assert!(ok(1990, 12, 31, 23.999).is_ok());
     }
 
     #[test]
