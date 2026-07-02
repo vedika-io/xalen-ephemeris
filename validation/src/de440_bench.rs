@@ -217,7 +217,10 @@ fn main() {
             "metric      : |Δ apparent geocentric ecliptic longitude| (DE440 − VSOP87), arcsec"
         );
     } else {
-        println!("reference   : SELF-BASELINE (no kernel found at {})", cfg.kernel);
+        println!(
+            "reference   : SELF-BASELINE (no kernel found at {})",
+            cfg.kernel
+        );
         println!("candidate   : XALEN analytic VSOP87/ELP series (vs itself)");
         println!(
             "metric      : |Δ longitude| — ~0 by construction; this is a wiring check, NOT a validation"
@@ -247,7 +250,9 @@ fn main() {
     println!();
 
     // Sweep.
-    let mut devs: Vec<Deviation> = (0..BENCH_BODIES.len()).map(|_| Deviation::default()).collect();
+    let mut devs: Vec<Deviation> = (0..BENCH_BODIES.len())
+        .map(|_| Deviation::default())
+        .collect();
     let mut skipped: u64 = 0;
     for &jd in &epochs {
         let jd_ut1 = JdUT1(jd);
