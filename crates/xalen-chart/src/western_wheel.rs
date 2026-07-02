@@ -228,7 +228,10 @@ mod tests {
         // A point on the Ascendant longitude maps to screen angle 180° (left).
         let asc = 100.0;
         let (x, y) = polar_to_xy(lon_to_angle(asc, asc), 100.0);
-        assert!((x - (CENTER - 100.0)).abs() < 0.01, "Asc must be at screen-left");
+        assert!(
+            (x - (CENTER - 100.0)).abs() < 0.01,
+            "Asc must be at screen-left"
+        );
         assert!((y - CENTER).abs() < 0.01);
     }
 
