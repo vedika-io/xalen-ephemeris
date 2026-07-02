@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+- Bump `pyo3` from 0.28 to **0.29** in the Python binding to clear
+  RUSTSEC-2026-0176 and RUSTSEC-2026-0177 (fixed in pyo3 ≥ 0.29.0). Migrated the
+  two deprecated `Bound::downcast` calls to `Bound::cast` (pyo3 0.29 API).
+
 ### Added
 - **`xalen-stars-hip-data`** crate — the Hipparcos-derived fixed-star catalogue
   (8,870 stars, CDS I/239, © ESA 1997) is now isolated in its own package,

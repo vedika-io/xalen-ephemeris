@@ -11,6 +11,14 @@ publish = false
 name = "xalen-validation"
 path = "src/main.rs"
 
+# Ephemeris-precision benchmark: XALEN's DE440-backed apparent longitudes vs an
+# independent reference (a JPL DE440/DE441 SPK kernel, and the analytic VSOP87
+# baseline). Emits a per-body max/RMS deviation table in arcseconds.
+#   cargo run -p xalen-validation --release --bin de440_bench
+[[bin]]
+name = "de440_bench"
+path = "src/de440_bench.rs"
+
 [dependencies]
 xalen-time = { path = "../crates/xalen-time", version = "0.6.0" }
 xalen-coords = { path = "../crates/xalen-coords", version = "0.6.0" }

@@ -102,7 +102,7 @@ fn calc(jd_et: f64, ipl: i32, flags: i32) -> PyResult<([f64; 6], i32)> {
 /// idiomatic bytes form. A 1-byte/1-char value is required, matching Swiss.
 fn parse_hsys(hsys: &Bound<'_, PyAny>) -> PyResult<char> {
     // bytes (the pyswisseph-native form, e.g. b'P')
-    if let Ok(b) = hsys.downcast::<PyBytes>() {
+    if let Ok(b) = hsys.cast::<PyBytes>() {
         let bytes = b.as_bytes();
         return match bytes.first() {
             Some(&byte) => Ok(byte as char),
@@ -112,7 +112,7 @@ fn parse_hsys(hsys: &Bound<'_, PyAny>) -> PyResult<char> {
         };
     }
     // str (e.g. 'P')
-    if let Ok(s) = hsys.downcast::<PyString>() {
+    if let Ok(s) = hsys.cast::<PyString>() {
         let text: String = s.extract()?;
         return text.chars().next().ok_or_else(|| {
             pyo3::exceptions::PyValueError::new_err(
