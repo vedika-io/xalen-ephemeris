@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+- Bump `pyo3` from 0.28 to **0.29** in the Python binding to clear
+  RUSTSEC-2026-0176 and RUSTSEC-2026-0177 (fixed in pyo3 ≥ 0.29.0). Migrated the
+  two deprecated `Bound::downcast` calls to `Bound::cast` (pyo3 0.29 API).
+
 ### Added
 - **`xalen-cloud`** crate — a local-first interpretation shim. The chart is
   computed entirely on-device (`compute_chart`, no network), and only the
@@ -14,7 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `InterpretationProvider`. Ships an offline, network-free `OfflineInterpreter`
   and an optional `RemoteInterpreter` (behind the `remote-http` feature) that
   POSTs the computed chart to a configurable endpoint. The base crate is fully
-  offline and pulls in no network dependency by default.
+  offline and pulls in no network dependency by default. Civil birth inputs and
+  remote endpoints are validated (`from_calendar` and `RemoteInterpreter::new`
+  return `Result`; bearer tokens are refused over plain `http://`).
 
 ## [0.6.0] - 2026-06-02
 
