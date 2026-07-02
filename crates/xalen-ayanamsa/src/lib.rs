@@ -639,8 +639,11 @@ fn true_chitra(t: f64) -> f64 {
 /// to 0.038″ across the 1900–2100 oracle epochs and 0.11″ across 200 randomly
 /// sampled dates within that span.
 fn spica_apparent_longitude(t: f64) -> f64 {
-    let spica =
-        xalen_stars::find_by_name("Spica").expect("Spica must exist in the fixed-star catalog");
+    // Spica anchor sourced from the commercial-OK `xalen-star-anchors` crate (a
+    // single factual coordinate, Apache-2.0) rather than the HIP-reconciled
+    // fixed-star catalog, so True Chitra is byte-identical whether or not the
+    // non-commercial `hip-catalog` data is linked. See xalen-star-anchors.
+    let spica = xalen_star_anchors::SPICA;
 
     // J2000.0 mean ecliptic (longitude, latitude) + linear proper motion.
     // pm components are in milliarcsec/yr; t is Julian centuries → years = t·100.

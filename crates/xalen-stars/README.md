@@ -39,4 +39,13 @@ for (star, dist) in find_conjunctions(70.0, 2.0) {
 J2000.0 positions, magnitudes and proper motions are derived from the Hipparcos Main Catalogue (CDS I/239, ESA 1997): each `hip_main.dat` record is propagated J1991.25 → J2000.0 by its measured proper motion, then rotated to the J2000 ecliptic at the IAU 2006 mean obliquity. Traditional names are joined to HIP numbers through the IAU Catalog of Star Names (IAU-CSN). Epoch propagation to other years uses the rigorous IAU 2006/P03 precession rotation plus per-star proper motion (CSV imports apply an approximate equatorial-to-ecliptic PM conversion). The generated catalog is rebuilt by `tools/gen-star-catalog/gen_catalog.py`. See [ACCURACY.md](../../docs/ACCURACY.md) and [CREDITS.md](../../CREDITS.md).
 
 ## License
-Licensed under Apache-2.0. See [LICENSE](../../LICENSE).
+
+The crate **code** is licensed under Apache-2.0. See [LICENSE](../../LICENSE).
+
+The **Hipparcos-derived catalogue data** is a separate matter. It ships in the
+optional [`xalen-stars-hip-data`](../xalen-stars-hip-data) crate, which is
+licensed **CC BY-NC 3.0 IGO** (non-commercial) because it derives from the
+Hipparcos Main Catalogue (CDS I/239, © ESA 1997). It is included only via the
+default-on `hip-catalog` feature; commercial builds must compile with
+`--no-default-features`, which links none of the non-commercial data. See
+[NOTICE](../../NOTICE) Part 3.

@@ -11,7 +11,19 @@ categories = ["science", "mathematics"]
 [dependencies]
 xalen-time = { version = "0.6.0", path = "../xalen-time" }
 xalen-coords = { version = "0.6.0", path = "../xalen-coords" }
+# The Hipparcos (CDS I/239, CC BY-NC) catalogue data — OPTIONAL and isolated in
+# its own NC-licensed crate. Pulled in only by the `hip-catalog` feature.
+xalen-stars-hip-data = { version = "0.6.0", path = "../xalen-stars-hip-data", optional = true }
 serde.workspace = true
+
+[features]
+# `hip-catalog` embeds the non-commercial Hipparcos catalogue (8,870 stars) and
+# the HIP-reconciled named-star positions. DEFAULT-ON for the open-source
+# library; commercial / paid builds MUST disable it (`--no-default-features`)
+# so no CC BY-NC data is linked. CI asserts the `xalen-stars-hip-data` package
+# is absent from commercial builds.
+default = ["hip-catalog"]
+hip-catalog = ["dep:xalen-stars-hip-data"]
 
 [lints]
 workspace = true

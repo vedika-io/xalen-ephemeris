@@ -1,5 +1,9 @@
 //! Swiss fixed-star oracle over the PUBLIC `find_by_name` API.
 //!
+//! Requires the HIP catalog (`hip-catalog` feature); skipped in commercial
+//! (`--no-default-features`) test runs where the non-commercial data is absent.
+#![cfg(feature = "hip-catalog")]
+//!
 //! WHAT THIS PROVES
 //! ----------------
 //! Every reference longitude/latitude below is a REAL value produced by the

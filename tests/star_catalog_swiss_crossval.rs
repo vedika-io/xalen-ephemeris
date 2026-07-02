@@ -1,5 +1,9 @@
 //! Fixed-star catalog (Hipparcos-derived) cross-validation vs Swiss Ephemeris.
 //!
+//! Requires the HIP catalog (`hip-catalog` feature); skipped in commercial
+//! (`--no-default-features`) test runs where the non-commercial data is absent.
+#![cfg(feature = "hip-catalog")]
+//!
 //! Reference: Swiss Ephemeris `swe_fixstar2` at J2000.0 (JD 2451545.0) with the
 //! ASTROMETRIC flag set `SEFLG_J2000 | SEFLG_NONUT | SEFLG_NOABERR | SEFLG_NOGDEFL`
 //! — the mean-J2000 ecliptic CATALOG place, the same quantity `catalog_generated.rs`

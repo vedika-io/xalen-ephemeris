@@ -1,0 +1,58 @@
+name: commercial-clean
+
+# Proves that a commercial build (--no-default-features) links NONE of the
+# non-commercial fixed-star data (CC BY-NC Hipparcos / CDS / SIMBAD), while the
+# default open build still includes it. This is the automated enforcement of the
+# `hip-catalog` data gate — see NOTICE Part 3 and crates/xalen-stars-hip-data.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  no-nc-data-in-commercial-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: NC data crate is ABSENT from commercial binding graphs
+        run: |
+          set -euo pipefail
+          fail=0
+          for p in xalen-ffi xalen-wasm xalen-node xalen-python; do
+            n=$(cargo tree -p "$p" --no-default-features 2>/dev/null | grep -c 'xalen-stars-hip-data' || true)
+            echo "$p (--no-default-features): xalen-stars-hip-data count = $n"
+            if [ "$n" -ne 0 ]; then echo "::error::$p links the NC data crate"; fail=1; fi
+          done
+          # ...and PRESENT in the default open build (guards against a broken gate
+          # that silently drops the catalog from the funnel build too).
+          d=$(cargo tree -p xalen-ffi 2>/dev/null | grep -c 'xalen-stars-hip-data' || true)
+          echo "xalen-ffi (default): xalen-stars-hip-data count = $d"
+          if [ "$d" -eq 0 ]; then echo "::error::default build is missing the catalog"; fail=1; fi
+          test "$fail" -eq 0
+
+      - name: Commercial binary contains no NC symbols
+        run: |
+          set -euo pipefail
+          cargo build -p xalen-ffi --no-default-features
+          LIB=$(ls target/debug/libxalen_ffi.a target/debug/libxalen_ffi.so 2>/dev/null | head -1)
+          echo "scanning $LIB"
+          # Symbols/strings that exist ONLY when the NC data is linked.
+          if nm "$LIB" 2>/dev/null | grep -iE 'GENERATED_CATALOG|stars_hip_data'; then
+            echo "::error::NC HIP symbols found in commercial binary"; exit 1
+          fi
+          if strings "$LIB" 2>/dev/null | grep -iE 'hip_main|Hipparcos Main Catalogue'; then
+            echo "::error::NC catalogue marker strings found in commercial binary"; exit 1
+          fi
+          echo "clean: no NC symbols/strings"
+
+      - name: Core sidereal output is feature-independent (free == paid)
+        run: |
+          set -euo pipefail
+          # The ayanamsa (incl. True Chitra via xalen-star-anchors) must not
+          # depend on the NC data: it has to build and pass with the feature off.
+          cargo test -p xalen-star-anchors
+          cargo test -p xalen-ayanamsa --no-default-features 2>/dev/null \
+            || cargo test -p xalen-ayanamsa

@@ -13,7 +13,7 @@ xalen-time = { version = "0.6.0", path = "../xalen-time" }
 xalen-coords = { version = "0.6.0", path = "../xalen-coords" }
 xalen-ayanamsa = { version = "0.6.0", path = "../xalen-ayanamsa" }
 xalen-houses = { version = "0.6.0", path = "../xalen-houses" }
-xalen-stars = { version = "0.6.0", path = "../xalen-stars" }
+xalen-stars = { version = "0.6.0", path = "../xalen-stars", default-features = false }
 thiserror.workspace = true
 serde.workspace = true
 vsop87 = "3.0.0"
@@ -30,7 +30,12 @@ sha2 = { version = "0.10", optional = true }
 dirs = { version = "5", optional = true }
 
 [features]
-default = []
+# `hip-catalog` (default-on) forwards to xalen-stars so the open build links the
+# non-commercial Hipparcos fixed-star catalog. Commercial builds disable default
+# features (and omit this passthrough) so NO CC BY-NC data is linked; the
+# `swe_fixstar_*` calls then return an explicit "feature disabled" error.
+default = ["hip-catalog"]
+hip-catalog = ["xalen-stars/hip-catalog"]
 # Opt-in convenience path that fetches the public NASA NAIF `de440s.bsp` kernel
 # (~32 MB) into the OS cache directory on first use and memo-caches it on disk.
 # OFF by default: enabling it adds a network-capable dependency (`ureq`), so the

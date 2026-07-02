@@ -14,9 +14,15 @@ crate-type = ["cdylib", "staticlib"]
 [dependencies]
 xalen-time = { version = "0.6.0", path = "../xalen-time" }
 xalen-coords = { version = "0.6.0", path = "../xalen-coords" }
-xalen-ephem = { version = "0.6.0", path = "../xalen-ephem" }
+xalen-ephem = { version = "0.6.0", path = "../xalen-ephem", default-features = false }
 xalen-houses = { version = "0.6.0", path = "../xalen-houses" }
 xalen-ayanamsa = { version = "0.6.0", path = "../xalen-ayanamsa" }
+
+[features]
+# Default-on passthrough for the non-commercial Hipparcos fixed-star catalog.
+# Commercial / on-prem builds (`--no-default-features`) link none of it.
+default = ["hip-catalog"]
+hip-catalog = ["xalen-ephem/hip-catalog"]
 
 [lints]
 workspace = true

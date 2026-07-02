@@ -15,14 +15,20 @@ crate-type = ["cdylib"]
 napi = { version = "3", features = ["serde-json"] }
 napi-derive = "3"
 serde_json = "1"
-xalen-ephem = { version = "0.6.0", path = "../xalen-ephem" }
+xalen-ephem = { version = "0.6.0", path = "../xalen-ephem", default-features = false }
 xalen-time = { version = "0.6.0", path = "../xalen-time" }
 xalen-ayanamsa = { version = "0.6.0", path = "../xalen-ayanamsa" }
 xalen-vedic = { version = "0.6.0", path = "../xalen-vedic" }
 xalen-houses = { version = "0.6.0", path = "../xalen-houses" }
-xalen-stars = { version = "0.6.0", path = "../xalen-stars" }
+xalen-stars = { version = "0.6.0", path = "../xalen-stars", default-features = false }
 xalen-numerology = { version = "0.6.0", path = "../xalen-numerology" }
 xalen-coords = { version = "0.6.0", path = "../xalen-coords" }
+
+[features]
+# Default-on passthrough for the non-commercial Hipparcos fixed-star catalog.
+# Commercial builds (`--no-default-features`) link none of it.
+default = ["hip-catalog"]
+hip-catalog = ["xalen-stars/hip-catalog", "xalen-ephem/hip-catalog"]
 
 [build-dependencies]
 napi-build = "2"

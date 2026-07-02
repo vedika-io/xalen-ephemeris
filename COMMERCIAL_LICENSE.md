@@ -30,6 +30,36 @@ grant:
 | Enterprise | $2,499/yr | Professional + warranty, IP indemnification, priority fixes, quarterly review calls |
 | OEM | $9,999/yr | Enterprise + white-label terms, custom builds |
 
+## Premium Modules (proprietary add-ons)
+
+Beyond the open-source engine, XALEN offers **closed premium modules** —
+delivered privately to licensees under a signed license, never published to
+public registries:
+
+- **Premium Charts pack** — advanced and specialty chart rendering beyond the
+  open-source SVG set.
+- **Interpretation Content packs** — original, professionally authored
+  interpretation text (remedies, meanings, degree symbolism, midpoint keys)
+  that plugs into the engine's content slots. The open-source engine ships the
+  frameworks; the text is a licensed product.
+- **Precision Data pack** — curated star catalogs, golden reference vectors,
+  and signed accuracy artifacts for regulated or accuracy-audited deployments.
+- **Validation programme** — the "XALEN Validated" mark for builds that pass
+  the published test-vector suite (see [TRADEMARK.md](TRADEMARK.md)).
+
+Premium modules are licensed per deployment and priced by scope — contact us
+for a proposal. Licenses are offline-verifiable (signed license files); the
+open-source engine contains no license checks or telemetry, ever.
+
+## Liability
+
+Any warranty or IP indemnification provided under a commercial license is
+**capped at the fees paid in the trailing twelve months** and **excludes
+third-party data and upstream components** (JPL ephemerides, VSOP87, ELP2000,
+Hipparcos/CDS, ERFA, IAU-CSN). XALEN retains sole control of the defense and
+settlement of indemnified claims. This page is indicative; the **signed
+commercial agreement** is the binding instrument.
+
 ## Contact
 
 For commercial licensing inquiries:
