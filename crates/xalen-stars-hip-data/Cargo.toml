@@ -1,0 +1,30 @@
+[package]
+name = "xalen-stars-hip-data"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+# DATA LICENSE — deliberately NOT the workspace Apache-2.0 license.
+#
+# This crate embeds the Hipparcos Main Catalogue (CDS I/239, hip_main.dat,
+# (C) ESA 1997), which CDS distributes under CC BY-NC (non-commercial). The
+# compilation of catalogue records is the restricted asset, so this crate must
+# NOT be linked into any commercial / paid build. It is consumed ONLY behind
+# the `xalen-stars` `hip-catalog` feature (default-on for the open library,
+# OFF for commercial builds). See NOTICE and crates/xalen-stars-hip-data/LICENSE.
+#
+# The exact SPDX choice (CC-BY-NC-3.0-IGO vs the CDS terms) is pending counsel
+# review — ASK-SENIOR. The metadata is corrected here so the package no longer
+# misrepresents NC data as Apache-2.0.
+license = "CC-BY-NC-3.0-IGO"
+repository.workspace = true
+description = "Hipparcos-derived fixed-star catalog DATA (CC BY-NC, non-commercial) for XALEN Ephemeris — gated off commercial builds via the xalen-stars `hip-catalog` feature"
+keywords = ["hipparcos", "star-catalog", "astronomy"]
+categories = ["science"]
+# Never auto-publish NC data to crates.io.
+publish = false
+
+[dependencies]
+serde.workspace = true
+
+[lints]
+workspace = true

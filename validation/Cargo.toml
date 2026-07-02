@@ -22,11 +22,17 @@ path = "src/de440_bench.rs"
 [dependencies]
 xalen-time = { path = "../crates/xalen-time", version = "0.6.0" }
 xalen-coords = { path = "../crates/xalen-coords", version = "0.6.0" }
-xalen-ephem = { path = "../crates/xalen-ephem", version = "0.6.0" }
+xalen-ephem = { path = "../crates/xalen-ephem", version = "0.6.0", default-features = false }
 xalen-houses = { path = "../crates/xalen-houses", version = "0.6.0" }
 xalen-ayanamsa = { path = "../crates/xalen-ayanamsa", version = "0.6.0" }
 serde = { workspace = true }
 serde_json = "1"
+
+[features]
+# Passthrough so the validation harness doesn't pull the NC catalog into a
+# `--no-default-features` workspace build. Default-on to match the open build.
+default = ["hip-catalog"]
+hip-catalog = ["xalen-ephem/hip-catalog"]
 
 [lints]
 workspace = true

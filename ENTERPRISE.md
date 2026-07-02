@@ -35,6 +35,9 @@ to it.
 - High-throughput batch & bulk computation.
 - White-label and on-premise deployment support.
 - Advanced and custom predictive modules built to your specification.
+- **Premium modules** — the Premium Charts pack, Interpretation Content packs,
+  and Precision Data pack, delivered privately under a signed commercial
+  license (see [COMMERCIAL_LICENSE.md](COMMERCIAL_LICENSE.md)).
 
 ---
 

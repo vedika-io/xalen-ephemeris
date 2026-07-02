@@ -70,8 +70,7 @@ sublicense the contribution under both the Apache-2.0 and the commercial
 license. You keep the copyright in your contribution; the CLA only grants the
 licensing rights the dual-license model requires.
 
-<!-- TODO(legal): Insert the full CLA text here — or link the signing flow (e.g.
-     a CLA-assistant bot that records agreement on each PR) — reviewed by
-     counsel, before accepting outside contributions. Until this lands, PRs from
-     new external contributors must be flagged for manual CLA handling and must
-     not be merged. -->
+The full CLA text is in **[CLA.md](CLA.md)**, together with the signing flow:
+post the signing comment from [CLA.md §6](CLA.md) on your first pull request,
+and a maintainer records it before merge. Pull requests from external
+contributors who have not signed the CLA **must not be merged**.

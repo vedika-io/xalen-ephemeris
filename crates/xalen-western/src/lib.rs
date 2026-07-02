@@ -35,6 +35,11 @@ pub mod sabian;
 /// Western sidereal astrology (Fagan-Bradley system).
 pub mod sidereal;
 /// Fixed star catalog — 506 named stars with J2000.0 positions.
+///
+/// Gated behind the default-on `hip-catalog` feature: its coordinates derive
+/// from the Hipparcos catalogue (ESA 1997) + SIMBAD, which is non-commercial,
+/// so commercial builds (`--no-default-features`) exclude this module entirely.
+#[cfg(feature = "hip-catalog")]
 pub mod stars;
 /// Uranian astrology and Transneptunian Points.
 pub mod uranian;

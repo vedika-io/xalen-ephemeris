@@ -606,17 +606,29 @@ pub fn swe_deltat(jd: f64) -> f64 {
 /// The catalog carries no parallax, so distance is reported as `0.0`.
 /// If the star is not found, returns an error.
 pub fn swe_fixstar_ut(star_name: &str, jd: f64) -> Result<[f64; 6], String> {
-    let star = xalen_stars::find_by_name(star_name)
-        .ok_or_else(|| format!("star not found: {star_name}"))?;
-    let year = 2000.0 + (jd - 2_451_545.0) / 365.25;
-    Ok([
-        star.longitude_at_epoch(year),
-        star.latitude_at_epoch(year),
-        0.0, // distance (AU): no parallax data in the catalog
-        0.0, // lon speed
-        0.0, // lat speed
-        0.0, // dist speed
-    ])
+    #[cfg(not(feature = "hip-catalog"))]
+    {
+        let _ = (star_name, jd);
+        return Err(
+            "swe_fixstar_ut requires the `hip-catalog` feature (the Hipparcos \
+             fixed-star catalog is non-commercial and is not linked in this build)"
+                .to_string(),
+        );
+    }
+    #[cfg(feature = "hip-catalog")]
+    {
+        let star = xalen_stars::find_by_name(star_name)
+            .ok_or_else(|| format!("star not found: {star_name}"))?;
+        let year = 2000.0 + (jd - 2_451_545.0) / 365.25;
+        Ok([
+            star.longitude_at_epoch(year),
+            star.latitude_at_epoch(year),
+            0.0, // distance (AU): no parallax data in the catalog
+            0.0, // lon speed
+            0.0, // lat speed
+            0.0, // dist speed
+        ])
+    }
 }
 
 /// Return the visual magnitude of a fixed star.
@@ -633,9 +645,21 @@ pub fn swe_fixstar_ut(star_name: &str, jd: f64) -> Result<[f64; 6], String> {
 /// assert!((mag - 0.98).abs() < 0.5);
 /// ```
 pub fn swe_fixstar_mag(star_name: &str) -> Result<f64, String> {
-    let star = xalen_stars::find_by_name(star_name)
-        .ok_or_else(|| format!("star not found: {star_name}"))?;
-    Ok(star.magnitude)
+    #[cfg(not(feature = "hip-catalog"))]
+    {
+        let _ = star_name;
+        return Err(
+            "swe_fixstar_mag requires the `hip-catalog` feature (the Hipparcos \
+             fixed-star catalog is non-commercial and is not linked in this build)"
+                .to_string(),
+        );
+    }
+    #[cfg(feature = "hip-catalog")]
+    {
+        let star = xalen_stars::find_by_name(star_name)
+            .ok_or_else(|| format!("star not found: {star_name}"))?;
+        Ok(star.magnitude)
+    }
 }
 
 /// No-op. XALEN embeds all data at compile time.

@@ -12,6 +12,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   RUSTSEC-2026-0176 and RUSTSEC-2026-0177 (fixed in pyo3 ≥ 0.29.0). Migrated the
   two deprecated `Bound::downcast` calls to `Bound::cast` (pyo3 0.29 API).
 
+### Added
+- **`xalen-stars-hip-data`** crate — the Hipparcos-derived fixed-star catalogue
+  (8,870 stars, CDS I/239, © ESA 1997) is now isolated in its own package,
+  licensed **CC BY-NC 3.0 IGO** (non-commercial) with a `LICENSE` file and
+  `publish = false`. It is consumed by `xalen-stars` only via the optional,
+  default-on `hip-catalog` feature.
+- **`xalen-star-anchors`** crate (Apache-2.0) — commercial-OK single-star
+  reference anchors (Spica) for star-anchored sidereal frames, so the ayanamsa
+  no longer depends on the non-commercial catalogue.
+- **`hip-catalog` cargo feature** (default-on) across `xalen-stars`,
+  `xalen-western`, the bindings (`xalen-ffi/-node/-python/-wasm`), the umbrella
+  crate and `xalen-validation`. Commercial builds use `--no-default-features` to
+  link **none** of the non-commercial fixed-star data.
+- **`commercial-clean` CI workflow** asserting no NC data in `--no-default-features`
+  builds (`cargo tree` absence + `nm`/`strings` symbol scan + parity tests), and a
+  bit-exact Spica anchor regression test.
+
+### Changed
+- **True Chitra ayanamsa** now reads the Spica anchor from `xalen-star-anchors`
+  instead of `xalen_stars::find_by_name`; output is byte-identical and remains
+  Swiss-validated, but the ayanamsa no longer depends on `xalen-stars`.
+- `xalen-stars`' `RECONCILED_CATALOG` falls back to the curated Apache catalogue
+  when `hip-catalog` is disabled; `swe_fixstar_*` return an explicit
+  "feature disabled" error in that configuration.
+- `xalen-western`'s 506-star fixed-star module is gated behind `hip-catalog`.
+- `xalen-stars` README corrected to state the catalogue **data** is CC BY-NC
+  (not Apache-2.0).
+
+### Fixed
+- **Western wheel chart** rendered the zodiac ring and houses clockwise — the
+  reverse of the standard Western natal-wheel orientation. Longitude now maps to
+  screen angle counter-clockwise (`180 − asc + lon`) so the Ascendant is on the
+  left and houses advance correctly. North/South Indian charts unaffected.
+  ([#35](https://github.com/vedika-io/xalen-ephemeris/issues/35))
+
 ## [0.6.0] - 2026-06-02
 
 This entry consolidates Wave B (accuracy / breadth) and Wave C (bindings parity +
