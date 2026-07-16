@@ -20,6 +20,14 @@ astrological computation library; correctness and accuracy are the priorities.
 - Rust **1.85+** (edition 2024). Pinned MSRV: `rust-version = "1.85"`.
 - `rustup component add clippy rustfmt`
 
+## Workflow
+
+1. Open a new issue or pick up an existing one before starting work.
+2. Create a focused branch for that issue.
+3. Implement the change together with any needed tests or docs updates.
+4. Run the pre-PR checks below locally.
+5. Open the PR with a closing reference such as `Closes #123`.
+
 ## Before opening a PR
 
 ```bash
