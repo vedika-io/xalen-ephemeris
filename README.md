@@ -7,7 +7,11 @@
 [![CI](https://github.com/vedika-io/xalen-ephemeris/actions/workflows/ci.yml/badge.svg)](https://github.com/vedika-io/xalen-ephemeris/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-> **Publish status:** the Rust crates, the PyPI `xalen` wheel, and the npm `xalen` (native) / `xalen-ephemeris` (WASM) packages are **not published to their registries yet** — the Crates.io / docs.rs registry badges above are placeholders until first release. Build from source per the per-binding READMEs (`crates/xalen-python`, `crates/xalen-node`, `crates/xalen-wasm`).
+> **Publish status:** the Rust crates are published on crates.io, while the PyPI
+> `xalen` wheel and the npm `xalen` (native) / `xalen-ephemeris` (WASM)
+> packages are **not published yet**. Build the language bindings from source
+> per the per-binding READMEs (`crates/xalen-python`, `crates/xalen-node`,
+> `crates/xalen-wasm`).
 
 > **Validated against the references that matter** — JPL Horizons **DE440** (NASA's
 > definitive ephemeris), the real DE440 binary kernel, **Swiss Ephemeris**, and the
@@ -72,15 +76,13 @@ println!("{}", Nakshatra::from_longitude_deg(sid)); // Swati
 
 ## Installation
 
-> **Availability note:** crates.io currently serves the **0.3.1** line (leaf
-> crates). The 0.4.x / 0.5.x releases described in this README are **not yet
-> published to crates.io** — publishing is in progress. Until it lands, either
-> pin `0.3` or depend on this repository directly with a `git`/`path` dependency.
-> The Node.js (`xalen`, npm) and Python (`xalen`, PyPI) packages are **not yet
-> published**; see *Language Bindings* below for building from source.
+> **Availability note:** crates.io now serves the **0.6.x** line for the Rust
+> crates described in this README. The Node.js (`xalen`, npm) and Python
+> (`xalen`, PyPI) packages are **not yet published**; see *Language Bindings*
+> below for building from source.
 
 ```bash
-# crates.io (currently serves the 0.3.1 line):
+# crates.io (currently serves the 0.6.x line):
 cargo add xalen-ephemeris
 ```
 
@@ -89,11 +91,11 @@ version):
 
 ```toml
 [dependencies]
-xalen-ephem = "0.3"         # planetary engine
-xalen-vedic = "0.3"         # Vedic astrology
-xalen-houses = "0.3"        # house systems
-xalen-ayanamsa = "0.3"      # ayanamsa / sidereal conversion
-xalen-time = "0.3"          # Julian Day, delta-T, calendars
+xalen-ephem = "0.6"         # planetary engine
+xalen-vedic = "0.6"         # Vedic astrology
+xalen-houses = "0.6"        # house systems
+xalen-ayanamsa = "0.6"      # ayanamsa / sidereal conversion
+xalen-time = "0.6"          # Julian Day, delta-T, calendars
 ```
 
 ## Quick Start
@@ -223,7 +225,7 @@ magnitude, obscuration, and C1–C4 contact times.
 
 | Language | Crate | Mechanism | Status |
 |----------|-------|-----------|--------|
-| **Rust** | `xalen-ephemeris` (umbrella) | Native (crates.io: 0.3.1 line published; 0.4.x+ not yet) | Published (0.3.1) |
+| **Rust** | `xalen-ephemeris` (umbrella) | Native (`0.6.x` line on crates.io) | Published |
 | **C / C++** | `xalen-ffi` | `extern "C"` + `repr(C)` structs | Source-stable; not yet on crates.io past 0.3.1 |
 | **Python** | `xalen-python` | PyO3 — build with `maturin develop` | Alpha; **not yet on PyPI** (`pip install xalen` is forthcoming) |
 | **Node.js** | `xalen-node` | napi-rs native addon — build with `napi build` | Alpha; **not yet on npm** (`npm install xalen` is forthcoming) |
