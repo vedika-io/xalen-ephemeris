@@ -35,7 +35,7 @@
   "scripts": {
     "build": "napi build --platform --release",
     "build:debug": "napi build --platform",
-    "test": "node --test __test__/"
+    "test": "node --test __test__/smoke.test.mjs __test__/platform-matrix.test.mjs"
   },
   "devDependencies": {
     "@napi-rs/cli": "^3.0.0"
