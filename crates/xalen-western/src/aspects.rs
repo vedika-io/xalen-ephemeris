@@ -187,11 +187,16 @@ pub fn find_all_aspects(
 /// * `transit_fn` — a closure that returns the transiting planet's longitude
 ///   at a given JD: `transit_fn(jd) -> longitude_deg`.
 /// * `aspect` — the aspect angle in degrees (0 = conjunction, 180 = opposition,
-///   120 = trine, etc.).
+///   120 = trine, etc.). Angles outside [0, 180] are folded into that range.
 /// * `jd_start` / `jd_end` — search window (Julian Dates).
 ///
-/// Returns a `Vec<f64>` of JDs where the aspect is exact (to ~1e-8 day
-/// precision, roughly 1 ms).
+/// Returns the JDs in `[jd_start, jd_end]` where the aspect is exact, in
+/// ascending order, refined to the f64 resolution of a Julian Date (~5e-10
+/// day, roughly 40 µs).
+///
+/// A body that reaches the exact degree and turns retrograde on it without
+/// crossing (a tangent touch) is not reported, and the body must move less
+/// than 90° per 0.5-day scan step.
 pub fn find_transit_aspect(
     natal_lon: f64,
     transit_fn: impl Fn(f64) -> f64,
@@ -203,80 +208,79 @@ pub fn find_transit_aspect(
         return Vec::new();
     }
 
-    // The aspect is exact when angular_distance(transit_lon, natal_lon) == aspect.
-    // We define g(jd) = angular_distance(transit_fn(jd), natal_lon) - aspect.
-    // Exact aspect happens at g(jd) == 0.
-    //
-    // However angular_distance is always [0, 180], so sign-change detection works
-    // for most aspects.  For conjunction (aspect=0) and opposition (aspect=180)
-    // there is an additional complication because g() can touch zero without
-    // crossing it, but the bisection still converges because we check both
-    // sign-changes and close approaches.
-    //
+    // The aspect is exact when the transiting body sits on natal_lon + aspect
+    // or natal_lon - aspect (the same point for conjunction and opposition).
+    // For each of those target longitudes the signed difference
+    // wrap_delta(transit_lon - target) crosses zero with a sign change, which
+    // the unsigned angular_distance never does at 0° and 180°.
+    let aspect = angular_distance(0.0, aspect);
+    let mut targets = vec![natal_lon + aspect];
+    if aspect > 0.0 && aspect < 180.0 {
+        targets.push(natal_lon - aspect);
+    }
+
     // Step size: 0.5 day catches even lunar transits (~13 deg/day).
     let step = 0.5_f64;
     let mut results = Vec::new();
-    let mut jd = jd_start;
-
-    let g = |t: f64| -> f64 { angular_distance(transit_fn(t), natal_lon) - aspect };
-
-    let mut prev = g(jd);
+    let (mut jd, mut lon) = (jd_start, transit_fn(jd_start));
 
     while jd < jd_end {
-        jd += step;
-        let curr = g(jd);
+        let next_jd = (jd + step).min(jd_end);
+        let next_lon = transit_fn(next_jd);
 
-        // Sign change or very close approach
-        if prev * curr < 0.0 || curr.abs() < 0.01 {
-            // Bisect to refine
-            if let Some(exact_jd) = bisect_aspect_crossing(&g, jd - step, jd, 60) {
-                // De-duplicate: skip if we already found a crossing within 0.5 day
-                if results
-                    .last()
-                    .is_none_or(|&last: &f64| (exact_jd - last).abs() > 0.5)
-                {
-                    results.push(exact_jd);
-                }
+        for &target in &targets {
+            let prev = wrap_delta(lon - target);
+            let curr = wrap_delta(next_lon - target);
+
+            if prev == 0.0 {
+                results.push(jd);
+            } else if prev * curr < 0.0 && prev.abs() < 90.0 && curr.abs() < 90.0 {
+                // The magnitude check rejects the ±180° wrap opposite the
+                // target, where the signed difference also changes sign.
+                let f = |t: f64| wrap_delta(transit_fn(t) - target);
+                results.push(bisect_aspect_crossing(&f, jd, next_jd, prev, 60));
             }
         }
-        prev = curr;
+        (jd, lon) = (next_jd, next_lon);
     }
+
+    // A pass exactly on the last sample has no following interval to report it.
+    for &target in &targets {
+        if wrap_delta(lon - target) == 0.0 {
+            results.push(jd_end);
+        }
+    }
+
+    results.sort_by(f64::total_cmp);
     results
 }
 
-/// Bisection helper for transit aspect search.
+/// Normalize an angle difference to [-180, +180].
+fn wrap_delta(d: f64) -> f64 {
+    let d = d.rem_euclid(360.0);
+    if d > 180.0 { d - 360.0 } else { d }
+}
+
+/// Bisection helper for transit aspect search. `f(lo)` and `f(hi)` must have
+/// opposite signs; `f_lo` is `f(lo)`.
 fn bisect_aspect_crossing(
-    g: &impl Fn(f64) -> f64,
+    f: &impl Fn(f64) -> f64,
     mut lo: f64,
     mut hi: f64,
+    mut f_lo: f64,
     max_iter: u32,
-) -> Option<f64> {
-    let g_lo = g(lo);
-    let g_hi = g(hi);
-
-    // If both endpoints have the same sign and neither is very close to zero,
-    // this might be a touch-without-crossing near conjunction/opposition.
-    // Still try: if one endpoint is close, bisect toward it.
-    if g_lo * g_hi > 0.0 && g_lo.abs() > 0.5 && g_hi.abs() > 0.5 {
-        return None;
-    }
-
+) -> f64 {
     for _ in 0..max_iter {
         let mid = (lo + hi) / 2.0;
-        let g_mid = g(mid);
+        let f_mid = f(mid);
 
-        if g_mid.abs() < 1e-8 || (hi - lo) < 1e-10 {
-            return Some(mid);
-        }
-
-        // Prefer the interval containing the sign change
-        if g(lo) * g_mid <= 0.0 {
+        if f_mid * f_lo <= 0.0 {
             hi = mid;
         } else {
-            lo = mid;
+            (lo, f_lo) = (mid, f_mid);
         }
     }
-    Some((lo + hi) / 2.0)
+    (lo + hi) / 2.0
 }
 
 #[cfg(test)]
@@ -406,6 +410,148 @@ mod tests {
             (results[0] - 15.0).abs() < 1.0,
             "Conjunction should be near jd=15, got {}",
             results[0]
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // find_transit_aspect: exact moments that fall between the scan samples
+    // -----------------------------------------------------------------------
+
+    const J2000: f64 = 2451545.0;
+
+    /// Run `find_transit_aspect` for a body moving linearly at `rate` deg/day
+    /// from `start_lon` at J2000, and compare with the analytically known
+    /// passes (`expected_days` after J2000). Every returned JD must also be a
+    /// real root of g(jd) = angular_distance(transit, natal) - aspect.
+    fn check_linear_passes(
+        natal_lon: f64,
+        start_lon: f64,
+        rate: f64,
+        aspect: f64,
+        days: f64,
+        expected_days: &[f64],
+    ) {
+        let transit = |jd: f64| (start_lon + rate * (jd - J2000)).rem_euclid(360.0);
+        let results = find_transit_aspect(natal_lon, transit, aspect, J2000, J2000 + days);
+        let got_days: Vec<f64> = results.iter().map(|jd| jd - J2000).collect();
+
+        for &jd in &results {
+            let residual = (angular_distance(transit(jd), natal_lon) - aspect).abs();
+            assert!(
+                residual < 1e-6,
+                "returned day {} is not exact: |g| = {residual} deg (all returned days: {got_days:?})",
+                jd - J2000
+            );
+        }
+        assert_eq!(
+            got_days.len(),
+            expected_days.len(),
+            "expected passes at days {expected_days:?}, got {got_days:?}"
+        );
+        for (got, want) in got_days.iter().zip(expected_days) {
+            assert!(
+                (got - want).abs() < 1e-6,
+                "expected passes at days {expected_days:?}, got {got_days:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn transit_conjunction_between_samples() {
+        // 100° + 1°/day reaches natal 110.3° at day 10.3.
+        check_linear_passes(110.3, 100.0, 1.0, 0.0, 30.0, &[10.3]);
+    }
+
+    #[test]
+    fn transit_opposition_between_samples() {
+        // Natal 290.3°: the opposition point is 110.3°, reached at day 10.3.
+        check_linear_passes(290.3, 100.0, 1.0, 180.0, 30.0, &[10.3]);
+    }
+
+    #[test]
+    fn transit_conjunction_fast_body() {
+        // 13°/day: 110.3° is reached at 10.3/13 and (10.3 + 360)/13 days.
+        check_linear_passes(110.3, 100.0, 13.0, 0.0, 30.0, &[10.3 / 13.0, 370.3 / 13.0]);
+    }
+
+    #[test]
+    fn transit_opposition_fast_body() {
+        check_linear_passes(
+            290.3,
+            100.0,
+            13.0,
+            180.0,
+            30.0,
+            &[10.3 / 13.0, 370.3 / 13.0],
+        );
+    }
+
+    #[test]
+    fn transit_conjunction_retrograde_body() {
+        // 120° − 1°/day reaches natal 110.3° at day 9.7.
+        check_linear_passes(110.3, 120.0, -1.0, 0.0, 30.0, &[9.7]);
+    }
+
+    #[test]
+    fn transit_conjunction_slow_body_is_not_reported_early() {
+        // 0.03°/day: exact at day 10.33, but the samples at days 10.0 and 10.5
+        // are already within 0.01° of the natal longitude.
+        check_linear_passes(100.3099, 100.0, 0.03, 0.0, 30.0, &[10.33]);
+    }
+
+    #[test]
+    fn transit_retrograde_loop_gives_three_passes() {
+        // Mean motion 0.5°/day plus a 10° oscillation with a 100-day period:
+        // the body is retrograde between days ~39.7 and ~60.3, sweeping back
+        // from ~125.88° to ~124.12°, so 125.3° is crossed direct, retrograde
+        // and direct again.
+        let transit = |jd: f64| {
+            let t = jd - J2000;
+            (100.0 + 0.5 * t + 10.0 * (std::f64::consts::TAU * t / 100.0).sin()).rem_euclid(360.0)
+        };
+        for (natal_lon, aspect) in [(125.3, 0.0), (305.3, 180.0)] {
+            let results = find_transit_aspect(natal_lon, transit, aspect, J2000, J2000 + 120.0);
+            assert_eq!(results.len(), 3, "aspect {aspect}: got {results:?}");
+            assert!(results.windows(2).all(|w| w[0] < w[1]));
+            for jd in results {
+                let residual = (angular_distance(transit(jd), natal_lon) - aspect).abs();
+                assert!(residual < 1e-6, "aspect {aspect}: |g| = {residual} at {jd}");
+            }
+        }
+    }
+
+    #[test]
+    fn transit_pass_on_window_edge_is_reported_once() {
+        // Natal 30°, transit longitude = jd: exact at jd = 30.
+        assert_eq!(find_transit_aspect(30.0, |jd| jd, 0.0, 30.0, 40.0), [30.0]);
+        assert_eq!(find_transit_aspect(30.0, |jd| jd, 0.0, 20.0, 30.0), [30.0]);
+        assert_eq!(find_transit_aspect(30.0, |jd| jd, 0.0, 20.0, 40.0), [30.0]);
+        // The scan must not run past jd_end.
+        assert!(find_transit_aspect(30.0, |jd| jd, 0.0, 20.0, 29.9).is_empty());
+    }
+
+    #[test]
+    fn transit_square_between_samples() {
+        // Natal 20.3°: square points are 110.3° (day 10.3) and 290.3° (not reached).
+        check_linear_passes(20.3, 100.0, 1.0, 90.0, 30.0, &[10.3]);
+    }
+
+    #[test]
+    fn transit_trine_between_samples() {
+        // Natal 350.3°: trine points are 110.3° (day 10.3) and 230.3° (not reached).
+        check_linear_passes(350.3, 100.0, 1.0, 120.0, 30.0, &[10.3]);
+    }
+
+    #[test]
+    fn transit_square_fast_body_both_sides() {
+        // Natal 110.3°, 13°/day: 200.3° at 100.3/13 days, 20.3° at 280.3/13 days.
+        check_linear_passes(
+            110.3,
+            100.0,
+            13.0,
+            90.0,
+            30.0,
+            &[100.3 / 13.0, 280.3 / 13.0],
         );
     }
 }

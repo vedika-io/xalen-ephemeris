@@ -55,6 +55,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   screen angle counter-clockwise (`180 − asc + lon`) so the Ascendant is on the
   left and houses advance correctly. North/South Indian charts unaffected.
   ([#35](https://github.com/vedika-io/xalen-ephemeris/issues/35))
+- **`xalen_western::aspects::find_transit_aspect`** missed conjunctions (0°) and
+  oppositions (180°) unless the exact moment happened to fall on a 0.5-day scan
+  sample, and for slow bodies could return a sample up to half a day away from
+  the exact moment. The search now looks for sign changes of the signed
+  difference to each target longitude (`natal ± aspect`). Results are returned
+  in ascending order and no longer extend past `jd_end`; aspect angles outside
+  [0°, 180°] are folded into that range.
 
 ## [0.6.0] - 2026-06-02
 
