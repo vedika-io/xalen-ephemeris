@@ -195,8 +195,10 @@ pub fn find_all_aspects(
 /// day, roughly 40 µs).
 ///
 /// A body that reaches the exact degree and turns retrograde on it without
-/// crossing (a tangent touch) is not reported, and the body must move less
-/// than 90° per 0.5-day scan step.
+/// crossing (a tangent touch) is not detected between scan samples; it is
+/// reported only when it lands exactly on a sample (`jd_start`, `jd_end` or a
+/// 0.5-day step from `jd_start`). The body must move less than 90° per
+/// 0.5-day scan step.
 pub fn find_transit_aspect(
     natal_lon: f64,
     transit_fn: impl Fn(f64) -> f64,
@@ -528,6 +530,17 @@ mod tests {
         assert_eq!(find_transit_aspect(30.0, |jd| jd, 0.0, 20.0, 40.0), [30.0]);
         // The scan must not run past jd_end.
         assert!(find_transit_aspect(30.0, |jd| jd, 0.0, 20.0, 29.9).is_empty());
+    }
+
+    #[test]
+    fn transit_tangent_touch_is_only_seen_on_a_sample() {
+        // The body touches natal 30° at `touch` and turns back without crossing.
+        let tangent = |touch: f64| move |jd: f64| 30.0 + 0.01 * (jd - touch).powi(2);
+        assert_eq!(
+            find_transit_aspect(30.0, tangent(10.0), 0.0, 0.0, 20.0),
+            [10.0]
+        );
+        assert!(find_transit_aspect(30.0, tangent(10.2), 0.0, 0.0, 20.0).is_empty());
     }
 
     #[test]
