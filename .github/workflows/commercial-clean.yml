@@ -10,6 +10,10 @@ on:
     branches: [main]
   pull_request:
 
+# Read-only GITHUB_TOKEN: the job only checks out and inspects cargo trees.
+permissions:
+  contents: read
+
 jobs:
   no-nc-data-in-commercial-build:
     runs-on: ubuntu-latest
