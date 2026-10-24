@@ -1,0 +1,26 @@
+name: attribution
+
+# Repository policy: no AI provider, AI tool or AI co-author attribution in commits or pull requests.
+# See CONTRIBUTING.md and scripts/repo-policy/check-attribution.sh.
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  no-ai-attribution:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Commit messages
+        run: scripts/repo-policy/check-attribution.sh --range "${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
+      - name: Pull request title and body
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: printf '%s\n%s\n' "$PR_TITLE" "$PR_BODY" | scripts/repo-policy/check-attribution.sh --stdin

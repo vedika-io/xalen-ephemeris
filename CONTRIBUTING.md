@@ -49,6 +49,12 @@ is `docs/ACCURACY.md`.
 - Conventional-commit prefixes (`feat:`, `fix:`, `test:`, `docs:`, `ci:`).
 - Keep PRs focused; include the reference/source for any numeric change.
 - New public items need rustdoc (`///`) comments.
+- No AI provider, AI coding tool or AI co-author attribution in commits or pull
+  requests: no `Co-authored-by:` trailers for AI tools or bots, no "Generated
+  with …" footers, no tool links or bot author addresses. The committer is the
+  author of record. `scripts/repo-policy/check-attribution.sh` enforces this in
+  the `commit-msg` hook (enable once per clone with
+  `git config core.hooksPath .githooks`) and in the `attribution` workflow.
 
 ## License and Contributor License Agreement (CLA)
 
