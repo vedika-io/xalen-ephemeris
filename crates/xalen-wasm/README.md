@@ -103,6 +103,68 @@ Body IDs: `0`=Sun `1`=Moon `2`=Mercury `3`=Venus `4`=Mars `5`=Jupiter `6`=Saturn
 
 > Functions that take a longitude or JD return an error string (thrown value on the JS side) for non-finite or out-of-range input rather than silently returning `NaN`.
 
+## Numeric ID reference
+
+### Ayanamsa IDs
+
+| ID | Name |
+|---|---|
+| `0` | `Lahiri` |
+| `1` | `KPKrishnamurti` |
+| `2` | `Raman` |
+| `3` | `FaganBradley` |
+| `4` | `TrueChitra` |
+| `5` | `TrueRevati` |
+| `6` | `SuryaSiddhanta` |
+| `7` | `YukteswarSriSS` |
+| `8` | `JNBhasin` |
+| `9` | `DeLuce` |
+| `10` | `Ushashashi` |
+| `11` | `PushyaPaksha` |
+| `12` | `GalacticCenter0Sag` |
+| `13` | `LahiriICRC` |
+| `14` | `KPStraightLine` |
+| `15` | `Hipparchos` |
+| `16` | `LahiriVP285` |
+
+### Body IDs
+
+| ID | Name |
+|---|---|
+| `0` | `Sun` |
+| `1` | `Moon` |
+| `2` | `Mercury` |
+| `3` | `Venus` |
+| `4` | `Mars` |
+| `5` | `Jupiter` |
+| `6` | `Saturn` |
+| `7` | `Uranus` |
+| `8` | `Neptune` |
+| `9` | `MeanNode (Rahu)` |
+| `10` | `TrueNode` |
+| `11` | `Pluto` |
+| `12` | `Chiron` |
+| `13` | `Ketu` |
+
+### House system IDs
+
+| ID | Name |
+|---|---|
+| `0` | `WholeSign` |
+| `1` | `Equal` |
+| `2` | `Placidus` |
+| `3` | `Koch` |
+| `4` | `Porphyry` |
+| `5` | `Regiomontanus` |
+| `6` | `Campanus` |
+| `7` | `Morinus` |
+| `8` | `Alcabitius` |
+| `9` | `Topocentric` |
+| `10` | `Sripati` |
+| `11` | `Vehlow` |
+| `12` | `Meridian` |
+| `13` | `KrusinskiPisa` |
+
 ```rust
 // The handle also runs natively, so it is testable without a browser:
 use xalen_wasm::XalenWasm;
