@@ -1194,16 +1194,15 @@ impl De440Reader {
 
         let denum_le = read_i32_le(2840);
         let denum_be = read_i32_be(2840);
-        let is_little_endian;
-        if (400..=500).contains(&denum_le) {
-            is_little_endian = true;
+        let is_little_endian = if (400..=500).contains(&denum_le) {
+            true
         } else if (400..=500).contains(&denum_be) {
-            is_little_endian = false;
+            false
         } else {
             return Err(EphemerisError::InvalidFormat(format!(
                 "cannot detect endianness: DENUM candidates LE={denum_le}, BE={denum_be}"
             )));
-        }
+        };
 
         let read_f64 = |off: usize| -> f64 {
             let b: [u8; 8] = buf[off..off + 8].try_into().unwrap();
