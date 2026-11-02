@@ -11,10 +11,10 @@
 //!    distance from Earth's centre) gives the global type and confirms whether
 //!    an eclipse actually occurs — NASA-validated for 2017/2024.
 //! 4. **Lunar eclipses** are determined from Earth's umbral and penumbral
-//!    shadow cones at the Moon's distance (Espenak & Meeus 2009), with
-//!    the shadow enlarged by Danjon's 1/85 of Earth's radius for the atmosphere
-//!    and Earth's parallax scaled by 0.998340 for its flattening — the
-//!    convention of NASA's Five Millennium Canon and Swiss Ephemeris. Greatest
+//!    shadow cones at the Moon's distance, using Danjon's radii
+//!    `R = 1.01·π☾ ± s☉ + π☉` (the 1.01 is 1 + 1/85 for the atmosphere less
+//!    1/594 for Earth's flattening): Espenak & Meeus, *Five Millennium Canon of
+//!    Lunar Eclipses* (NASA/TP-2009-214172), ch. 1, eqs. 1-5 and 1-6. Greatest
 //!    eclipse is the least separation of the Moon from the shadow axis; the
 //!    umbral and penumbral magnitudes and the six contacts follow from the same
 //!    geometry.
@@ -47,15 +47,14 @@ const SCAN_STEP: f64 = 1.0;
 const MIN_SYNODIC_GAP: f64 = 25.0;
 
 const LUNAR_PENUMBRAL_LIMIT: f64 = 1.58;
-const LUNAR_ECLIPSE_LIMIT: f64 = 1.9;
+const LUNAR_ECLIPSE_LIMIT_DEG: f64 = 1.9;
 const AU_KM: f64 = 149_597_870.7;
 const EARTH_RADIUS_KM: f64 = 6378.137;
 const SUN_RADIUS_KM: f64 = 695_700.0;
 const MOON_RADIUS_KM: f64 = 1737.4;
-const DANJON_ENLARGEMENT: f64 = 1.0 / 85.0;
-const EARTH_OBLATENESS_FACTOR: f64 = 0.998_340;
-const LUNAR_MAXIMUM_WINDOW: f64 = 0.25;
-const LUNAR_CONTACT_WINDOW: f64 = 0.3;
+const DANJON_PARALLAX_FACTOR: f64 = 1.01;
+const LUNAR_MAXIMUM_WINDOW_DAYS: f64 = 0.25;
+const LUNAR_CONTACT_WINDOW_DAYS: f64 = 0.3;
 
 // Solar eclipse latitude pre-filter (degrees, absolute value). The maximum
 // |Moon latitude| at New Moon for any eclipse geometry is ~1.58° (Meeus Ch. 55);
@@ -185,8 +184,8 @@ pub fn find_lunar_eclipses(almanac: &Almanac, jd_start: f64, jd_end: f64) -> Vec
 
     find_full_moons(
         almanac,
-        jd_start - LUNAR_MAXIMUM_WINDOW,
-        jd_end + LUNAR_MAXIMUM_WINDOW,
+        jd_start - LUNAR_MAXIMUM_WINDOW_DAYS,
+        jd_end + LUNAR_MAXIMUM_WINDOW_DAYS,
     )
     .into_iter()
     .filter_map(|jd_full| lunar_eclipse_at(almanac, jd_full))
@@ -198,7 +197,7 @@ fn lunar_eclipse_at(almanac: &Almanac, jd_full: f64) -> Option<LunarEclipse> {
     let moon = almanac
         .geocentric_ecliptic(Body::Moon, JdUT1(jd_full))
         .ok()?;
-    if moon.latitude.to_degrees().abs() >= LUNAR_ECLIPSE_LIMIT {
+    if moon.latitude.to_degrees().abs() >= LUNAR_ECLIPSE_LIMIT_DEG {
         return None;
     }
     let jd_maximum = lunar_greatest_eclipse(almanac, jd_full)?;
@@ -257,9 +256,7 @@ impl EarthShadow {
         let angle = |radius_km: f64, distance_au: f64| {
             (radius_km / (distance_au * AU_KM)).asin().to_degrees()
         };
-        let core = (1.0 + DANJON_ENLARGEMENT)
-            * EARTH_OBLATENESS_FACTOR
-            * angle(EARTH_RADIUS_KM, moon.distance)
+        let core = DANJON_PARALLAX_FACTOR * angle(EARTH_RADIUS_KM, moon.distance)
             + angle(EARTH_RADIUS_KM, sun.distance);
         let sun_radius = angle(SUN_RADIUS_KM, sun.distance);
         Ok(Self {
@@ -291,8 +288,8 @@ fn lunar_greatest_eclipse(almanac: &Almanac, jd_full: f64) -> Option<f64> {
     const PHI: f64 = 0.618_033_988_749_895;
     let separation = |t: f64| EarthShadow::at(almanac, t).map(|s| s.separation).ok();
     let (mut lo, mut hi) = (
-        jd_full - LUNAR_MAXIMUM_WINDOW,
-        jd_full + LUNAR_MAXIMUM_WINDOW,
+        jd_full - LUNAR_MAXIMUM_WINDOW_DAYS,
+        jd_full + LUNAR_MAXIMUM_WINDOW_DAYS,
     );
     let mut a = hi - PHI * (hi - lo);
     let mut b = lo + PHI * (hi - lo);
@@ -325,7 +322,7 @@ fn lunar_contact(
             .ok()
     };
     let mut inner = jd_maximum;
-    let mut outer = jd_maximum + side * LUNAR_CONTACT_WINDOW;
+    let mut outer = jd_maximum + side * LUNAR_CONTACT_WINDOW_DAYS;
     if outside(inner)? || !outside(outer)? {
         return None;
     }
