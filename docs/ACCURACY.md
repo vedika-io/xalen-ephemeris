@@ -317,8 +317,17 @@ All 6 NASA reference eclipses detected within 1-day tolerance.
 > **Still NOT computed:** the path of totality (northern/southern limits and
 > central-line traces). That cartographic layer is tracked as future work; the
 > per-observer contact times above are the practical substitute for a single
-> location. Lunar eclipses use the simpler Meeus Ch.55 shadow-cone test (date +
-> type, not contact-time geometry).
+> location.
+>
+> **Lunar eclipses** use Earth's umbral and penumbral shadow cones at the Moon's
+> distance with Danjon's 1/85 enlargement and the 0.998340 flattening factor.
+> Against pyswisseph 2.10.03 over 1900–2100 all 457 eclipses are found with the
+> same type and no extra ones; umbral and penumbral magnitudes agree to 0.002,
+> greatest eclipse to 21 s, and the P1/U1/U2/U3/U4/P4 contacts to a median of
+> 5 s (≤ 18 s at the 95th percentile, up to ~110 s for grazing contacts such as
+> the 2015-04-04 total with umbral magnitude 1.0002).
+> `tests/lunar_eclipse_swiss_crossval.rs` asserts every eclipse of 2020–2030
+> plus six historical cases.
 
 ---
 

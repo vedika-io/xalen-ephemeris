@@ -43,8 +43,8 @@ pub use de440::{
     chebyshev_compute, chebyshev_derivative,
 };
 pub use eclipse::{
-    LunarEclipse, LunarEclipseType, SolarEclipse, SolarEclipseType, find_lunar_eclipses,
-    find_solar_eclipses,
+    LunarContacts, LunarEclipse, LunarEclipseType, SolarEclipse, SolarEclipseType,
+    find_lunar_eclipses, find_solar_eclipses,
 };
 pub use event_search::{EventSearchResult, find_crossing, find_sign_ingress, find_station};
 #[cfg(feature = "kernel-autodownload")]

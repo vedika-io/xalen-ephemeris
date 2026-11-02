@@ -10,23 +10,29 @@
 //!    Besselian shadow geometry ([`crate::besselian`]): γ (least shadow-axis
 //!    distance from Earth's centre) gives the global type and confirms whether
 //!    an eclipse actually occurs — NASA-validated for 2017/2024.
-//! 4. **Lunar eclipses** are still classified by comparing the Moon's ecliptic
-//!    latitude against the Earth-shadow cone limits (Meeus Ch. 54); a Besselian
-//!    lunar treatment is not yet implemented.
+//! 4. **Lunar eclipses** are determined from Earth's umbral and penumbral
+//!    shadow cones at the Moon's distance (Espenak & Meeus 2009), with
+//!    the shadow enlarged by Danjon's 1/85 of Earth's radius for the atmosphere
+//!    and Earth's parallax scaled by 0.998340 for its flattening — the
+//!    convention of NASA's Five Millennium Canon and Swiss Ephemeris. Greatest
+//!    eclipse is the least separation of the Moon from the shadow axis; the
+//!    umbral and penumbral magnitudes and the six contacts follow from the same
+//!    geometry.
 //!
 //! # Magnitude honesty
 //!
-//! Neither result type exposes a true astronomical eclipse magnitude. Solar
-//! events carry [`SolarEclipse::coverage_proxy`] (a geocentric diameter-ratio /
-//! parallax-overlap figure) and lunar events carry
-//! [`LunarEclipse::shadow_depth_proxy`] (a latitude-derived depth measure).
-//! Both are honestly named proxies — the rigorous per-observer/umbral magnitude
-//! is not computed. The authoritative geometric quantity for solar eclipses is
+//! Lunar events carry the true umbral and penumbral magnitudes
+//! ([`LunarEclipse::umbral_magnitude`], [`LunarEclipse::penumbral_magnitude`]).
+//! Solar events carry [`SolarEclipse::coverage_proxy`] (a geocentric
+//! diameter-ratio / parallax-overlap figure), an honestly named proxy — the
+//! rigorous per-observer solar magnitude lives in [`crate::local_eclipse`]. The
+//! authoritative geometric quantity for solar eclipses is
 //! [`SolarEclipse::gamma`].
 
 use crate::almanac::Almanac;
 use crate::besselian::{GlobalSolarType, classify_solar_eclipse};
 use crate::body::Body;
+use crate::provider::EphemerisError;
 use xalen_time::{DeltaTModel, JdUT1, JulianDay, delta_t};
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -40,14 +46,16 @@ const SCAN_STEP: f64 = 1.0;
 /// forward by this amount to avoid double-counting the same lunation.
 const MIN_SYNODIC_GAP: f64 = 25.0;
 
-// Lunar eclipse latitude thresholds (degrees, absolute value).
-// Derived from Meeus Ch. 54 / Explanatory Supplement Table 11.1a.
-// The penumbral limit is the maximum latitude at which the Moon can enter
-// Earth's penumbral shadow. The partial limit is where the umbral shadow
-// begins to cover the Moon, and the total limit is full umbral immersion.
 const LUNAR_PENUMBRAL_LIMIT: f64 = 1.58;
-const LUNAR_PARTIAL_LIMIT: f64 = 0.85;
-const LUNAR_TOTAL_LIMIT: f64 = 0.43;
+const LUNAR_ECLIPSE_LIMIT: f64 = 1.9;
+const AU_KM: f64 = 149_597_870.7;
+const EARTH_RADIUS_KM: f64 = 6378.137;
+const SUN_RADIUS_KM: f64 = 695_700.0;
+const MOON_RADIUS_KM: f64 = 1737.4;
+const DANJON_ENLARGEMENT: f64 = 1.0 / 85.0;
+const EARTH_OBLATENESS_FACTOR: f64 = 0.998_340;
+const LUNAR_MAXIMUM_WINDOW: f64 = 0.25;
+const LUNAR_CONTACT_WINDOW: f64 = 0.3;
 
 // Solar eclipse latitude pre-filter (degrees, absolute value). The maximum
 // |Moon latitude| at New Moon for any eclipse geometry is ~1.58° (Meeus Ch. 55);
@@ -82,29 +90,45 @@ pub enum LunarEclipseType {
 /// A single lunar eclipse event.
 #[derive(Debug, Clone)]
 pub struct LunarEclipse {
-    /// Julian Date (UT1) of the Full Moon (syzygy) instant.
-    ///
-    /// NOTE: unlike [`SolarEclipse::jd_maximum`], which is the Besselian
-    /// greatest-eclipse time (closest shadow-axis approach), this is the exact
-    /// Sun–Moon opposition instant. For lunar eclipses the geocentric maximum
-    /// (deepest immersion in Earth's shadow) is very close to syzygy — within a
-    /// few minutes — but the two are not identical. A rigorous greatest-eclipse
-    /// reduction for lunar eclipses is not yet implemented; this field reports
-    /// the syzygy, which always lies inside the requested `[jd_start, jd_end]`.
+    /// Julian Date (UT1) of greatest eclipse: the least angular separation of
+    /// the Moon's centre from the axis of Earth's shadow. It always lies inside
+    /// the requested `[jd_start, jd_end]`.
     pub jd_maximum: f64,
-    /// Eclipse classification.
+    /// Eclipse classification, from the umbral and penumbral magnitudes.
     pub eclipse_type: LunarEclipseType,
+    /// Fraction of the Moon's diameter inside the umbra at greatest eclipse.
+    /// Negative for a penumbral eclipse; at least 1.0 for a total one.
+    pub umbral_magnitude: f64,
+    /// Fraction of the Moon's diameter inside the penumbra at greatest eclipse.
+    pub penumbral_magnitude: f64,
+    /// Contact times (UT1) of the Moon's limb with the shadow edges.
+    pub contacts: LunarContacts,
     /// **Shadow-depth proxy, NOT the astronomical eclipse magnitude.**
     ///
-    /// A crude `1 − |β| / 1.58°` measure of how close the Full Moon sits to the
-    /// ecliptic (1.0 = Moon centred on the node-crossing, 0.0 = at the
-    /// penumbral edge). It is monotonic with shadow depth but is NOT the
-    /// umbral/penumbral magnitude (fraction of the lunar diameter immersed),
-    /// which requires Earth-shadow cone radii at the Moon's distance — not yet
-    /// implemented. Do not report this as "magnitude" to users.
+    /// `1 − |β| / 1.58°`, clamped to `[0, 1]`, from the Moon's ecliptic latitude
+    /// at greatest eclipse. Kept for compatibility; use
+    /// [`Self::umbral_magnitude`] and [`Self::penumbral_magnitude`] instead.
     pub shadow_depth_proxy: f64,
     /// Moon's ecliptic latitude at maximum (degrees).
     pub moon_latitude_deg: f64,
+}
+
+/// Contact times (UT1 Julian Dates) of a lunar eclipse. A phase the eclipse
+/// does not reach has no contacts (`None`).
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct LunarContacts {
+    /// P1: the Moon's leading limb enters the penumbra.
+    pub penumbral_begin: Option<f64>,
+    /// U1: the Moon's leading limb enters the umbra.
+    pub partial_begin: Option<f64>,
+    /// U2: the Moon's trailing limb enters the umbra.
+    pub total_begin: Option<f64>,
+    /// U3: the Moon's leading limb leaves the umbra.
+    pub total_end: Option<f64>,
+    /// U4: the Moon's trailing limb leaves the umbra.
+    pub partial_end: Option<f64>,
+    /// P4: the Moon's trailing limb leaves the penumbra.
+    pub penumbral_end: Option<f64>,
 }
 
 /// Classification of a solar eclipse.
@@ -151,60 +175,169 @@ pub struct SolarEclipse {
 
 /// Find all lunar eclipses between `jd_start` and `jd_end` (UT1).
 ///
-/// The search locates every Full Moon in the range, checks the Moon's ecliptic
-/// latitude, and classifies any eclipse that falls within the penumbral limit.
+/// Every Full Moon near an ecliptic node is reduced to greatest eclipse, and it
+/// is reported when the Moon reaches Earth's penumbra; the type follows from the
+/// umbral magnitude.
 pub fn find_lunar_eclipses(almanac: &Almanac, jd_start: f64, jd_end: f64) -> Vec<LunarEclipse> {
     if jd_start >= jd_end {
         return Vec::new();
     }
 
-    let full_moons = find_full_moons(almanac, jd_start, jd_end);
-    let mut eclipses = Vec::new();
+    find_full_moons(
+        almanac,
+        jd_start - LUNAR_MAXIMUM_WINDOW,
+        jd_end + LUNAR_MAXIMUM_WINDOW,
+    )
+    .into_iter()
+    .filter_map(|jd_full| lunar_eclipse_at(almanac, jd_full))
+    .filter(|e| (jd_start..=jd_end).contains(&e.jd_maximum))
+    .collect()
+}
 
-    for jd_full in full_moons {
-        // JD bounds guard: the syzygy scan steps a fixed `SCAN_STEP` and can
-        // refine a Full Moon a fraction of a step past the requested window.
-        // The reported maximum (syzygy) must never fall outside [jd_start,
-        // jd_end], so skip any out-of-range lunation.
-        if jd_full < jd_start || jd_full > jd_end {
-            continue;
-        }
-        let moon_pos = match almanac.geocentric_ecliptic(Body::Moon, JdUT1(jd_full)) {
-            Ok(p) => p,
-            // Skip this lunation if the Moon's position cannot be computed.
-            // This can happen for JD values at the extreme edges of the
-            // ephemeris validity range. Since eclipse detection scans many
-            // lunations, one failed position should not abort the entire
-            // search — the caller still receives all successfully detected
-            // eclipses.
-            Err(_) => continue,
+fn lunar_eclipse_at(almanac: &Almanac, jd_full: f64) -> Option<LunarEclipse> {
+    let moon = almanac
+        .geocentric_ecliptic(Body::Moon, JdUT1(jd_full))
+        .ok()?;
+    if moon.latitude.to_degrees().abs() >= LUNAR_ECLIPSE_LIMIT {
+        return None;
+    }
+    let jd_maximum = lunar_greatest_eclipse(almanac, jd_full)?;
+    let shadow = EarthShadow::at(almanac, jd_maximum).ok()?;
+    let penumbral_magnitude = shadow.magnitude(shadow.penumbra);
+    if penumbral_magnitude <= 0.0 {
+        return None;
+    }
+    let umbral_magnitude = shadow.magnitude(shadow.umbra);
+    let eclipse_type = if umbral_magnitude >= 1.0 {
+        LunarEclipseType::Total
+    } else if umbral_magnitude > 0.0 {
+        LunarEclipseType::Partial
+    } else {
+        LunarEclipseType::Penumbral
+    };
+    let contact =
+        |side: f64, limit: fn(&EarthShadow) -> f64| lunar_contact(almanac, jd_maximum, side, limit);
+    let contacts = LunarContacts {
+        penumbral_begin: contact(-1.0, EarthShadow::penumbral_contact),
+        partial_begin: contact(-1.0, EarthShadow::partial_contact),
+        total_begin: contact(-1.0, EarthShadow::total_contact),
+        total_end: contact(1.0, EarthShadow::total_contact),
+        partial_end: contact(1.0, EarthShadow::partial_contact),
+        penumbral_end: contact(1.0, EarthShadow::penumbral_contact),
+    };
+    let moon_latitude_deg = almanac
+        .geocentric_ecliptic(Body::Moon, JdUT1(jd_maximum))
+        .ok()?
+        .latitude
+        .to_degrees();
+    Some(LunarEclipse {
+        jd_maximum,
+        eclipse_type,
+        umbral_magnitude,
+        penumbral_magnitude,
+        contacts,
+        shadow_depth_proxy: (1.0 - moon_latitude_deg.abs() / LUNAR_PENUMBRAL_LIMIT).clamp(0.0, 1.0),
+        moon_latitude_deg,
+    })
+}
+
+struct EarthShadow {
+    separation: f64,
+    umbra: f64,
+    penumbra: f64,
+    moon_radius: f64,
+}
+
+impl EarthShadow {
+    fn at(almanac: &Almanac, jd: f64) -> Result<Self, EphemerisError> {
+        let sun = almanac.geocentric_ecliptic(Body::Sun, JdUT1(jd))?;
+        let moon = almanac.geocentric_ecliptic(Body::Moon, JdUT1(jd))?;
+        let cos_elongation = moon.latitude.sin() * sun.latitude.sin()
+            + moon.latitude.cos() * sun.latitude.cos() * (moon.longitude - sun.longitude).cos();
+        let angle = |radius_km: f64, distance_au: f64| {
+            (radius_km / (distance_au * AU_KM)).asin().to_degrees()
         };
-        let lat_deg = moon_pos.latitude.to_degrees();
-
-        if lat_deg.abs() < LUNAR_PENUMBRAL_LIMIT {
-            let eclipse_type = if lat_deg.abs() < LUNAR_TOTAL_LIMIT {
-                LunarEclipseType::Total
-            } else if lat_deg.abs() < LUNAR_PARTIAL_LIMIT {
-                LunarEclipseType::Partial
-            } else {
-                LunarEclipseType::Penumbral
-            };
-
-            // Shadow-depth PROXY (not the astronomical magnitude): how close the
-            // Moon sits to the node-crossing. 1.0 = Moon's centre on the
-            // ecliptic, 0.0 = at the penumbral-limit edge. See the field doc.
-            let shadow_depth_proxy = 1.0 - (lat_deg.abs() / LUNAR_PENUMBRAL_LIMIT);
-
-            eclipses.push(LunarEclipse {
-                jd_maximum: jd_full,
-                eclipse_type,
-                shadow_depth_proxy,
-                moon_latitude_deg: lat_deg,
-            });
-        }
+        let core = (1.0 + DANJON_ENLARGEMENT)
+            * EARTH_OBLATENESS_FACTOR
+            * angle(EARTH_RADIUS_KM, moon.distance)
+            + angle(EARTH_RADIUS_KM, sun.distance);
+        let sun_radius = angle(SUN_RADIUS_KM, sun.distance);
+        Ok(Self {
+            separation: 180.0 - cos_elongation.clamp(-1.0, 1.0).acos().to_degrees(),
+            umbra: core - sun_radius,
+            penumbra: core + sun_radius,
+            moon_radius: angle(MOON_RADIUS_KM, moon.distance),
+        })
     }
 
-    eclipses
+    fn magnitude(&self, shadow_radius: f64) -> f64 {
+        (shadow_radius + self.moon_radius - self.separation) / (2.0 * self.moon_radius)
+    }
+
+    fn penumbral_contact(&self) -> f64 {
+        self.penumbra + self.moon_radius
+    }
+
+    fn partial_contact(&self) -> f64 {
+        self.umbra + self.moon_radius
+    }
+
+    fn total_contact(&self) -> f64 {
+        self.umbra - self.moon_radius
+    }
+}
+
+fn lunar_greatest_eclipse(almanac: &Almanac, jd_full: f64) -> Option<f64> {
+    const PHI: f64 = 0.618_033_988_749_895;
+    let separation = |t: f64| EarthShadow::at(almanac, t).map(|s| s.separation).ok();
+    let (mut lo, mut hi) = (
+        jd_full - LUNAR_MAXIMUM_WINDOW,
+        jd_full + LUNAR_MAXIMUM_WINDOW,
+    );
+    let mut a = hi - PHI * (hi - lo);
+    let mut b = lo + PHI * (hi - lo);
+    let (mut fa, mut fb) = (separation(a)?, separation(b)?);
+    while hi - lo > 1e-7 {
+        if fa < fb {
+            hi = b;
+            (b, fb) = (a, fa);
+            a = hi - PHI * (hi - lo);
+            fa = separation(a)?;
+        } else {
+            lo = a;
+            (a, fa) = (b, fb);
+            b = lo + PHI * (hi - lo);
+            fb = separation(b)?;
+        }
+    }
+    Some(0.5 * (lo + hi))
+}
+
+fn lunar_contact(
+    almanac: &Almanac,
+    jd_maximum: f64,
+    side: f64,
+    limit: fn(&EarthShadow) -> f64,
+) -> Option<f64> {
+    let outside = |t: f64| {
+        EarthShadow::at(almanac, t)
+            .map(|s| s.separation > limit(&s))
+            .ok()
+    };
+    let mut inner = jd_maximum;
+    let mut outer = jd_maximum + side * LUNAR_CONTACT_WINDOW;
+    if outside(inner)? || !outside(outer)? {
+        return None;
+    }
+    while (outer - inner).abs() > 1e-8 {
+        let mid = 0.5 * (inner + outer);
+        if outside(mid)? {
+            outer = mid;
+        } else {
+            inner = mid;
+        }
+    }
+    Some(0.5 * (inner + outer))
 }
 
 /// Find all solar eclipses between `jd_start` and `jd_end` (UT1).
@@ -849,13 +982,11 @@ mod tests {
             "Eclipse should be within 1 day of 2024-Sep-18, got offset {:.2} days",
             e.jd_maximum - jd_target
         );
-        // NASA classifies this as partial. Our latitude-based model may classify
-        // it as penumbral or partial depending on the threshold, but it should
-        // NOT be total.
-        assert_ne!(
+        assert_eq!(
             e.eclipse_type,
-            LunarEclipseType::Total,
-            "2024-Sep-18 should NOT be classified as total lunar"
+            LunarEclipseType::Partial,
+            "NASA classifies 2024-Sep-18 as partial lunar, got {:?}",
+            e.eclipse_type
         );
     }
 
