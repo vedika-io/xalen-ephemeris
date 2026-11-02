@@ -218,10 +218,9 @@ pub fn classify_solar_eclipse(almanac: &Almanac, jd_new_ut: f64) -> Option<Globa
     //                            the path ends where ζ → 0 and the antumbra shows)
     //   L2_sub ≥ 0             → Annular
     //
-    // LIMITATION: rare NON-central total/annular eclipses (axis just misses the
-    // ellipsoid yet the umbra grazes the limb, 0.9972 < |γ| ≲ 1) are reported as
-    // Partial here — resolving those needs the full observer reduction (the per-
-    // location ξ/η/ζ layer), which is not implemented.
+    // Non-central: the axis misses the ellipsoid but the umbra or antumbra still
+    // touches the limb when 0.9972 < |γ| < 0.9972 + |l2| (Meeus, *Astronomical
+    // Algorithms* 2nd ed. Ch. 54) — Total if l2 < 0, Annular if l2 > 0.
     const CENTRAL_LIMIT: f64 = 0.9972;
     let eclipse_type = if gamma_abs < CENTRAL_LIMIT {
         let zeta = (1.0 - gamma_abs * gamma_abs).max(0.0).sqrt();
@@ -232,6 +231,12 @@ pub fn classify_solar_eclipse(almanac: &Almanac, jd_new_ut: f64) -> Option<Globa
             } else {
                 GlobalSolarType::Total
             }
+        } else {
+            GlobalSolarType::Annular
+        }
+    } else if gamma_abs < CENTRAL_LIMIT + b.l2.abs() {
+        if b.l2 < 0.0 {
+            GlobalSolarType::Total
         } else {
             GlobalSolarType::Annular
         }

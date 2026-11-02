@@ -301,6 +301,14 @@ All cusps 0-360 deg, ASC-DSC opposite within 0.01 deg, MC-IC opposite within
 
 All 6 NASA reference eclipses detected within 1-day tolerance.
 
+**Non-central solar eclipses.** When the shadow axis misses Earth but the
+umbra or antumbra still reaches it (0.9972 < |γ| < 0.9972 + |l2|, Meeus Ch. 54)
+the eclipse is a non-central total or annular one. All eight such eclipses of
+1901–2100 in NASA's Five Millennium Canon (1928-05-19, 1950-03-18, 1957-04-30,
+1957-10-23, 1967-11-02, 2014-04-29, 2043-04-09, 2043-10-03) are classified as
+NASA lists them, with γ within about 0.001; `tests/solar_eclipse_nasa_crossval.rs`
+asserts them with partial and central controls.
+
 > **What this engine is (honest scope):** for **solar** eclipses XALEN now runs
 > the rigorous Bessel/Chauvenet method (`crate::besselian`): it forms the
 > geocentric fundamental-plane elements, derives γ, the global type
