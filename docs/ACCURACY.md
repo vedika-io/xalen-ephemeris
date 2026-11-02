@@ -294,7 +294,7 @@ All cusps 0-360 deg, ASC-DSC opposite within 0.01 deg, MC-IC opposite within
 |------------|------|------|-----------|--------|
 | Penumbral Lunar | 2024-Mar-25 | Penumbral | Yes | < 1 day |
 | Total Solar | 2024-Apr-08 | Total | Yes | < 1 day |
-| Partial Lunar | 2024-Sep-18 | Not total (confirmed) | Yes | < 1 day |
+| Partial Lunar | 2024-Sep-18 | Partial | Yes | < 1 day |
 | Annular Solar | 2024-Oct-02 | Annular | Yes | < 1 day |
 | Total Lunar | 2025-Mar-14 | Total | Yes | < 1 day |
 | Partial Solar | 2025-Mar-29 | Partial | Yes | < 1 day |
