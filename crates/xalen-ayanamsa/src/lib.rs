@@ -640,9 +640,9 @@ fn true_chitra(t: f64) -> f64 {
 /// sampled dates within that span.
 fn spica_apparent_longitude(t: f64) -> f64 {
     // Spica anchor sourced from the commercial-OK `xalen-star-anchors` crate (a
-    // single factual coordinate, Apache-2.0) rather than the HIP-reconciled
-    // fixed-star catalog, so True Chitra is byte-identical whether or not the
-    // non-commercial `hip-catalog` data is linked. See xalen-star-anchors.
+    // single factual coordinate, Apache-2.0) rather than the reconciled
+    // fixed-star catalog, so True Chitra does not depend on which star catalogue
+    // features are enabled. See xalen-star-anchors.
     let spica = xalen_star_anchors::SPICA;
 
     // J2000.0 mean ecliptic (longitude, latitude) + linear proper motion.

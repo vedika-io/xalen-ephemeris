@@ -22,8 +22,8 @@
 //!
 //! A single star's measured ecliptic coordinate is a fact, not a protectable
 //! compilation. The [`SPICA`] values below are the exact ones the open library
-//! has been emitting (so True Chitra stays byte-identical across the
-//! `hip-catalog` feature). An equally valid, even-cleaner-provenance choice is
+//! has been emitting (so True Chitra stays byte-identical whichever star
+//! catalogue features are enabled). An equally valid, even-cleaner-provenance choice is
 //! the self-derived FK5/Hipparcos equatorial place already carried in
 //! `xalen-stars`' Apache `CATALOG` (203.841355, −2.054487, pm −27.72/−45.23),
 //! which differs by ~1e-6° (~0.01″) and would shift today's output by that
@@ -46,8 +46,9 @@ pub struct StarAnchor {
 
 /// **Spica** (α Virginis), the anchor for the True Chitra / Chitrapaksha
 /// sidereal frame. Values match what the open `xalen-stars` library emits for
-/// `find_by_name("Spica")`, so True Chitra is byte-identical with or without the
-/// `hip-catalog` feature. See the crate-level provenance note.
+/// `find_by_name("Spica")` to within a few milliarcseconds of position, and True
+/// Chitra does not depend on which star catalogue features are enabled. See the
+/// crate-level provenance note.
 pub const SPICA: StarAnchor = StarAnchor {
     longitude_j2000: 203.841358,
     latitude_j2000: -2.054496,

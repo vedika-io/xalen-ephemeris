@@ -606,29 +606,17 @@ pub fn swe_deltat(jd: f64) -> f64 {
 /// The catalog carries no parallax, so distance is reported as `0.0`.
 /// If the star is not found, returns an error.
 pub fn swe_fixstar_ut(star_name: &str, jd: f64) -> Result<[f64; 6], String> {
-    #[cfg(not(feature = "hip-catalog"))]
-    {
-        let _ = (star_name, jd);
-        return Err(
-            "swe_fixstar_ut requires the `hip-catalog` feature (the Hipparcos \
-             fixed-star catalog is non-commercial and is not linked in this build)"
-                .to_string(),
-        );
-    }
-    #[cfg(feature = "hip-catalog")]
-    {
-        let star = xalen_stars::find_by_name(star_name)
-            .ok_or_else(|| format!("star not found: {star_name}"))?;
-        let year = 2000.0 + (jd - 2_451_545.0) / 365.25;
-        Ok([
-            star.longitude_at_epoch(year),
-            star.latitude_at_epoch(year),
-            0.0, // distance (AU): no parallax data in the catalog
-            0.0, // lon speed
-            0.0, // lat speed
-            0.0, // dist speed
-        ])
-    }
+    let star = xalen_stars::find_by_name(star_name)
+        .ok_or_else(|| format!("star not found: {star_name}"))?;
+    let year = 2000.0 + (jd - 2_451_545.0) / 365.25;
+    Ok([
+        star.longitude_at_epoch(year),
+        star.latitude_at_epoch(year),
+        0.0, // distance (AU): no parallax data in the catalog
+        0.0, // lon speed
+        0.0, // lat speed
+        0.0, // dist speed
+    ])
 }
 
 /// Return the visual magnitude of a fixed star.
@@ -645,21 +633,9 @@ pub fn swe_fixstar_ut(star_name: &str, jd: f64) -> Result<[f64; 6], String> {
 /// assert!((mag - 0.98).abs() < 0.5);
 /// ```
 pub fn swe_fixstar_mag(star_name: &str) -> Result<f64, String> {
-    #[cfg(not(feature = "hip-catalog"))]
-    {
-        let _ = star_name;
-        return Err(
-            "swe_fixstar_mag requires the `hip-catalog` feature (the Hipparcos \
-             fixed-star catalog is non-commercial and is not linked in this build)"
-                .to_string(),
-        );
-    }
-    #[cfg(feature = "hip-catalog")]
-    {
-        let star = xalen_stars::find_by_name(star_name)
-            .ok_or_else(|| format!("star not found: {star_name}"))?;
-        Ok(star.magnitude)
-    }
+    let star = xalen_stars::find_by_name(star_name)
+        .ok_or_else(|| format!("star not found: {star_name}"))?;
+    Ok(star.magnitude)
 }
 
 /// No-op. XALEN embeds all data at compile time.
@@ -1012,6 +988,19 @@ mod tests {
         // Magnitude comes from the dedicated call, matching Swiss.
         let mag = swe_fixstar_mag("Spica").unwrap();
         assert!(mag < 2.0, "Spica magnitude={mag}"); // mag ~0.98
+    }
+
+    #[test]
+    fn fixstar_sirius_works_in_every_build() {
+        // The star list is in-house data with no feature switch that disables
+        // the lookup, so this holds with default and with
+        // `--no-default-features`.
+        let xx = swe_fixstar_ut("Sirius", J2000).unwrap();
+        // Swiss J2000 mean place: 104.0817 / -39.6053 (within 1" of it).
+        assert!((xx[0] - 104.081_677).abs() < 0.0003, "Sirius lon={}", xx[0]);
+        assert!((xx[1] + 39.605_303).abs() < 0.0003, "Sirius lat={}", xx[1]);
+        let mag = swe_fixstar_mag("Sirius").unwrap();
+        assert!((mag + 1.46).abs() < 0.05, "Sirius magnitude={mag}");
     }
 
     #[test]
