@@ -12,22 +12,21 @@
 //! SEFLG_NOABERR | SEFLG_NOGDEFL`). The tests compare them with the in-house
 //! Bright Star Catalogue list, through the public lookups, in arcseconds.
 //!
-//! The 38 stars of `SWISS_ORACLE` and the 16 of `SWISS_J2000_FULL` are named
+//! The 43 stars of `SWISS_ORACLE` and the 16 of `SWISS_J2000_FULL` are named
 //! stars, so their positions come from the IAU Catalog of Star Names (6
-//! decimals of a degree). Measured worst separation 0.245" (Sirius), median
-//! 0.03".
+//! decimals of a degree). `Al Jabhah` (eta Leonis, `SWISS_BSC_ONLY`) has no IAU
+//! name; its position comes from the Bright Star Catalogue (RA to 0.1 s, Dec to
+//! 1") and has its own, looser bound.
 //!
-//! `SWISS_ORACLE_ALIASED` holds six reference values (recorded by the original
-//! oracle test with a 0.05 deg tolerance) that disagree with this list by 2" to
-//! 27". The Hipparcos-derived data of `xalen-stars-hip-data` disagrees with the
-//! same six values by the same amounts (see that crate's
-//! `tests/bright_vs_hipparcos.rs`), so the disagreement is in the reference
-//! values, not in the new list. They are listed here by name with their
-//! measured separations instead of being folded into the sub-arcsecond bound.
+//! `SWISS_EPOCH_ORACLE` holds live Swiss places of seven stars at seven epochs
+//! (1000 to 3000 CE), checked against `BrightStar::ecliptic_at_epoch`.
+//!
+//! The measured separations are printed with a `MEASURED` prefix (run the test
+//! binary with `--nocapture`).
 
 mod common;
 
-use common::{SWISS_J2000_FULL, SWISS_ORACLE, SWISS_ORACLE_ALIASED, sep_arcsec};
+use common::{SWISS_BSC_ONLY, SWISS_EPOCH_ORACLE, SWISS_J2000_FULL, SWISS_ORACLE, sep_arcsec};
 use xalen_stars::{find_bright_by_name, find_by_name};
 
 /// Bound for the IAU-positioned named stars. Measured worst case 0.245"
@@ -35,6 +34,14 @@ use xalen_stars::{find_bright_by_name, find_by_name};
 const IAU_BOUND_ARCSEC: f64 = 0.30;
 /// Bound for the median separation (measured 0.03").
 const IAU_MEDIAN_BOUND_ARCSEC: f64 = 0.06;
+/// Bound for the BSC-positioned star. Measured 0.79"; its source position is
+/// rounded to RA 0.1 s and Dec 1".
+const BSC_ONLY_BOUND_ARCSEC: f64 = 1.0;
+/// Bounds for the epoch propagation. Measured worst 20.6" (Sirius at 3000 CE:
+/// the Bright Star Catalogue proper motion differs from Swiss's by 18 mas/yr),
+/// median 0.72".
+const EPOCH_BOUND_ARCSEC: f64 = 22.0;
+const EPOCH_MEDIAN_BOUND_ARCSEC: f64 = 1.0;
 
 fn median(v: &mut [f64]) -> f64 {
     v.sort_by(|a, b| a.partial_cmp(b).unwrap());
@@ -112,24 +119,12 @@ fn full_precision_anchors_match_swiss() {
     assert!(med < IAU_MEDIAN_BOUND_ARCSEC);
 }
 
-/// The six aliased/curated stars whose reference values disagree with this list
-/// (and with the Hipparcos-derived data). Measured separations are pinned so any
-/// change of the underlying data is noticed; they are NOT sub-arcsecond and are
-/// reported as such. `Al Jabhah` is the only one positioned from the Bright
-/// Star Catalogue itself (RA to 0.1 s, Dec to 1") because it has no IAU name.
+/// The BSC-positioned star among the references (Al Jabhah, no IAU row). Its
+/// source position is rounded to RA 0.1 s and Dec 1" (up to about 0.9" of
+/// rounding in each axis).
 #[test]
-fn aliased_stars_known_reference_disagreements_are_pinned() {
-    // (name, measured separation in arcsec, tolerance in arcsec)
-    let pinned: &[(&str, f64, f64)] = &[
-        ("Zuben Eschamali", 26.97, 0.2),
-        ("Zuben Elgenubi", 25.75, 0.2),
-        ("Lambda Orionis", 6.58, 0.2),
-        ("Hyadum II", 3.56, 0.2),
-        ("Bharani 41", 3.12, 0.2),
-        ("Al Jabhah", 1.95, 0.2),
-    ];
-    assert_eq!(pinned.len(), SWISS_ORACLE_ALIASED.len());
-    for o in SWISS_ORACLE_ALIASED {
+fn bsc_only_star_within_bound_of_swiss() {
+    for o in SWISS_BSC_ONLY {
         let star = find_by_name(o.name).unwrap_or_else(|| panic!("{} missing", o.name));
         let sep = sep_arcsec(
             star.longitude_j2000,
@@ -137,34 +132,50 @@ fn aliased_stars_known_reference_disagreements_are_pinned() {
             o.swiss_lon,
             o.swiss_lat,
         );
-        let &(_, expected, tol) = pinned
-            .iter()
-            .find(|(n, _, _)| *n == o.name)
-            .unwrap_or_else(|| panic!("{} not pinned", o.name));
-        println!("MEASURED {} vs Swiss reference: {sep:.3}\"", o.name);
+        println!(
+            "MEASURED {} (BSC-positioned) vs Swiss J2000: {sep:.3}\"",
+            o.name
+        );
         assert!(
-            (sep - expected).abs() < tol,
-            "{}: separation {sep:.3}\" differs from pinned {expected}\" +/- {tol}\"",
+            sep < BSC_ONLY_BOUND_ARCSEC,
+            "{} is {sep:.3}\" from Swiss J2000 (bound {BSC_ONLY_BOUND_ARCSEC}\")",
             o.name
         );
     }
 }
 
-/// The BSC-only star among the references (Al Jabhah, no IAU row). Its source
-/// position is rounded to RA 0.1 s and Dec 1" (up to about 0.9" of rounding);
-/// the measured separation vs Swiss is 1.95".
+/// Epoch propagation (IAU 2006/P03 precession plus the catalogue proper
+/// motion) against live Swiss at 1000, 1600, 1900, 2000, 2100, 2400 and 3000.
 #[test]
-fn bsc_only_star_within_two_arcsec_of_swiss() {
-    let o = SWISS_ORACLE_ALIASED
-        .iter()
-        .find(|o| o.name == "Al Jabhah")
-        .unwrap();
-    let star = find_by_name("Al Jabhah").unwrap();
-    let sep = sep_arcsec(
-        star.longitude_j2000,
-        star.latitude_j2000,
-        o.swiss_lon,
-        o.swiss_lat,
+fn epoch_propagation_matches_swiss() {
+    let mut seps: Vec<f64> = Vec::new();
+    let mut worst = (0.0_f64, String::new());
+    let mut per_epoch: std::collections::BTreeMap<i64, f64> = std::collections::BTreeMap::new();
+    for &(name, year, slon, slat) in SWISS_EPOCH_ORACLE {
+        let star = find_bright_by_name(name).unwrap_or_else(|| panic!("{name} missing"));
+        let (lon, lat) = star.ecliptic_at_epoch(year);
+        let sep = sep_arcsec(lon, lat, slon, slat);
+        if sep > worst.0 {
+            worst = (sep, format!("{name} {year:.0}"));
+        }
+        let e = per_epoch.entry(year as i64).or_insert(0.0);
+        *e = e.max(sep);
+        assert!(
+            sep < EPOCH_BOUND_ARCSEC,
+            "{name} at {year:.0}: {sep:.2}\" from Swiss (bound {EPOCH_BOUND_ARCSEC}\")"
+        );
+        seps.push(sep);
+    }
+    let med = median(&mut seps);
+    println!(
+        "MEASURED epoch propagation vs Swiss ({} star/epoch pairs): worst {:.3}\" ({}), median {:.3}\"",
+        SWISS_EPOCH_ORACLE.len(),
+        worst.0,
+        worst.1,
+        med
     );
-    assert!(sep < 2.5, "Al Jabhah is {sep:.3}\" from Swiss J2000");
+    for (y, w) in &per_epoch {
+        println!("MEASURED   epoch {y}: worst {w:.3}\"");
+    }
+    assert!(med < EPOCH_MEDIAN_BOUND_ARCSEC, "median {med:.3}\"");
 }

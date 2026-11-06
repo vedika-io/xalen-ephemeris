@@ -9,7 +9,7 @@
 #[path = "../../xalen-stars/tests/common/mod.rs"]
 mod common;
 
-use common::{SWISS_J2000_FULL, SWISS_ORACLE, SWISS_ORACLE_ALIASED, sep_arcsec};
+use common::{SWISS_BSC_ONLY, SWISS_J2000_FULL, SWISS_ORACLE, sep_arcsec};
 use xalen_stars_hip_data::find_generated_by_name;
 
 #[test]
@@ -58,25 +58,16 @@ fn oracle_generated_catalog_matches_swiss() {
         assert!(sep < 1.0, "{} is {sep:.3}\" from Swiss", o.name);
     }
     println!(
-        "MEASURED Hipparcos-derived vs Swiss (38 stars): worst {:.3}\" ({})",
+        "MEASURED Hipparcos-derived vs Swiss (43 stars): worst {:.3}\" ({})",
         worst.0, worst.1
     );
 }
 
-/// The six aliased stars: the Hipparcos-derived data disagrees with the same
-/// reference values as the Bright Star Catalogue list does (2" to 27"), which
-/// shows the disagreement is in the reference values.
+/// The star whose place the default list takes from the Bright Star Catalogue
+/// (Al Jabhah): the Hipparcos-derived place against live Swiss.
 #[test]
-fn aliased_reference_disagreements_are_shared_with_hipparcos() {
-    let pinned: &[(&str, f64)] = &[
-        ("Zuben Eschamali", 26.98),
-        ("Zuben Elgenubi", 25.75),
-        ("Lambda Orionis", 6.57),
-        ("Hyadum II", 3.55),
-        ("Bharani 41", 3.11),
-        ("Al Jabhah", 1.32),
-    ];
-    for o in SWISS_ORACLE_ALIASED {
+fn bsc_only_reference_star_vs_hipparcos() {
+    for o in SWISS_BSC_ONLY {
         let star = find_generated_by_name(o.name).unwrap_or_else(|| panic!("{}", o.name));
         let sep = sep_arcsec(
             star.longitude_j2000,
@@ -84,15 +75,10 @@ fn aliased_reference_disagreements_are_shared_with_hipparcos() {
             o.swiss_lon,
             o.swiss_lat,
         );
-        let &(_, expected) = pinned.iter().find(|(n, _)| *n == o.name).unwrap();
         println!(
             "MEASURED Hipparcos-derived {} vs Swiss reference: {sep:.3}\"",
             o.name
         );
-        assert!(
-            (sep - expected).abs() < 0.3,
-            "{}: {sep:.3}\" vs pinned {expected}\"",
-            o.name
-        );
+        assert!(sep < 0.05, "{}: {sep:.3}\"", o.name);
     }
 }

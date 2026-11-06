@@ -15,7 +15,7 @@ use xalen_stars_hip_data::{GENERATED_CATALOG, GeneratedStarExt, find_generated_b
 #[path = "../../xalen-stars/tests/common/mod.rs"]
 mod common;
 
-use common::{SWISS_ORACLE_ALIASED, sep_arcsec};
+use common::sep_arcsec;
 
 fn percentile(sorted: &[f64], p: f64) -> f64 {
     let i = ((sorted.len() as f64 - 1.0) * p).round() as usize;
@@ -108,25 +108,6 @@ fn unnamed_bright_stars_agree_with_hipparcos() {
     assert!(s.median < 0.75, "median {:.3}\"", s.median);
     assert!(s.p95 < 2.6, "p95 {:.3}\"", s.p95);
     assert!(s.p99 < 4.0, "p99 {:.3}\"", s.p99);
-}
-
-/// The six curated names whose Swiss reference values disagree with the list:
-/// the bright-catalogue positions sit within 2" of the Hipparcos-derived
-/// positions of the same stars, so the disagreement is shared.
-#[test]
-fn aliased_stars_agree_with_hipparcos() {
-    for o in SWISS_ORACLE_ALIASED {
-        let b = xalen_stars::find_by_name(o.name).unwrap();
-        let h = find_generated_by_name(o.name).unwrap();
-        let s = sep_arcsec(
-            b.longitude_j2000,
-            b.latitude_j2000,
-            h.longitude_j2000,
-            h.latitude_j2000,
-        );
-        println!("MEASURED {} bright vs Hipparcos-derived: {s:.3}\"", o.name);
-        assert!(s < 2.0, "{} {s:.3}\"", o.name);
-    }
 }
 
 /// Epoch propagation of the same seven stars as the Swiss multi-epoch test

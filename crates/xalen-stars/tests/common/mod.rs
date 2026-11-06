@@ -2,7 +2,10 @@
 //! `xalen-stars` and (through a `#[path]` include) `xalen-stars-hip-data`.
 //!
 //! Every reference longitude/latitude below is a REAL value produced by the
-//! Swiss Ephemeris (`pyswisseph` 2.10.3.2, `libswe` 2.10.03). Each row is the
+//! Swiss Ephemeris (`libswe` 2.10.03, the library inside `pyswisseph`
+//! 2.10.3.2; the five re-recorded rows and the multi-epoch rows were produced by
+//! calling `swe_fixstar2` of a `libswe` built from the `pyswisseph` 2.10.3.2
+//! source distribution, with the official `sefstars.txt`). Each row is the
 //! J2000.0 *mean* ecliptic place of the star, queried with the astrometric flag
 //! set
 //!
@@ -41,7 +44,17 @@ pub struct Oracle {
     pub swiss_lat: f64,
 }
 
-/// 38 well-known named stars with their LIVE Swiss J2000 mean-ecliptic places.
+/// 43 named stars with their LIVE Swiss J2000 mean-ecliptic places.
+///
+/// The last five rows (Zuben Eschamali, Zuben Elgenubi, Lambda Orionis, Hyadum
+/// II, Bharani 41) are looked up in Swiss by their Bayer/Flamsteed key
+/// (`,beLib`, `,al-2Lib`, `,laOri`, `,de-1Tau`, `,41Ari`), because Swiss does
+/// not index the spelling used here for Lambda Orionis and Bharani 41. Swiss
+/// resolves each key to the same star as the IAU-CSN designation (beta Librae,
+/// alpha2 Librae, lambda Orionis = Meissa, delta1 Tauri = Secunda Hyadum, 41
+/// Arietis = Bharani). An earlier recording of these five rows, made with a
+/// 0.05 degree tolerance, was 3" to 27" away from live Swiss output and was
+/// replaced by the values below.
 pub const SWISS_ORACLE: &[Oracle] = &[
     Oracle {
         name: "Polaris",
@@ -233,44 +246,99 @@ pub const SWISS_ORACLE: &[Oracle] = &[
         swiss_lon: 2.583502,
         swiss_lat: -20.783547,
     },
-];
-
-/// Six curated stars whose spelling differs from the IAU-WGSN name (formerly
-/// served from the coarse curated coordinates). These reference values come
-/// from the original oracle test (tolerance 0.05 deg) and disagree with BOTH the
-/// Bright Star Catalogue list and the Hipparcos-derived data by 2" to 27" (see
-/// `crates/xalen-stars/tests/swiss_star_oracle.rs`).
-pub const SWISS_ORACLE_ALIASED: &[Oracle] = &[
     Oracle {
-        name: "Bharani 41",
-        swiss_lon: 48.203266,
-        swiss_lat: 10.450526,
-    },
-    Oracle {
-        name: "Lambda Orionis",
-        swiss_lon: 83.708661,
-        swiss_lat: -13.369833,
-    },
-    Oracle {
-        name: "Hyadum II",
-        swiss_lon: 66.871684,
-        swiss_lat: -3.969725,
+        name: "Zuben Eschamali",
+        swiss_lon: 229.3716920,
+        swiss_lat: 8.4959360,
     },
     Oracle {
         name: "Zuben Elgenubi",
-        swiss_lon: 225.075512,
-        swiss_lat: 0.333043,
+        swiss_lon: 225.0826753,
+        swiss_lat: 0.3330706,
     },
     Oracle {
-        name: "Zuben Eschamali",
-        swiss_lon: 229.364142,
-        swiss_lat: 8.495271,
+        name: "Lambda Orionis",
+        swiss_lon: 83.7068329,
+        swiss_lat: -13.3694486,
     },
     Oracle {
-        name: "Al Jabhah",
-        swiss_lon: 147.905168,
-        swiss_lat: 4.865355,
+        name: "Hyadum II",
+        swiss_lon: 66.8707186,
+        swiss_lat: -3.9695032,
     },
+    Oracle {
+        name: "Bharani 41",
+        swiss_lon: 48.2035302,
+        swiss_lat: 10.4496967,
+    },
+];
+
+/// The one named star that has a Swiss reference but no IAU-CSN position:
+/// eta Leonis (`Al Jabhah`, Swiss key `,etLeo`). Its place in the new list comes
+/// from the Bright Star Catalogue (RA to 0.1 s, Dec to 1"), so it is tested
+/// with its own, looser bound.
+pub const SWISS_BSC_ONLY: &[Oracle] = &[Oracle {
+    name: "Al Jabhah",
+    swiss_lon: 147.9051120,
+    swiss_lat: 4.8657168,
+}];
+
+/// Swiss mean-ecliptic-of-date places for the seven stars of the multi-epoch
+/// test, at six epochs besides J2000. Each row is `(name, year, longitude deg,
+/// latitude deg)`. They were produced with the flags `SEFLG_SWIEPH |
+/// SEFLG_NONUT | SEFLG_NOABERR | SEFLG_NOGDEFL` (no `SEFLG_J2000`: the equinox
+/// of date) at `jd = 2451545.0 + (year - 2000) * 365.25`, the same year to JD
+/// convention as `BrightStar::ecliptic_at_epoch`.
+pub const SWISS_EPOCH_ORACLE: &[(&str, f64, f64, f64)] = &[
+    ("Polaris", 1000.0, 74.6097691, 65.9817038),
+    ("Polaris", 1600.0, 82.9741283, 66.0538251),
+    ("Polaris", 1900.0, 87.1679253, 66.0895975),
+    ("Polaris", 2000.0, 88.5675815, 66.1014733),
+    ("Polaris", 2100.0, 89.9680996, 66.1133236),
+    ("Polaris", 2400.0, 94.1748218, 66.1487121),
+    ("Polaris", 3000.0, 102.6114536, 66.2186823),
+    ("Aldebaran", 1000.0, 55.8371249, -5.5380619),
+    ("Aldebaran", 1600.0, 64.2011629, -5.4958346),
+    ("Aldebaran", 1900.0, 68.3912756, -5.4744725),
+    ("Aldebaran", 2000.0, 69.7891841, -5.4673211),
+    ("Aldebaran", 2100.0, 71.1876952, -5.4601557),
+    ("Aldebaran", 2400.0, 75.3868453, -5.4385855),
+    ("Aldebaran", 3000.0, 83.8013903, -5.3951933),
+    ("Spica", 1000.0, 189.9149912, -1.9834320),
+    ("Spica", 1600.0, 198.2634726, -2.0249876),
+    ("Spica", 1900.0, 202.4459691, -2.0469805),
+    ("Spica", 2000.0, 203.8413628, -2.0544872),
+    ("Spica", 2100.0, 205.2373712, -2.0620807),
+    ("Spica", 2400.0, 209.4290853, -2.0853754),
+    ("Spica", 3000.0, 217.8290831, -2.1342192),
+    ("Antares", 1000.0, 235.8294728, -4.4376904),
+    ("Antares", 1600.0, 244.1817389, -4.5168678),
+    ("Antares", 1900.0, 248.3662242, -4.5566623),
+    ("Antares", 2000.0, 249.7622953, -4.5699517),
+    ("Antares", 2100.0, 251.1589884, -4.5832519),
+    ("Antares", 2400.0, 255.3528006, -4.6232084),
+    ("Antares", 3000.0, 263.7571943, -4.7032912),
+    ("Regulus", 1000.0, 135.9551838, 0.4272065),
+    ("Regulus", 1600.0, 144.2722157, 0.4510406),
+    ("Regulus", 1900.0, 148.4389910, 0.4615534),
+    ("Regulus", 2000.0, 149.8291445, 0.4648489),
+    ("Regulus", 2100.0, 151.2199128, 0.4680398),
+    ("Regulus", 2400.0, 155.3959062, 0.4769842),
+    ("Regulus", 3000.0, 163.7644561, 0.4920368),
+    ("Sirius", 1000.0, 90.3249902, -39.3783666),
+    ("Sirius", 1600.0, 98.5729258, -39.5137924),
+    ("Sirius", 1900.0, 102.7037261, -39.5823310),
+    ("Sirius", 2000.0, 104.0816778, -39.6053035),
+    ("Sirius", 2100.0, 105.4601394, -39.6283401),
+    ("Sirius", 2400.0, 109.5985855, -39.6978407),
+    ("Sirius", 3000.0, 117.8892360, -39.8386533),
+    ("Pollux", 1000.0, 99.4408506, 6.6095711),
+    ("Pollux", 1600.0, 107.6982573, 6.6551002),
+    ("Pollux", 1900.0, 111.8353634, 6.6770229),
+    ("Pollux", 2000.0, 113.2156482, 6.6842022),
+    ("Pollux", 2100.0, 114.5965581, 6.6913163),
+    ("Pollux", 2400.0, 118.7430391, 6.7122628),
+    ("Pollux", 3000.0, 127.0528422, 6.7523239),
 ];
 
 /// Signed shortest angular separation in longitude (handles the 0/360 wrap).
@@ -288,8 +356,7 @@ pub fn sep_arcsec(lon1: f64, lat1: f64, lon2: f64, lat2: f64) -> f64 {
 
 /// Swiss `fixstar2` J2000 places at full double precision for 16 stars (same
 /// flags as above): `(name, ecliptic longitude deg, ecliptic latitude deg)`.
-/// These are the recorded values of the original Hipparcos cross-validation
-/// test, not hand-typed.
+/// Recorded from `swe_fixstar2` output, not hand-typed.
 pub const SWISS_J2000_FULL: &[(&str, f64, f64)] = &[
     ("Aldebaran", 69.789_183_983_576_72, -5.467_321_051_715_642),
     ("Sirius", 104.081_676_762_978_83, -39.605_303_481_139_92),
