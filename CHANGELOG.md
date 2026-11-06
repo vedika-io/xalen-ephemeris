@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **ΔT uncertainty envelope** (`delta_t_with_uncertainty`, `to_tt_with_sigma`,
+  `jd_tt_with_sigma`) was rebuilt from public-domain sources only: NASA's
+  "Uncertainty in Delta T" page (Morrison & Stephenson parabola, Huber bound)
+  and the error column of USNO's `historic_deltat.data`, with a 0.11 s floor.
+  It replaces a lookup table taken from a source whose licence is not compatible
+  with Apache-2.0; upgrade from 0.6.0 if you need a clean licence chain. The ΔT
+  values and the SMH2016 spline are unchanged. Reported σ in seconds, old → new:
+  −2000 1080 → 3732, −720 180 → 516, AD 0 90 → 265, 1000 15 → 54, 1700 5 → 12,
+  1800 0.5 → 3.5, 1900 0.1 → 0.22, 2000 0.1 → 0.11. Years after 2016 are
+  unchanged.
+
 ### Fixed
 - **Lunar eclipses** are found and classified from Earth's umbral and penumbral
   shadow cones (Danjon) instead of thresholds on the Moon's latitude at Full

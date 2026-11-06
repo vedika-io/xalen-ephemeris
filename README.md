@@ -54,7 +54,7 @@ println!("{}", Nakshatra::from_longitude_deg(sid)); // Swati
 
 - **Time systems** -- UT1 / TT / TDB Julian Day types, UTC↔TAI with the full
   leap-second table, and a genuine Stephenson–Morrison–Hohenkerk 2016 ΔT spline
-  with a published per-epoch σ envelope
+  with a per-epoch σ envelope built from NASA and USNO public-domain sources
 
 - **15 asteroids** -- the big 4 (Ceres, Pallas, Juno, Vesta), Hygeia, Astraea, Psyche, Eros, Lilith (1181), centaurs (Pholus, Nessus), and TNOs (Eris, Sedna, Makemake, Haumea), plus an external element loader for any asteroid with known orbital elements
 
