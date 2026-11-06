@@ -13,23 +13,23 @@ all language bindings.
 
 ## Quick start
 
-> **Availability:** the Rust crates are on crates.io at the **0.3.1** line (pin
-> `0.3` or depend on this repo for the newer 0.4.x+ work, which is not yet
-> published). The **Node.js (`npm install xalen`) and Python (`pip install xalen`)
-> packages are forthcoming — not yet published.** There is an unrelated `xalen`
-> package on PyPI (a separate XALEN SDK); it is **not** these ephemeris bindings.
-> Until the bindings publish, build them from source: `cd crates/xalen-python &&
-> maturin develop` and `cd crates/xalen-node && napi build --release`.
+> **Availability:** the Rust crates are on crates.io and the Python binding is on
+> PyPI as `xalen`. The browser / WASM build is on npm as `@xalen/wasm`. The
+> **native Node.js addon (`npm install xalen`) is not yet published**; until it
+> is, build it from source: `cd crates/xalen-node && napi build --release`.
 
 ```bash
-# Rust (crates.io 0.3.1 line; pin 0.3 or use a git/path dep for newer work)
+# Rust
 cargo add xalen-ephem xalen-ayanamsa xalen-houses xalen-time xalen-stars xalen-vedic
 
-# Node.js — FORTHCOMING (not yet on npm); build from source for now
-npm install xalen
-
-# Python — FORTHCOMING (not yet on PyPI as these bindings); build from source for now
+# Python
 pip install xalen
+
+# Browser / WASM
+npm install @xalen/wasm
+
+# Node.js native addon — FORTHCOMING (not yet on npm); build from source for now
+npm install xalen
 ```
 
 ---

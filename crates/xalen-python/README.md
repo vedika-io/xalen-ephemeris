@@ -2,7 +2,7 @@
 
 **Pure-Rust astronomical & astrology ephemeris for Python — VSOP87 planets, Vedic/Western/KP, house systems, ayanamsa, fixed stars, numerology. A drop-in for `pyswisseph`, with no AGPL and no data files to ship.**
 
-[![PyPI](https://img.shields.io/pypi/v/xalen.svg)](https://pypi.org/project/xalen/) <!-- coming soon: not yet published -->
+[![PyPI](https://img.shields.io/pypi/v/xalen.svg)](https://pypi.org/project/xalen/)
 [![CI](https://github.com/vedika-io/xalen-ephemeris/actions/workflows/ci.yml/badge.svg)](https://github.com/vedika-io/xalen-ephemeris/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](https://github.com/vedika-io/xalen-ephemeris/blob/main/LICENSE)
 
@@ -13,15 +13,10 @@
 ## Install
 
 ```bash
-# FORTHCOMING — these ephemeris bindings are NOT on PyPI yet.
 pip install xalen
 ```
 
-> **Pre-publish note:** the `xalen` ephemeris wheel is **not on PyPI yet** (the
-> badge above is a placeholder). Be aware that an **unrelated** package also named
-> `xalen` currently exists on PyPI (a separate "XALEN SDK") — `pip install xalen`
-> today does **not** install these bindings. Until the ephemeris wheel ships, build
-> it locally from the repo:
+To build from the repository instead:
 
 ```bash
 pip install maturin
