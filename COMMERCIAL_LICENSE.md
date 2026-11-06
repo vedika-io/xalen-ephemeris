@@ -55,9 +55,10 @@ open-source engine contains no license checks or telemetry, ever.
 
 Any warranty or IP indemnification provided under a commercial license is
 **capped at the fees paid in the trailing twelve months** and **excludes
-third-party data and upstream components** (JPL ephemerides, VSOP87, ELP2000,
-the Yale Bright Star Catalogue/CDS, ERFA, IAU-CSN). XALEN retains sole control of the defense and
-settlement of indemnified claims. This page is indicative; the **signed
+third-party data and upstream components** (including, without limitation, JPL
+ephemerides, VSOP87, ELP2000, the Yale Bright Star Catalogue, ERFA, IAU-CSN and
+the other sources credited in `NOTICE`). XALEN retains sole control of the
+defense and settlement of indemnified claims. This page is indicative; the **signed
 commercial agreement** is the binding instrument.
 
 ## Contact
