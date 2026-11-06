@@ -20,9 +20,10 @@ pub enum DeltaTModel {
     ///
     /// The spline's last fitted knot is AD 2016. Beyond it the value is an
     /// extrapolation and `delta_t_with_uncertainty` widens σ accordingly.
-    /// The published model carries a scalar per-epoch error envelope only —
-    /// there is NO published coefficient covariance matrix, so none is claimed.
-    /// See CREDITS.md / docs/ACCURACY.md.
+    /// The paper publishes no coefficient covariance matrix, so none is
+    /// claimed; the scalar per-epoch σ envelope is XALEN's own, assembled from
+    /// public-domain sources (see `delta_t_with_uncertainty`, CREDITS.md and
+    /// docs/ACCURACY.md).
     StephensonMorrisonHohenkerk2016,
     /// Espenak & Meeus (2006) -- NASA polynomial expressions.
     EspenakMeeus2006,
@@ -55,20 +56,22 @@ const SMH_LAST_KNOT_YEAR: f64 = 2016.0;
 ///   * [`DeltaTModel::Zero`] — ΔT is identically 0 by construction, so σ = 0.
 ///     (Returning the SMH envelope here would falsely attribute uncertainty to a
 ///     value the caller asked to be exactly zero.)
-///   * [`DeltaTModel::StephensonMorrisonHohenkerk2016`] — the published NAO/SMH
-///     per-epoch scalar error envelope inside the fitted era, widened past the
-///     last fitted knot (max of the smooth NAO envelope and the Huber random
-///     walk). This is the only model with a published companion σ.
+///   * [`DeltaTModel::StephensonMorrisonHohenkerk2016`] — XALEN's own scalar
+///     1-σ envelope, built only from public-domain sources (NASA eclipse
+///     pages by F. Espenak and USNO Earth-orientation files; see
+///     `historical_sigma` in the source for the segments and their citations)
+///     and floored at 0.11 s. Past the last fitted knot it is the Huber
+///     random-walk bound. This is the only model for which a σ is offered.
 ///   * [`DeltaTModel::EspenakMeeus2006`] / [`DeltaTModel::MorrisonStephenson2004`]
-///     — these polynomial fits ship NO published per-epoch σ. We do NOT borrow
-///     the SMH envelope (the fits differ from SMH by far more than the SMH σ at
-///     many epochs, so the SMH envelope would understate the real disagreement).
+///     — these polynomial fits ship NO per-epoch σ. We do NOT borrow the SMH
+///     envelope (the fits differ from SMH by far more than the SMH σ at many
+///     epochs, so the SMH envelope would understate the real disagreement).
 ///     σ is returned as `f64::NAN` to signal "uncertainty unavailable for this
 ///     model" rather than a fabricated number.
 pub fn delta_t_with_uncertainty(jd_ut: f64, model: &DeltaTModel) -> (f64, f64) {
     let dt = delta_t(jd_ut, model);
-    // σ is only published for the SMH2016 model. Zero has σ = 0 by construction;
-    // the polynomial fits carry no published per-epoch envelope.
+    // σ is only offered for the SMH2016 model. Zero has σ = 0 by construction;
+    // the polynomial fits carry no per-epoch envelope.
     match model {
         DeltaTModel::Zero => return (dt, 0.0),
         DeltaTModel::EspenakMeeus2006 | DeltaTModel::MorrisonStephenson2004 => {
@@ -78,26 +81,16 @@ pub fn delta_t_with_uncertainty(jd_ut: f64, model: &DeltaTModel) -> (f64, f64) {
     }
     let year = jd_to_year(jd_ut);
     let sigma = if year > SMH_LAST_KNOT_YEAR {
-        // Past the last fitted spline knot (AD 2016) ΔT is an extrapolation.
-        // Two published uncertainty estimates exist for this regime and they
-        // disagree by ~5×: the NAO/SMH scalar envelope (smooth lod-trend, ≈6 s
-        // at 2050 / ≈10 s at 2100) and Espenak's Huber Brownian-motion model
-        // (random walk, ≈15.5 s at 2050 / ≈47.9 s at 2100). We report the
-        // LARGER of the two so the stated σ never understates: the smooth
-        // envelope assumes the long-term trend holds, the random walk does not,
-        // and for a process driven by unpredictable core-mantle coupling the
-        // more conservative bound is the honest one. Floored at the observed-era
-        // precision (0.1 s). Refs: NAO "Earth Rotation" σ table; EclipseWise
-        // "Uncertainty in ΔT" (Huber calibration year +2005).
-        published_sigma(year)
-            .max(huber_sigma(year, 2005.0))
-            .max(0.1)
+        // Past the last fitted spline knot (AD 2016) ΔT is an extrapolation and
+        // σ follows Huber's Brownian-motion-with-drift bound calibrated at
+        // AD 2005 (≈15.5 s at 2050, ≈47.9 s at 2100), as given on NASA's
+        // "Uncertainty in Delta T" page. It grows with the distance from the
+        // last observed epoch, so it never understates a trend that fails to
+        // hold. The jump from the fitted-era floor to this bound at 2016 is
+        // deliberate: it is the step from fitted to extrapolated.
+        huber_sigma(year, HUBER_FUTURE_CALIBRATION_YEAR).max(SIGMA_FLOOR_S)
     } else {
-        // Within the fitted era use the published NAO/SMH scalar error envelope
-        // (eclipse/occultation fit scatter, per epoch). This replaces the old
-        // ad-hoc Morrison–Stephenson parabola σ = 0.8·((Y−1820)/100)², which
-        // overstated ancient σ by ~3× (≈516 s vs the published 180 s at −720).
-        published_sigma(year).max(0.1)
+        historical_sigma(year)
     };
     (dt, sigma)
 }
@@ -106,16 +99,27 @@ fn jd_to_year(jd: f64) -> f64 {
     2000.0 + (jd - 2_451_545.0) / 365.25
 }
 
-/// Espenak's Huber Brownian-motion 1-σ uncertainty model for ΔT outside the
-/// directly-observed era (EclipseWise, "Uncertainty in ΔT"):
+/// Calibration year of Huber's bound for targets after the last fitted knot
+/// (NASA, "Uncertainty in Delta T": "the calibration year is 2005 CE for target
+/// years in the future").
+const HUBER_FUTURE_CALIBRATION_YEAR: f64 = 2005.0;
+
+/// Calibration year of Huber's bound for targets before 500 BCE (same page:
+/// "The calibration year is taken as -500 for target years before 500 BCE").
+const HUBER_PAST_CALIBRATION_YEAR: f64 = -500.0;
+
+/// Huber's Brownian-motion-with-drift 1-σ uncertainty of ΔT outside the
+/// directly observed era, as given on NASA's "Uncertainty in Delta T" page by
+/// F. Espenak (<https://eclipse.gsfc.nasa.gov/SEhelp/uncertainty2004.html>,
+/// from P. J. Huber, 2000):
 ///
 /// ```text
 /// σ = 365.25 · N · sqrt[ (N·Q/3)·(1 + N/M) ] / 1000   seconds
 /// ```
 ///
 /// with `N = |target_year − calibration_year|`, `M = 2500` yr and
-/// `Q = 0.058 ms²/yr`. The published calibration year is +2005 for future
-/// targets (and −500 for targets before 500 BCE). Yields ≈47.9 s at 2100.
+/// `Q = 0.058 ms²/yr`. NASA's Table 3 lists the results at 500-year steps
+/// (e.g. 622 s at −1000, 612 s at 2500, 1885 s at 3000); the tests pin them.
 fn huber_sigma(year: f64, calibration_year: f64) -> f64 {
     const M: f64 = 2500.0;
     const Q: f64 = 0.058; // ms² / yr
@@ -134,10 +138,7 @@ fn huber_sigma(year: f64, calibration_year: f64) -> f64 {
 // *regression* spline: continuity of value / 1st / 2nd derivative at interior
 // knots is built into the coefficients, so they are read in mechanically — we
 // do NOT re-solve a tridiagonal system. The 54 spline rows are transcribed and
-// checked directly against the SMH2016 Table-S15 supplement; the lod-integral
-// tail formula and the eps_tab σ-envelope convention were cross-checked against
-// ytliu0/DeltaT (MIT) — note its spline table is the 2020/2025-extended variant
-// with different knots and c1/c2, so only the tail/σ conventions transfer.
+// checked directly against the SMH2016 Table-S15 supplement.
 
 /// Start year `K_i` of each spline interval `[K_i, K_{i+1}]` (row 1 starts at
 /// −720; the implied end of the last interval is [`SMH_LAST_KNOT_YEAR`]).
@@ -267,87 +268,105 @@ fn smh_lod_tail(year: f64, c: f64) -> f64 {
     c + 31.4115 * tau * tau + 284.843_580_525_142_4 * (0.448_798_950_512_827_6 * (tau + 0.75)).cos()
 }
 
-/// Published NAO/SMH scalar 1-σ error envelope for ΔT (seconds). These are the
-/// per-epoch uncertainties the model authors publish alongside ΔT (derived from
-/// eclipse/occultation fit scatter); there is no coefficient covariance matrix.
+/// Smallest 1-σ ΔT uncertainty XALEN reports anywhere (seconds).
 ///
-/// Reproduced faithfully from the NAO "Earth Rotation — ΔT" table as a
-/// **left-continuous step lookup** (the largest tabulated year ≤ `year` gives
-/// the value) over `[−2000, 2500]` — exactly the convention of the reference
-/// implementation `ytliu0/DeltaT::DeltaT_error_estimate`. In the historical era
-/// σ decreases toward the present, so the step always takes the older, larger
-/// value and never understates. Outside the table, σ follows the NAO quadratic
-/// tails `0.74e-4·(Y−1825)²` (before −2000) and `2.2e-4·(Y−1825)²` (from 2500),
-/// each calibrated to join the table endpoints (−2000→≈1080 s, 2500→≈100 s);
-/// the NAO note flags these tails as "probably not reliable" extrapolations.
-fn published_sigma(year: f64) -> f64 {
-    // (tabulated year, 1-σ seconds) — all 44 NAO rows, verbatim.
-    const TAB: [(f64, f64); 44] = [
-        (-2000.0, 1080.0),
-        (-1600.0, 720.0),
-        (-900.0, 360.0),
-        (-720.0, 180.0),
-        (-700.0, 170.0),
-        (-600.0, 160.0),
-        (-500.0, 150.0),
-        (-400.0, 130.0),
-        (-300.0, 120.0),
-        (-200.0, 110.0),
-        (-100.0, 100.0),
-        (0.0, 90.0),
-        (100.0, 80.0),
-        (200.0, 70.0),
-        (300.0, 60.0),
-        (400.0, 50.0),
-        (500.0, 40.0),
-        (700.0, 30.0),
-        (800.0, 25.0),
-        (900.0, 20.0),
-        (1000.0, 15.0),
-        (1620.0, 20.0),
-        (1660.0, 15.0),
-        (1670.0, 10.0),
-        (1680.0, 5.0),
-        (1730.0, 2.0),
-        (1770.0, 1.0),
-        (1800.0, 0.5),
-        (1802.0, 0.4),
-        (1805.0, 0.3),
-        (1809.0, 0.2),
-        (1831.0, 0.1),
-        (1870.0, 0.05),
-        (2025.0, 0.1),
-        (2025.5, 0.2),
-        (2026.0, 1.0),
-        (2030.0, 2.0),
-        (2040.0, 4.0),
-        (2050.0, 6.0),
-        (2100.0, 10.0),
-        (2200.0, 20.0),
-        (2300.0, 30.0),
-        (2400.0, 50.0),
-        (2500.0, 100.0),
-    ];
-    let lo = TAB[0].0;
-    let hi = TAB[TAB.len() - 1].0;
-    if year < lo {
-        let d = year - 1825.0;
-        return 0.74e-4 * d * d;
-    }
-    if year >= hi {
-        let d = year - 1825.0;
-        return 2.2e-4 * d * d;
-    }
-    // Left-continuous step: largest tabulated year ≤ `year`.
-    let mut sigma = TAB[0].1;
-    for &(y, s) in &TAB {
-        if y <= year {
-            sigma = s;
-        } else {
-            break;
-        }
-    }
-    sigma
+/// From the start of the atomic-time era the USNO table below quotes
+/// measurement errors of a few milliseconds, but the SMH2016 spline is a smooth
+/// regression fit and does not follow every wiggle of the measured ΔT. Taking
+/// the monthly TT−UT1 values published by USNO (`deltat.data`, 1973–2016) as
+/// truth, the spline departs from them with an RMS of 0.1075 s (largest single
+/// departure 0.27 s, in 1978). The floor is that RMS rounded up to 0.01 s, so
+/// the reported σ describes the model rather than the observations, and it is
+/// applied at every epoch so the envelope stays monotone towards the present.
+const SIGMA_FLOOR_S: f64 = 0.11;
+
+/// Year at which the parabolic σ of Morrison & Stephenson (2004) is centred:
+/// `σ = 0.8·t²` seconds with `t = (year − 1820)/100`.
+const MS2004_SIGMA_CENTRE_YEAR: f64 = 1820.0;
+
+/// Earliest year to which the Morrison–Stephenson parabola is applied;
+/// earlier epochs use Huber's bound (and never less than the parabola).
+const MS2004_SIGMA_FIRST_YEAR: f64 = -1000.0;
+
+/// Plateau σ (seconds) from the "decade fluctuations" in ΔT over 1300–1600 CE
+/// (NASA: "approximately 20 seconds"). The parabola falls to exactly this value
+/// at `1820 − 500 = 1320`, so a `max` of the two joins continuously.
+const DECADE_FLUCTUATION_SIGMA_S: f64 = 20.0;
+
+/// First epoch of the USNO telescopic-era error table, [`USNO_SIGMA_STEPS`].
+/// The plateau above is held up to here.
+const TELESCOPIC_ERA_START_YEAR: f64 = 1657.0;
+
+/// Morrison & Stephenson (2004) standard error of ΔT, as quoted on NASA's
+/// "Uncertainty in Delta T" page (Table 1: 636 s at −1000, 265 s at 0,
+/// 54 s at 1000, 31 s at 1200): `σ = 0.8·((year − 1820)/100)²` seconds.
+fn parabolic_sigma(year: f64) -> f64 {
+    let t = (year - MS2004_SIGMA_CENTRE_YEAR) / 100.0;
+    0.8 * t * t
+}
+
+/// Telescopic-era ΔT errors from USNO's "Historic Delta T and LOD values from
+/// McCarthy and Babcock (1986)" (`historic_deltat.data`, column "error" of
+/// TDT−UT1, half-yearly rows 1657.0 to 1984.5), reduced to a non-increasing
+/// step function: for any year `y`, the entry `(row_year, error)` is the first
+/// one with `row_year ≥ y`, and `error` is the largest error in the USNO file
+/// at every row dated `y` or later. Entries are those rows whose error strictly
+/// exceeds the error of every later row (the last such row where values tie),
+/// copied verbatim; the unit test `usno_steps_pin_the_source_rows` keeps them
+/// tied to the source lines. The envelope can therefore only shrink towards
+/// the present, never understates any later USNO row, and the first entry
+/// (19 s) is the file's overall maximum.
+#[rustfmt::skip]
+const USNO_SIGMA_STEPS: [(f64, f64); 58] = [
+    (1694.0, 19.0), (1695.0, 18.0), (1696.0, 17.0), (1696.5, 16.0),
+    (1697.5, 15.0), (1698.5, 14.0), (1700.5, 12.0), (1704.5, 11.0),
+    (1716.5, 10.0), (1726.5, 9.0), (1728.5, 6.3), (1742.5, 5.9),
+    (1743.0, 5.8), (1743.5, 5.6), (1744.0, 5.2), (1744.5, 4.8),
+    (1750.5, 4.6), (1751.0, 4.5), (1751.5, 4.3), (1752.0, 4.0),
+    (1752.5, 3.8), (1761.0, 3.6), (1816.0, 3.5), (1817.0, 3.0),
+    (1818.0, 2.9), (1819.0, 2.8), (1819.5, 2.2), (1820.0, 2.15),
+    (1821.0, 1.86), (1833.0, 1.59), (1834.0, 1.56), (1835.0, 1.27),
+    (1835.5, 0.97), (1853.0, 0.87), (1854.0, 0.84), (1855.0, 0.81),
+    (1856.0, 0.74), (1859.0, 0.71), (1860.0, 0.70), (1860.5, 0.51),
+    (1861.0, 0.49), (1861.5, 0.44), (1873.5, 0.38), (1874.0, 0.31),
+    (1876.5, 0.25), (1920.5, 0.22), (1921.0, 0.17), (1921.5, 0.15),
+    (1922.0, 0.11), (1926.5, 0.09), (1927.0, 0.07), (1927.5, 0.05),
+    (1939.5, 0.04), (1940.0, 0.03), (1945.5, 0.02), (1955.5, 0.01),
+    (1961.5, 0.003), (1984.5, 0.001),
+];
+
+/// XALEN's 1-σ ΔT uncertainty envelope (seconds) for `year ≤ 2016`, with every
+/// segment taken from a source that allows reuse:
+///
+/// | years                | σ                                                     | source |
+/// |----------------------|-------------------------------------------------------|--------|
+/// | below −1000          | max(Huber bound, parabola) (calibration year −500)    | NASA, Uncertainty in Delta T (Huber 2000; Morrison & Stephenson 2004) |
+/// | −1000 to 1657        | parabola `0.8·((Y−1820)/100)²`, at least 20 s         | same page: Table 1 and the 1300–1600 "approximately 20 seconds" |
+/// | 1657 to 1984.5       | non-increasing step of the USNO error column          | USNO `historic_deltat.data` |
+/// | after 1984.5         | the floor                                             | derived against USNO `deltat.data` |
+///
+/// and never below [`SIGMA_FLOOR_S`]. The pieces join continuously or step
+/// down towards the present, so the envelope never rises with the year. Years
+/// after the last fitted knot use [`huber_sigma`] directly, see
+/// [`delta_t_with_uncertainty`].
+///
+/// The Huber and parabolic expressions are published mathematics; the NASA
+/// page is a US Government work (<https://eclipse.gsfc.nasa.gov/SEpubs/copyright.html>:
+/// "NASA material is not protected by copyright unless noted") and the USNO
+/// files carry "Distribution Statement A. Approved for public release:
+/// distribution unlimited." (<https://maia.usno.navy.mil/products/deltaT>).
+fn historical_sigma(year: f64) -> f64 {
+    let envelope = if year < MS2004_SIGMA_FIRST_YEAR {
+        huber_sigma(year, HUBER_PAST_CALIBRATION_YEAR).max(parabolic_sigma(year))
+    } else if year < TELESCOPIC_ERA_START_YEAR {
+        parabolic_sigma(year).max(DECADE_FLUCTUATION_SIGMA_S)
+    } else {
+        USNO_SIGMA_STEPS
+            .iter()
+            .find(|&&(row_year, _)| row_year >= year)
+            .map_or(0.0, |&(_, error)| error)
+    };
+    envelope.max(SIGMA_FLOOR_S)
 }
 
 fn espenak_meeus(jd_ut: f64) -> f64 {
@@ -475,7 +494,7 @@ mod tests {
     fn uncertainty_is_model_specific_not_borrowed_from_smh() {
         // Probe an ancient epoch and a modern epoch — both must obey the rule.
         for jd in [2_451_545.0, 2_451_545.0 - 365.25 * 3000.0] {
-            // Zero: ΔT == 0 AND σ == 0 (NOT the SMH envelope of ~180 s at −720).
+            // Zero: ΔT == 0 AND σ == 0 (NOT the SMH envelope of ~516 s at −720).
             let (dt0, s0) = delta_t_with_uncertainty(jd, &DeltaTModel::Zero);
             assert_eq!(dt0, 0.0, "Zero ΔT must be 0 at JD {jd}");
             assert_eq!(
@@ -483,7 +502,7 @@ mod tests {
                 "Zero σ must be 0, not the SMH envelope, at JD {jd}"
             );
 
-            // Espenak–Meeus and Morrison–Stephenson: no published σ → NaN.
+            // Espenak–Meeus and Morrison–Stephenson: no per-epoch σ offered → NaN.
             for model in [
                 DeltaTModel::EspenakMeeus2006,
                 DeltaTModel::MorrisonStephenson2004,
@@ -495,7 +514,7 @@ mod tests {
                 );
             }
 
-            // SMH2016 keeps a real, finite, positive published σ.
+            // SMH2016 keeps a real, finite, positive σ.
             let (_, s_smh) =
                 delta_t_with_uncertainty(jd, &DeltaTModel::StephensonMorrisonHohenkerk2016);
             assert!(
@@ -606,14 +625,12 @@ mod tests {
         let (_, sigma_2010) = delta_t_with_uncertainty(year_to_jd(2010.0), &model);
         let (_, sigma_2100) = delta_t_with_uncertainty(year_to_jd(2100.0), &model);
         assert_eq!(
-            sigma_2010, 0.1,
-            "2010 is within the fitted era; σ floors at 0.1 s, got {sigma_2010}"
+            sigma_2010, SIGMA_FLOOR_S,
+            "2010 is within the fitted era; σ sits at the floor, got {sigma_2010}"
         );
-        // Beyond 2016 we report max(published envelope, Huber random walk). The
-        // Huber term (calibration year 2005) dominates the future: ≈47.9 s at
-        // 2100 and ≈15.5 s at 2050. A flat 0.1 s, the NAO smooth envelope alone
-        // (≈10 s at 2100), or the Morrison-Stephenson parabola (≈6.3 s) would
-        // all understate this.
+        // Beyond 2016 we report the Huber random-walk bound (calibration year
+        // 2005): ≈47.9 s at 2100 and ≈15.5 s at 2050. A flat floor or the
+        // Morrison-Stephenson parabola (≈6.3 s at 2100) would understate this.
         assert!(
             (sigma_2100 - 47.9).abs() < 1.0,
             "2100 σ should match the Huber bound ≈47.9 s, got {sigma_2100}"
@@ -625,37 +642,249 @@ mod tests {
         );
     }
 
-    /// σ must FAITHFULLY reproduce the published NAO envelope as a left-continuous
-    /// step lookup (not interpolation, which understates), with quadratic tails
-    /// outside [−2000, 2500]. Reference: ytliu0/DeltaT::DeltaT_error_estimate.
+    fn sigma_at(year: f64) -> f64 {
+        delta_t_with_uncertainty(
+            year_to_jd(year),
+            &DeltaTModel::StephensonMorrisonHohenkerk2016,
+        )
+        .1
+    }
+
+    /// The σ envelope must reproduce the numbers printed on NASA's
+    /// "Uncertainty in Delta T" page (F. Espenak; US Government work), which
+    /// are the source of the parabola and the Huber bound. Table values are
+    /// rounded to whole seconds on the page, hence the half-second tolerance.
     #[test]
-    fn sigma_reproduces_published_step_envelope() {
-        let model = DeltaTModel::StephensonMorrisonHohenkerk2016;
-        let sig = |y: f64| delta_t_with_uncertainty(year_to_jd(y), &model).1;
-        // Exact tabulated knots.
-        assert!(
-            (sig(-720.0) - 180.0).abs() < 1e-9,
-            "−720 → 180 s, got {}",
-            sig(-720.0)
-        );
-        assert!(
-            (sig(1000.0) - 15.0).abs() < 1e-9,
-            "1000 → 15 s, got {}",
-            sig(1000.0)
-        );
-        // Between knots the step takes the OLDER, larger value (never understates):
-        // −1000 ∈ [−1600, −900) → 720 s (a linear interp would give ≈411 s).
-        assert!(
-            (sig(-1000.0) - 720.0).abs() < 1e-9,
-            "−1000 → 720 s (step), got {}",
-            sig(-1000.0)
-        );
-        // Deep ancient uses the NAO quadratic tail, NOT a clamp at 1080 s:
-        // −3000 → 0.74e-4·(−3000−1825)² ≈ 1722.8 s.
-        assert!(
-            (sig(-3000.0) - 1722.8).abs() < 1.0,
-            "−3000 → ≈1723 s (quad tail), got {}",
-            sig(-3000.0)
-        );
+    fn sigma_matches_nasa_published_tables() {
+        // Table 1 (−1000 to 1200): σ = 0.8·((year − 1820)/100)².
+        for (year, nasa) in [
+            (-1000.0, 636.0),
+            (-500.0, 431.0),
+            (0.0, 265.0),
+            (500.0, 139.0),
+            (1000.0, 54.0),
+            (1200.0, 31.0),
+        ] {
+            let got = sigma_at(year);
+            assert!(
+                (got - nasa).abs() <= 0.5,
+                "σ({year}) = {got}, NASA Table 1 prints {nasa}"
+            );
+        }
+        // Table 3 (Huber bound, calibration −500 before 500 BCE, +2005 after
+        // the last fitted knot). −1000 is printed as 622 s there; our envelope
+        // takes the larger parabola (636 s) at that epoch, so it is checked
+        // against the Huber function itself.
+        assert!((huber_sigma(-1000.0, HUBER_PAST_CALIBRATION_YEAR) - 622.0).abs() <= 0.5);
+        for (year, nasa) in [
+            (-4000.0, 16291.0),
+            (-3500.0, 12378.0),
+            (-3000.0, 8978.0),
+            (-2500.0, 6094.0),
+            (-2000.0, 3732.0),
+            (-1500.0, 1900.0),
+            (2500.0, 612.0),
+            (3000.0, 1885.0),
+            (3500.0, 3711.0),
+            (4000.0, 6068.0),
+            (4500.0, 8946.0),
+            (5000.0, 12341.0),
+        ] {
+            let got = sigma_at(year);
+            assert!(
+                (got - nasa).abs() <= 0.5,
+                "σ({year}) = {got}, NASA Table 3 prints {nasa}"
+            );
+        }
+        // Table 2 (Stephenson & Houlden 1986) is a lower reference for the
+        // telescopic era: the envelope must not fall below it.
+        for (year, nasa) in [(1700.0, 5.0), (1800.0, 1.0), (1900.0, 0.1)] {
+            assert!(
+                sigma_at(year) >= nasa,
+                "σ({year}) = {} understates NASA Table 2 ({nasa})",
+                sigma_at(year)
+            );
+        }
+        // About 20 s over 1300–1600 ("approximately 20 seconds").
+        for year in [1300.0, 1450.0, 1600.0] {
+            assert!(
+                (sigma_at(year) - 20.0).abs() <= 1.7,
+                "σ({year}) = {}",
+                sigma_at(year)
+            );
+        }
+    }
+
+    /// Every value in [`USNO_SIGMA_STEPS`] is pinned to the source line of
+    /// USNO's `historic_deltat.data` it was copied from (columns: year,
+    /// TDT−UT1, error, LOD, LOD error). The lines below are those rows
+    /// verbatim, so editing the table without the source fails here.
+    #[test]
+    fn usno_steps_pin_the_source_rows() {
+        const SOURCE_ROWS: [&str; 58] = [
+            "1694.000     21       19        -1       74",
+            "1695.000     21       18         0       71",
+            "1696.000     20       17         0       67",
+            "1696.500     20       16         0       65",
+            "1697.500     20       15         0       59",
+            "1698.500     20       14         0       55",
+            "1700.500     21       12         0       38",
+            "1704.500     19       11        -1       43",
+            "1716.500     21       10         1       35",
+            "1726.500     19.1      9.0      -2.1     33.9",
+            "1728.500     17.4      6.3      -1.8     20.2",
+            "1742.500     13.4      5.9      -0.2     22.2",
+            "1743.000     13.3      5.8      -0.2     22.7",
+            "1743.500     13.3      5.6      -0.2     22.6",
+            "1744.000     13.2      5.2      -0.2     21.7",
+            "1744.500     13.2      4.8      -0.2     20.3",
+            "1750.500     13.8      4.6       0.4     17.8",
+            "1751.000     13.9      4.5       0.4     17.9",
+            "1751.500     14.0      4.3       0.3     17.4",
+            "1752.000     14.0      4.0       0.3     16.6",
+            "1752.500     14.1      3.8       0.2     15.6",
+            "1761.000     14.9      3.6       0.3     13.3",
+            "1816.000     11.6      3.5      -0.4     12.2",
+            "1817.000     11.5      3.0      -0.3      9.3",
+            "1818.000     11.4      2.9      -0.2      9.2",
+            "1819.000     11.3      2.8      -0.4      8.9",
+            "1819.500     11.3      2.2      -0.3     10.8",
+            "1820.000     11.13     2.15     -0.48     8.61",
+            "1821.000     10.94     1.86     -1.48     6.21",
+            "1833.000      7.10     1.59     -0.64     4.93",
+            "1834.000      6.89     1.56     -0.49     4.91",
+            "1835.000      6.73     1.27     -0.80     4.84",
+            "1835.500      6.64     0.97     -1.11     4.92",
+            "1853.000      7.03     0.87      0.42     2.37",
+            "1854.000      7.15     0.84      0.26     2.77",
+            "1855.000      7.26     0.81      0.09     2.55",
+            "1856.000      7.23     0.74     -0.14     2.50",
+            "1859.000      7.19     0.71      0.73     1.08",
+            "1860.000      7.35     0.70      0.12     2.36",
+            "1860.500      7.39     0.51      0.19     2.70",
+            "1861.000      7.41     0.49      0.07     1.97",
+            "1861.500      7.45     0.44     -0.41     1.89",
+            "1873.500     -2.08     0.38     -2.10     1.16",
+            "1874.000     -2.48     0.31     -1.96     1.48",
+            "1876.500     -4.14     0.25     -1.45     0.69",
+            "1920.500     21.78     0.22      1.64     0.70",
+            "1921.000     22.06     0.17      1.21     0.84",
+            "1921.500     22.30     0.15      1.26     0.67",
+            "1922.000     22.51     0.11      1.40     0.58",
+            "1926.500     24.25     0.09      0.88     0.22",
+            "1927.000     24.39     0.07      0.01     0.34",
+            "1927.500     24.42     0.05     -0.27     0.29",
+            "1939.500     24.20     0.04      0.95     0.11",
+            "1940.000     24.35     0.03      1.29     0.08",
+            "1945.500     27.04     0.02      1.29     0.85",
+            "1955.500     31.24     0.01      1.37     0.01",
+            "1961.500     33.804    0.003     1.29     0.10",
+            "1984.500     54.087    0.001     1.45     0.04",
+        ];
+        assert_eq!(SOURCE_ROWS.len(), USNO_SIGMA_STEPS.len());
+        for (line, &(year, error)) in SOURCE_ROWS.iter().zip(USNO_SIGMA_STEPS.iter()) {
+            let cols: Vec<&str> = line.split_whitespace().collect();
+            assert_eq!(cols.len(), 5, "malformed source row {line:?}");
+            let src_year: f64 = cols[0].parse().unwrap();
+            let src_error: f64 = cols[2].parse().unwrap();
+            assert_eq!(year, src_year, "year differs from source row {line:?}");
+            assert_eq!(error, src_error, "error differs from source row {line:?}");
+        }
+        // Shape of the reduction: rows on the half-year grid of the source,
+        // later rows strictly smaller (so each kept row exceeds every later one).
+        for pair in USNO_SIGMA_STEPS.windows(2) {
+            assert!(pair[0].0 < pair[1].0 && pair[0].1 > pair[1].1);
+        }
+        for &(year, _) in &USNO_SIGMA_STEPS {
+            assert!((TELESCOPIC_ERA_START_YEAR..=1984.5).contains(&year));
+            assert_eq!(
+                (year * 2.0).fract(),
+                0.0,
+                "{year} is not on the half-year grid"
+            );
+        }
+        // The overall maximum of the file's error column is the first entry.
+        assert_eq!(USNO_SIGMA_STEPS[0].1, 19.0);
+    }
+
+    /// Reference values of the envelope (seconds) at representative epochs, so
+    /// a change to any segment is visible in review.
+    #[test]
+    fn sigma_envelope_reference_values() {
+        for (year, expected) in [
+            (-2000.0, 3731.99),
+            (-1000.0, 636.19),
+            (-720.0, 516.13),
+            (0.0, 264.99),
+            (500.0, 139.39),
+            (1000.0, 53.79),
+            (1600.0, 20.0),
+            (1700.0, 12.0),
+            (1800.0, 3.5),
+            (1900.0, 0.22),
+            (1962.0, SIGMA_FLOOR_S),
+            (2000.0, SIGMA_FLOOR_S),
+            (2015.999, SIGMA_FLOOR_S),
+            (2026.0, 4.91),
+            (2050.0, 15.47),
+            (2100.0, 47.91),
+            (2500.0, 612.18),
+            (3000.0, 1884.66),
+        ] {
+            let got = sigma_at(year);
+            assert!(
+                (got - expected).abs() < 0.01,
+                "σ({year}) = {got}, expected {expected}"
+            );
+        }
+    }
+
+    /// The envelope is finite and positive everywhere, never rises towards the
+    /// present while the model is fitted to data (≤ 2016), never falls once it
+    /// is extrapolated (> 2016), and joins its segments without an upward step.
+    #[test]
+    fn sigma_envelope_is_positive_monotone_and_joined() {
+        let mut year = -50_000.0;
+        let mut previous = f64::INFINITY;
+        while year < 2016.0 {
+            let sigma = sigma_at(year);
+            assert!(
+                sigma.is_finite() && sigma >= SIGMA_FLOOR_S,
+                "σ({year}) = {sigma}"
+            );
+            assert!(
+                sigma <= previous,
+                "σ rises at {year}: {previous} -> {sigma}"
+            );
+            previous = sigma;
+            year += 0.25;
+        }
+        let mut previous = sigma_at(2016.001);
+        let mut year = 2016.25;
+        while year <= 50_000.0 {
+            let sigma = sigma_at(year);
+            assert!(
+                sigma.is_finite() && sigma >= previous,
+                "σ({year}) = {sigma}"
+            );
+            previous = sigma;
+            year += 7.25;
+        }
+        // Continuous where the formulas meet: −1000 (Huber/parabola) and 1320
+        // (parabola/20 s plateau).
+        for year in [MS2004_SIGMA_FIRST_YEAR, 1320.0] {
+            let jump = (sigma_at(year - 1e-6) - sigma_at(year + 1e-6)).abs();
+            assert!(jump < 1e-3, "σ jumps by {jump} at {year}");
+        }
+        // Stepwise-conservative where the USNO table starts (20 s -> 19 s) and
+        // where it ends (0.001 s -> floor): never larger after the step.
+        assert!(sigma_at(TELESCOPIC_ERA_START_YEAR - 1e-6) >= sigma_at(TELESCOPIC_ERA_START_YEAR));
+        // Past the last fitted knot the bound takes over from the floor.
+        assert!(sigma_at(SMH_LAST_KNOT_YEAR + 1e-3) > sigma_at(SMH_LAST_KNOT_YEAR - 1e-3));
+        // Extremes stay finite.
+        for year in [-1.0e9, -1.0e6, 1.0e6, 1.0e9] {
+            let sigma = sigma_at(year);
+            assert!(sigma.is_finite() && sigma > 0.0, "σ({year}) = {sigma}");
+        }
     }
 }

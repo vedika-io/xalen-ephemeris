@@ -26,7 +26,18 @@ Third-Party Acknowledgments:
 - DE440 ephemeris data: NASA/JPL (Jet Propulsion Laboratory)
 - IAU 2006 precession: N. Capitaine, P.T. Wallace, J. Chapront (2003)
 - IAU 2000B nutation: D.D. McCarthy, G. Petit (IERS TN 32)
-- Delta-T model: F.R. Stephenson, L.V. Morrison, C.Y. Hohenkerk (2016)
+- Delta-T model: F.R. Stephenson, L.V. Morrison, C.Y. Hohenkerk (2016),
+  Proc. R. Soc. A 472:20160404 and its electronic supplementary material
+  (spline coefficients, Table S15), used under Creative Commons Attribution 4.0
+  (https://creativecommons.org/licenses/by/4.0/); the original authors and
+  source are credited here. The coefficient values are unchanged.
+- Delta-T uncertainty envelope: formulas from NASA, "Uncertainty in Delta T"
+  (F. Espenak, NASA/GSFC, https://eclipse.gsfc.nasa.gov/SEhelp/uncertainty2004.html;
+  Morrison & Stephenson 2004, Huber 2000) and the error column of the U.S. Naval
+  Observatory file historic_deltat.data (McCarthy & Babcock 1986,
+  https://maia.usno.navy.mil/ser7/historic_deltat.data). The NASA page and the
+  USNO file are U.S. Government material, not protected by copyright; the
+  formulas are published mathematics.
 - Fixed-star catalog: The Hipparcos and Tycho Catalogues, (C) ESA 1997
   (ESA SP-1200), distributed by CDS Strasbourg as catalogue I/239. The
   expanded fixed-star catalog (Vmag <= 6.5) is generated directly from

@@ -58,8 +58,8 @@ impl JdUT1 {
     /// The second tuple element is the **1σ uncertainty of the ΔT (TT−UT1)
     /// model in SECONDS of time** — the time-conversion envelope, NOT a
     /// position or output covariance. It comes verbatim from
-    /// [`delta_t_with_uncertainty`] (the published NAO/SMH per-epoch error
-    /// envelope inside the fitted era, widened past the last fitted knot). A
+    /// [`delta_t_with_uncertainty`] (XALEN's per-epoch envelope built from
+    /// public-domain NASA and USNO sources, widened past the last fitted knot). A
     /// caller may propagate it into apparent-position bounds (Earth rotates
     /// ≈15″/s, so 1 s of ΔT σ ≈ 15″ of geocentric longitude), but this
     /// function does not perform that propagation.
@@ -206,7 +206,7 @@ mod tests {
     fn to_tt_with_sigma_matches_to_tt_and_uncertainty() {
         use crate::delta_t::delta_t_with_uncertainty;
         // Cover the fitted era, an ancient epoch, and a future extrapolation so
-        // both the published-envelope and Huber-tail σ branches are exercised.
+        // both the historical-envelope and Huber-tail σ branches are exercised.
         for jd in [
             2_451_545.0,                   // J2000 (within fitted era)
             2_451_545.0 - 365.25 * 3000.0, // ~1000 BCE (ancient envelope)
@@ -226,7 +226,7 @@ mod tests {
                     "to_tt_with_sigma TT must equal to_tt exactly at JD {jd}"
                 );
                 // σ must equal delta_t_with_uncertainty(jd, model).1 exactly.
-                // For models with no published envelope (Espenak–Meeus,
+                // For models with no σ envelope (Espenak–Meeus,
                 // Morrison–Stephenson) σ is NaN; NaN != NaN under `==`, so
                 // compare via the NaN-aware bit pattern instead.
                 let (_, expected_sigma) = delta_t_with_uncertainty(jd, &model);
