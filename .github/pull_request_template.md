@@ -4,7 +4,7 @@
 
 ## Related issue
 
-<!-- e.g. Closes #123 -->
+Closes #
 
 ## Type of change
 
