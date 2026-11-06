@@ -37,9 +37,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   **CC BY-NC 3.0 IGO** (non-commercial) with a `LICENSE` file and
   `publish = false`. It is an optional, unpublished add-on that depends on
   `xalen-stars`; no published crate depends on it.
-- **`xalen-star-anchors`** crate (Apache-2.0) — commercial-OK single-star
-  reference anchors (Spica) for star-anchored sidereal frames, so the ayanamsa
-  no longer depends on the non-commercial catalogue.
+- **`xalen-star-anchors`** crate (Apache-2.0) — single-star reference anchors
+  (Spica) for star-anchored sidereal frames, so the ayanamsa does not depend on
+  a star list.
 - **`commercial-clean` CI workflow** asserting that no published crate, built
   with default features, depends on `xalen-stars-hip-data` (`cargo tree`
   absence + `nm`/`strings` symbol scan), and a bit-exact Spica anchor regression
@@ -60,8 +60,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **True Chitra ayanamsa** now reads the Spica anchor from `xalen-star-anchors`
-  instead of `xalen_stars::find_by_name`; output is byte-identical and remains
-  Swiss-validated, but the ayanamsa no longer depends on `xalen-stars`.
+  instead of `xalen_stars::find_by_name`, so the ayanamsa no longer depends on
+  `xalen-stars`. The anchor is now derived from the IAU-CSN position and the
+  Bright Star Catalogue proper motion (it equals the new list's Spica row). The
+  anchor moves by −0.004″ in longitude and +0.011″ in latitude at J2000; its
+  latitude proper motion changes from −45.228 to −41.208 mas/yr (−8.0″ in
+  latitude at year 0, +4.0″ at year 3000). The True Chitra ayanamsa itself shifts
+  by −0.004″ at J2000, +0.012″ at year 0 and +0.013″ at year 3000, and still
+  matches Swiss within the unchanged tolerances.
 - **The default star list is now the in-house Bright Star Catalogue list of
   9,096 stars** (was the 8,870-star Hipparcos-derived list). The Hipparcos data
   is CC BY-NC, so it could not be published; the new list is built from the Yale
@@ -69,20 +75,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   crate is free of non-commercial star data by default and keeps a full-size
   list. `find_by_name`, `find_conjunctions*`, `nakshatra_yogatara`,
   `expanded_star_count` and `swe_fixstar_ut` / `swe_fixstar_mag` read it.
-  Measured against Swiss `fixstar2` at J2000: the 38 IAU-named oracle stars are
-  within 0.245″ (median 0.026″). Stars without an IAU name use the Bright Star
-  Catalogue position (RA to 0.1 s, Dec to 1″): against the Hipparcos-derived
-  positions the median separation is 0.64″, 95% are within 2.3″. Over ±1000
-  years the propagated positions differ from Swiss by up to 0.34′ (was 0.07′),
-  because the Bright Star Catalogue proper motions are the older FK5 values.
+  Measured against live Swiss `fixstar2` at J2000: the 43 IAU-named oracle stars
+  are within 0.245″ (median 0.026″). Stars without an IAU name use the Bright
+  Star Catalogue position (RA to 0.1 s, Dec to 1″): against the Hipparcos-derived
+  positions the median separation is 0.64″, 95% are within 2.3″. Seven stars at
+  seven epochs from 1000 to 3000 differ from live Swiss by up to 20.6″ (median
+  0.72″; the Hipparcos-derived data reached about 4″), because the Bright Star
+  Catalogue proper motions are the older FK5 values.
+- Six Swiss reference rows of the star tests (Zuben Eschamali, Zuben Elgenubi,
+  Lambda Orionis, Hyadum II, Bharani 41, Al Jabhah) were found to be 1.3″ to 27″
+  from live Swiss output and were re-recorded from it.
 - `swe_fixstar_ut` and `swe_fixstar_mag` always work; there is no longer a
   "feature disabled" error path.
 - `xalen-western`'s star table is no longer feature-gated. It is regenerated
-  from the Bright Star Catalogue and the IAU-CSN and now has **492** entries (was
-  506): 14 entries that neither source can place (resolved components, fainter
-  stars, a globular cluster) were removed instead of keeping unsourced values.
-  About 145 entries had a position more than 5′ from the star they name; those
-  are corrected.
+  from the Bright Star Catalogue and the IAU-CSN and now has **503** entries (was
+  506). Barnard's Star, Proxima Centauri, Wolf 359 and Omega Centauri, which are
+  not in the Bright Star Catalogue, are sourced from the Gliese & Jahreiss CNS3
+  catalogue and Harris (1996); seven entries are second components or carry
+  Latin-letter designations and point at their Bright Star Catalogue record.
+  Three entries (A Velorum, Q Velorum, Zeta Puppis2) could not be identified
+  from the allowed sources and were removed instead of keeping unsourced
+  values. About 150 entries had a position more than 5′ from the star they name;
+  those are corrected.
 - `xalen-stars` README corrected to state the catalogue **data** in
   `xalen-stars-hip-data` is CC BY-NC (not Apache-2.0).
 

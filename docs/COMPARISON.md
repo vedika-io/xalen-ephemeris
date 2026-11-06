@@ -39,7 +39,7 @@ ephemeris/astrology libraries it is most often weighed against:
 | **Moon accuracy (analytical)** | RMS ~2.8″ / max ~12″ (truncated ELP); ~sub-arcsec with DE440 kernel | ~few arcsec (full ELP / Moshier); sub-arcsec with kernel | same as Swiss | Meeus low-order (arcmin-class) | textbook-grade |
 | **House systems** | **23** (19 comparable systems within 0.01°, 18 tight; §5) | 23 | 23 (via Swiss) | None | A handful (textbook examples) |
 | **Ayanamsa systems** | **50 named** (all 47 Swiss IDs 0–46 + 3 non-SE systems) + Custom, §4 | ~47 predefined + custom | same as Swiss | None | None |
-| **Fixed stars (built-in)** | **9,096** compiled-in (Yale Bright Star Catalogue; the 38 IAU-named oracle stars are within 0.245″ of Swiss at J2000) + 492 astrology catalog | 6,000+ via `sefstars.txt` data file | same as Swiss | None | None |
+| **Fixed stars (built-in)** | **9,096** compiled-in (Yale Bright Star Catalogue; the 43 IAU-named oracle stars are within 0.245″ of Swiss at J2000) + 503 astrology catalog | 6,000+ via `sefstars.txt` data file | same as Swiss | None | None |
 | **Vedic / Jyotish** | Deep: dasha, panchang, shadbala, KP, Jaimini, Tajaka, ashtakavarga, D-2…D-60, yogas/doshas (§6) | **None** (positions only) | None | None | None |
 | **Western technique layer** | Aspects, dignities, 97 Arabic Lots, returns, progressions, harmonics, horary | None (positions only) | None | None | None |
 | **World systems** | BaZi, Zi Wei, Saju, Mayan, Aztec, I-Ching, Tibetan, Nine Star Ki, Mahabote (day-sign profile), Qi Men (experimental), Persian, Egyptian, Celtic (§7) | None | None | None | None |

@@ -36,6 +36,13 @@ Third-Party Acknowledgments:
   IAU Division C Working Group on Star Names (WGSN), used under
   Creative Commons Attribution; proper names, constellations and J2000
   positions of the named stars.
+- Western fixed-star table (xalen-western): Gliese W., Jahreiss H.,
+  Preliminary Version of the Third Catalogue of Nearby Stars (CNS3),
+  Astron. Rechen-Institut Heidelberg (1991), CDS catalogue V/70A (magnitude and
+  proper motion of Barnard's Star, Proxima Centauri and Wolf 359; position of
+  Wolf 359); Harris W.E., A Catalog of Parameters for Globular Clusters in the
+  Milky Way, Astron. J. 112, 1487 (1996), CDS catalogue VII/195 (position and
+  magnitude of Omega Centauri).
 - Hipparcos: The Hipparcos and Tycho Catalogues, (C) ESA 1997 (ESA SP-1200),
   CDS catalogue I/239, published under CC BY-NC 3.0 IGO (non-commercial).
   The Hipparcos-derived data is now only in the optional, unpublished
