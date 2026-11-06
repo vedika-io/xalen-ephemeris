@@ -96,6 +96,10 @@ categories.workspace = true
 # workspace-root crate, so it would otherwise package every root file).
 exclude = [
     "playground/",
+    ".github/",
+    ".githooks/",
+    "scripts/",
+    "tools/",
 ]
 
 [dependencies]
