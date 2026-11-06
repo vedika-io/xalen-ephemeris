@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Generate crates/xalen-stars/src/catalog_generated.rs from the real
+"""Generate crates/xalen-stars-hip-data/src/catalog_generated.rs (the optional,
+unpublished, non-commercial Hipparcos add-on) from the real
 Hipparcos Main Catalogue (CDS I/239, hip_main.dat, 118,218 records).
 
 EVERY emitted star comes from a record in hip_main.dat. No coordinate, magnitude
@@ -25,7 +26,7 @@ Run:
   python3 tools/gen-star-catalog/gen_catalog.py \
       --hip /tmp/hip_main.dat \
       --curated /tmp/curated_stars.json \
-      --out crates/xalen-stars/src/catalog_generated.rs
+      --out crates/xalen-stars-hip-data/src/catalog_generated.rs
 """
 import argparse
 import json
@@ -260,7 +261,7 @@ def main():
     ap.add_argument("--hip", default="/tmp/hip_main.dat")
     ap.add_argument("--curated", default="/tmp/curated_stars.json")
     ap.add_argument("--iau", default=os.path.join(here, "IAU-CSN.txt"))
-    ap.add_argument("--out", default="crates/xalen-stars/src/catalog_generated.rs")
+    ap.add_argument("--out", default="crates/xalen-stars-hip-data/src/catalog_generated.rs")
     args = ap.parse_args()
 
     records, total = parse_hip(args.hip)
