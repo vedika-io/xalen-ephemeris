@@ -43,7 +43,7 @@ println!("{}", Nakshatra::from_longitude_deg(sid)); // Swati
 
 - **506 built-in fixed stars** (in `xalen-western`) with proper motion and precession correction (all mag < 3.0, Behenian, Royal, Nakshatra yogatara, IAU-named to mag ~5). The `xalen-stars` crate adds **8,870 compiled-in Hipparcos stars** (every Hipparcos record at Vmag ≤ 6.5, propagated J1991.25 → J2000.0, zero data files) on top of a 108-star curated core catalog — and still supports loading the full 118,218-star Hipparcos catalog from CSV at runtime
 
-- **Solar and lunar eclipse engine** -- rigorous Besselian elements (Explanatory Supplement §11; Meeus Ch. 54) for global type / γ / greatest-eclipse, plus a per-observer local-circumstances layer (magnitude, obscuration, C1–C4 contact times); lunar eclipse classification (total / partial / penumbral) via Meeus Ch. 55. Global type validated against NASA for 2017-08-21 and 2024-04-08
+- **Solar and lunar eclipse engine** -- rigorous Besselian elements (Explanatory Supplement §11; Meeus Ch. 54) for global type / γ / greatest-eclipse, plus a per-observer local-circumstances layer (magnitude, obscuration, C1–C4 contact times); lunar eclipses from Earth's shadow cones (Danjon) with umbral / penumbral magnitudes and P1–P4 contacts, matching Swiss Ephemeris for every eclipse of 1900–2100. Global type validated against NASA for 2017-08-21 and 2024-04-08
 
 - **Black Moon Lilith** -- both **mean** lunar apogee and **True (osculating)** Lilith (Swiss `SE_OSCU_APOG`), Chiron, True Node, Mean Node
 

@@ -420,11 +420,14 @@ let lunar = find_lunar_eclipses(&almanac, jd_start, jd_end);
 ```
 
 XALEN returns typed results (`SolarEclipse`, `LunarEclipse`) with classification
-(`Total`, `Annular`, `Partial`, `Penumbral`), the Besselian `gamma` (solar), and
-honestly-named proxies (`coverage_proxy` for solar, `shadow_depth_proxy` for
-lunar) rather than a true astronomical magnitude. Global eclipse type verified
-against the NASA Eclipse Catalog for 2024--2025. For a real per-observer
-magnitude / obscuration / contact times, use the local-circumstances layer.
+(`Total`, `Annular`, `Partial`, `Penumbral`), the Besselian `gamma` and an
+honestly-named `coverage_proxy` (solar), and for lunar eclipses the umbral and
+penumbral magnitudes and the six contacts (`contacts.penumbral_begin` through
+`contacts.penumbral_end`), the values `swe_lun_eclipse_when` returns in `tret`
+and `swe_lun_eclipse_how` in `attr[0..2]`. Lunar results are cross-validated
+against pyswisseph for 1900–2100 (see `docs/ACCURACY.md`). For a real
+per-observer solar magnitude / obscuration / contact times, use the
+local-circumstances layer.
 
 ---
 

@@ -294,7 +294,7 @@ All cusps 0-360 deg, ASC-DSC opposite within 0.01 deg, MC-IC opposite within
 |------------|------|------|-----------|--------|
 | Penumbral Lunar | 2024-Mar-25 | Penumbral | Yes | < 1 day |
 | Total Solar | 2024-Apr-08 | Total | Yes | < 1 day |
-| Partial Lunar | 2024-Sep-18 | Not total (confirmed) | Yes | < 1 day |
+| Partial Lunar | 2024-Sep-18 | Partial | Yes | < 1 day |
 | Annular Solar | 2024-Oct-02 | Annular | Yes | < 1 day |
 | Total Lunar | 2025-Mar-14 | Total | Yes | < 1 day |
 | Partial Solar | 2025-Mar-29 | Partial | Yes | < 1 day |
@@ -325,8 +325,17 @@ asserts them with partial and central controls.
 > **Still NOT computed:** the path of totality (northern/southern limits and
 > central-line traces). That cartographic layer is tracked as future work; the
 > per-observer contact times above are the practical substitute for a single
-> location. Lunar eclipses use the simpler Meeus Ch.55 shadow-cone test (date +
-> type, not contact-time geometry).
+> location.
+>
+> **Lunar eclipses** use Earth's umbral and penumbral shadow cones at the Moon's
+> distance with Danjon's radii `1.01·π☾ ± s☉ + π☉` (Espenak & Meeus 2009, eqs. 1-5/1-6).
+> Against pyswisseph 2.10.03 over 1900–2100 all 457 eclipses are found with the
+> same type and no extra ones; umbral and penumbral magnitudes agree to 0.002,
+> greatest eclipse to 21 s, and the P1/U1/U2/U3/U4/P4 contacts to a median of
+> 6 s (≤ 19 s at the 95th percentile, up to ~100 s for grazing contacts such as
+> the 2015-04-04 total with umbral magnitude 1.0002).
+> `tests/lunar_eclipse_swiss_crossval.rs` asserts every eclipse of 2020–2030
+> plus six historical cases.
 
 ---
 

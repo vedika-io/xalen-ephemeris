@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Lunar eclipses** are found and classified from Earth's umbral and penumbral
+  shadow cones (Danjon) instead of thresholds on the Moon's latitude at Full
+  Moon. Over 1900–2100 the threshold test gave the wrong type for 60 of 457
+  eclipses, reported 19 that do not happen (e.g. 2005-03-25) and missed
+  1958-04-04; it now matches pyswisseph for all 457. `jd_maximum` is greatest
+  eclipse rather than the Full Moon instant (previously ~9 min off).
+  `LunarEclipse` gains `umbral_magnitude`, `penumbral_magnitude` and
+  `contacts` (P1, U1, U2, U3, U4, P4).
+
 ### Security
 - Bump `pyo3` from 0.28 to **0.29** in the Python binding to clear
   RUSTSEC-2026-0176 and RUSTSEC-2026-0177 (fixed in pyo3 ≥ 0.29.0). Migrated the
