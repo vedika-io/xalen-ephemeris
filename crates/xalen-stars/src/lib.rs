@@ -57,11 +57,11 @@ const J2000_JD: f64 = 2_451_545.0;
 /// so `*_at_epoch` and `*_at_jd` round-trip exactly. The returned longitude is
 /// wrapped to `[0, 360)`; latitude is signed.
 ///
-/// Validated against `pyswisseph` `swe.fixstar2` (mean ecliptic of date,
-/// `FLG_SWIEPH | FLG_NONUT | FLG_NOABERR | FLG_NOGDEFL`) at 1000 CE and 3000 CE
-/// for Polaris, Aldebaran, Spica, Antares, Regulus, Sirius and Pollux: worst
-/// total separation 0.074′ (≈4.4″), all under 0.1′. See the
-/// `precession_*_multi_epoch_*` tests.
+/// Validated against Swiss `swe_fixstar2` (mean ecliptic of date,
+/// `FLG_SWIEPH | FLG_NONUT | FLG_NOABERR | FLG_NOGDEFL`) at 1000, 1600, 1900,
+/// 2000, 2100, 2400 and 3000 CE for Polaris, Aldebaran, Spica, Antares,
+/// Regulus, Sirius and Pollux. See `epoch_propagation_matches_swiss` in
+/// `tests/swiss_star_oracle.rs` for the measured separations.
 pub fn precessed_ecliptic_of_date(
     longitude_j2000_deg: f64,
     latitude_j2000_deg: f64,
@@ -490,14 +490,16 @@ pub fn nakshatra_yogatara(nakshatra_index: usize) -> Option<&'static FixedStar> 
 }
 
 // ---------------------------------------------------------------------------
-// CATALOG — 110 astrologically significant fixed stars
+// CATALOG — 108 astrologically significant fixed stars (curated core)
 //
-// Every entry carries J2000.0 ecliptic longitude / latitude, visual magnitude,
-// Ptolemaic planetary nature, and proper-motion components in mas/yr.
-//
-// High proper motion values (> ~100 mas/yr) are set for Sirius, Arcturus,
-// Procyon, Pollux, Aldebaran, and other well-measured stars. Stars where
-// proper motion is astrologically negligible (< 50 mas/yr) use 0.0.
+// What these values are: the traditional names, constellations and Ptolemaic
+// natures of the 108 curated stars, with APPROXIMATE positions (two or three
+// decimals of a degree, rounded proper motions). They are used directly only
+// for the two open clusters (Pleiades, Praesepe) and when the `bright-catalog`
+// feature is off. With the feature on, every other entry is replaced by the
+// Bright Star Catalogue / IAU-CSN record it names (see `bright_generated.rs`
+// and `tools/gen-star-catalog/gen_bright_catalog.py`), so the positions served
+// by `find_by_name` come from those two sources, not from this table.
 // ---------------------------------------------------------------------------
 pub static CATALOG: &[FixedStar] = &[
     // ===== ORIGINAL 25 BRIGHT / ROYAL STARS ==============================
@@ -522,23 +524,19 @@ pub static CATALOG: &[FixedStar] = &[
         pm_lat_mas_per_year: 5.6,
     },
     FixedStar {
-        // Spica (alpha Virginis, HIP 65474). Ecliptic position and proper-motion
-        // components derived from the Hipparcos/FK5 J2000.0 equatorial place
-        // RA = 201.2982474 deg, Dec = -11.1613125 deg, pmRA* = -42.50 mas/yr,
-        // pmDec = -31.73 mas/yr, rotated into the J2000 ecliptic frame with the
-        // IAU 2006 mean obliquity (84381.406"). Carried to 5+ decimals so the
-        // True Chitra ayanamsa (which anchors Spica at exactly 180 deg) is not
-        // capped at the ~36" floor that the old 2-decimal longitude (203.83)
-        // imposed. The previous pm components were the un-rotated equatorial
-        // values mislabelled as ecliptic; they are now correctly rotated.
+        // Spica (alpha Virginis, HR 5056). Carried to 6 decimals so the curated
+        // value agrees with the Bright Star Catalogue row (IAU-CSN position,
+        // Bright Star Catalogue proper motion, ecliptic components at the
+        // IAU 2006 mean obliquity 84381.406") and with the True Chitra anchor in
+        // `xalen-star-anchors`.
         name: "Spica",
         constellation: "Virgo",
-        longitude_j2000: 203.841355,
-        latitude_j2000: -2.054487,
+        longitude_j2000: 203.841357,
+        latitude_j2000: -2.054493,
         magnitude: 0.98,
         nature: "Venus-Mars",
-        pm_lon_mas_per_year: -27.72,
-        pm_lat_mas_per_year: -45.23,
+        pm_lon_mas_per_year: -27.711,
+        pm_lat_mas_per_year: -41.208,
     },
     FixedStar {
         name: "Antares",
@@ -1680,7 +1678,44 @@ mod tests {
     #[test]
     fn spica_at_j2000() {
         let spica = find_by_name("Spica").unwrap();
-        assert!((spica.longitude_j2000 - 203.841355).abs() < 0.01);
+        assert!((spica.longitude_j2000 - 203.841357).abs() < 1e-6);
+    }
+
+    /// The True Chitra anchor of `xalen-star-anchors` is the Bright Star
+    /// Catalogue row of Spica (HR 5056), bit for bit, and the curated core row
+    /// carries the same values.
+    #[test]
+    fn spica_anchor_equals_the_catalogue_row() {
+        let a = xalen_star_anchors::SPICA;
+        let curated = CATALOG.iter().find(|s| s.name == "Spica").unwrap();
+        assert_eq!(
+            curated.longitude_j2000.to_bits(),
+            a.longitude_j2000.to_bits()
+        );
+        assert_eq!(curated.latitude_j2000.to_bits(), a.latitude_j2000.to_bits());
+        assert_eq!(
+            curated.pm_lon_mas_per_year.to_bits(),
+            a.pm_lon_mas_per_year.to_bits()
+        );
+        assert_eq!(
+            curated.pm_lat_mas_per_year.to_bits(),
+            a.pm_lat_mas_per_year.to_bits()
+        );
+        #[cfg(feature = "bright-catalog")]
+        {
+            let b = find_bright_by_hr(5056).unwrap();
+            assert_eq!(b.name, Some("Spica"));
+            assert_eq!(b.longitude_j2000.to_bits(), a.longitude_j2000.to_bits());
+            assert_eq!(b.latitude_j2000.to_bits(), a.latitude_j2000.to_bits());
+            assert_eq!(
+                b.pm_lon_mas_per_year.to_bits(),
+                a.pm_lon_mas_per_year.to_bits()
+            );
+            assert_eq!(
+                b.pm_lat_mas_per_year.to_bits(),
+                a.pm_lat_mas_per_year.to_bits()
+            );
+        }
     }
 
     #[test]
@@ -1689,8 +1724,8 @@ mod tests {
         let lon_2000 = spica.longitude_at_epoch(2000.0);
         let lon_2100 = spica.longitude_at_epoch(2100.0);
         let diff = lon_2100 - lon_2000;
-        // Spica has ecliptic pm_lon = -27.72 mas/yr, so over 100 yr that adds
-        // -27.72 * 100 / 3_600_000 = -0.00077 deg. Combined with precession
+        // Spica has ecliptic pm_lon = -27.711 mas/yr, so over 100 yr that adds
+        // -27.711 * 100 / 3_600_000 = -0.00077 deg. Combined with precession
         // of ~1.39689 deg (50.28796″/yr × 100) the total is ~1.39612 deg.
         assert!(
             (diff - 1.39612).abs() < 0.01,
@@ -1735,8 +1770,9 @@ mod tests {
         // Arcturus's ECLIPTIC longitude proper motion is ~-281 mas/yr. (Its
         // famous ~1100 mas/yr figure is the EQUATORIAL pmRA*cos(dec); the
         // curated catalog used to mislabel that equatorial value as ecliptic.
-        // The validated Hipparcos-derived ecliptic component now backs this
-        // lookup — cross-checked against Swiss `fixstar2` at FLG_J2000.)
+        // The Bright Star Catalogue ecliptic component now backs this
+        // lookup — its position is cross-checked against Swiss `fixstar2` at
+        // FLG_J2000.)
         assert!(
             arc.pm_lon_mas_per_year.abs() > 250.0,
             "Arcturus ecliptic pm_lon should be ~281 mas/yr, got {}",
@@ -1826,169 +1862,21 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // Multi-epoch star precession vs pyswisseph (the regression this fix closes)
+    // Multi-epoch star precession vs Swiss
     // -----------------------------------------------------------------------
     //
-    // Reference longitudes/latitudes below are LIVE `pyswisseph` 2.10.3.2
-    // (`libswe` 2.10.03) `swe.fixstar2` output for the MEAN ecliptic of date,
-    // flags `FLG_SWIEPH | FLG_NONUT | FLG_NOABERR | FLG_NOGDEFL`, at the
-    // Gregorian-noon Julian Dates JD(1000-01-01 12:00) = 2086303.0 and
-    // JD(3000-01-01 12:00) = 2816788.0. Swiss applies proper motion, so the
-    // catalog's ecliptic PM components participate — exactly what our pipeline
-    // also does. Regenerate with the snippet in `tests/swiss_star_oracle.rs`,
-    // substituting those JDs and the date flags above.
+    // The seven-star, seven-epoch comparison against live Swiss output is in
+    // `tests/swiss_star_oracle.rs` (`epoch_propagation_matches_swiss`), with the
+    // reference values in `tests/common/mod.rs`.
     //
-    // The OLD planar model (longitude += rate·dt, latitude frozen) misplaces
+    // The OLD planar model (longitude += rate*dt, latitude frozen) misplaces
     // high-ecliptic-latitude stars because it never moves their latitude
-    // (e.g. Vega, ~0.06°/1000 yr error vs Swiss). The IAU 2006/P03 rotation
-    // couples longitude and latitude and matches Swiss to < 0.1′ across the
-    // stars below.
-    struct EpochOracle {
-        name: &'static str,
-        year: f64,
-        swiss_lon: f64,
-        swiss_lat: f64,
-    }
-
-    // Polaris, Aldebaran, Spica, Antares, Regulus, Sirius, Pollux at 1000 & 3000 CE.
-    const EPOCH_ORACLE: &[EpochOracle] = &[
-        EpochOracle {
-            name: "Polaris",
-            year: 1000.0,
-            swiss_lon: 74.610263,
-            swiss_lat: 65.981708,
-        },
-        EpochOracle {
-            name: "Polaris",
-            year: 3000.0,
-            swiss_lon: 102.611184,
-            swiss_lat: 66.218680,
-        },
-        EpochOracle {
-            name: "Aldebaran",
-            year: 1000.0,
-            swiss_lon: 55.837618,
-            swiss_lat: -5.538059,
-        },
-        EpochOracle {
-            name: "Aldebaran",
-            year: 3000.0,
-            swiss_lon: 83.801123,
-            swiss_lat: -5.395195,
-        },
-        EpochOracle {
-            name: "Spica",
-            year: 1000.0,
-            swiss_lon: 189.915486,
-            swiss_lat: -1.983434,
-        },
-        EpochOracle {
-            name: "Spica",
-            year: 3000.0,
-            swiss_lon: 217.828814,
-            swiss_lat: -2.134218,
-        },
-        EpochOracle {
-            name: "Antares",
-            year: 1000.0,
-            swiss_lon: 235.829777,
-            swiss_lat: -4.437693,
-        },
-        EpochOracle {
-            name: "Antares",
-            year: 3000.0,
-            swiss_lon: 263.756925,
-            swiss_lat: -4.703289,
-        },
-        EpochOracle {
-            name: "Regulus",
-            year: 1000.0,
-            swiss_lon: 135.955486,
-            swiss_lat: 0.427207,
-        },
-        EpochOracle {
-            name: "Regulus",
-            year: 3000.0,
-            swiss_lon: 163.764189,
-            swiss_lat: 0.492036,
-        },
-        EpochOracle {
-            name: "Sirius",
-            year: 1000.0,
-            swiss_lon: 90.325449,
-            swiss_lat: -39.378372,
-        },
-        EpochOracle {
-            name: "Sirius",
-            year: 3000.0,
-            swiss_lon: 117.888987,
-            swiss_lat: -39.838647,
-        },
-        EpochOracle {
-            name: "Pollux",
-            year: 1000.0,
-            swiss_lon: 99.441148,
-            swiss_lat: 6.609573,
-        },
-        EpochOracle {
-            name: "Pollux",
-            year: 3000.0,
-            swiss_lon: 127.052579,
-            swiss_lat: 6.752322,
-        },
-    ];
+    // (e.g. Vega, ~0.06 deg/1000 yr error vs Swiss). The IAU 2006/P03 rotation
+    // couples longitude and latitude; the Vega test below shows the difference.
 
     /// Signed shortest longitude separation (handles the 0/360 wrap), degrees.
     fn lon_delta(a: f64, b: f64) -> f64 {
         ((a - b + 180.0).rem_euclid(360.0)) - 180.0
-    }
-
-    #[cfg(feature = "bright-catalog")]
-    #[test]
-    fn precession_multi_epoch_matches_pyswisseph() {
-        // Measured worst case with the Bright Star Catalogue proper motions is
-        // 0.341' (20") over +/-1000 yr; the bound sits a little above it. (The
-        // Hipparcos-derived data this test used before reached 0.074'; the
-        // difference is the older FK5 proper motions of the Bright Star
-        // Catalogue, which act over 1000 years.)
-        const TOL_ARCMIN: f64 = 0.40;
-        let mut worst = 0.0_f64;
-        let mut worst_label = String::new();
-        let mut seps: Vec<f64> = Vec::new();
-        let mut failures: Vec<String> = Vec::new();
-
-        for o in EPOCH_ORACLE {
-            let star = find_by_name(o.name).expect("oracle star in catalog");
-            let (lon, lat) = star.ecliptic_at_epoch(o.year);
-            // Great-circle-ish separation: scale the longitude error by cos(lat).
-            let dlon = lon_delta(lon, o.swiss_lon) * lat.to_radians().cos();
-            let dlat = lat - o.swiss_lat;
-            let sep_arcmin = (dlon * dlon + dlat * dlat).sqrt() * 60.0;
-            if sep_arcmin > worst {
-                worst = sep_arcmin;
-                worst_label = format!("{} {:.0}", o.name, o.year);
-            }
-            seps.push(sep_arcmin);
-            if sep_arcmin > TOL_ARCMIN {
-                failures.push(format!(
-                    "{:<9} {:.0}: model {:.5}/{:.5} vs Swiss {:.5}/{:.5} = {:.3}'",
-                    o.name, o.year, lon, lat, o.swiss_lon, o.swiss_lat, sep_arcmin
-                ));
-            }
-        }
-        seps.sort_by(|a, b| a.partial_cmp(b).unwrap());
-        println!(
-            "MEASURED multi-epoch (1000/3000 CE, 7 stars) bright vs Swiss: worst {worst:.4} arcmin ({worst_label}), median {:.4} arcmin",
-            seps[seps.len() / 2]
-        );
-
-        assert!(
-            failures.is_empty(),
-            "{} star/epoch pairs disagree with pyswisseph by > {TOL_ARCMIN}' \
-             (worst {worst:.3}'):\n  {}",
-            failures.len(),
-            failures.join("\n  ")
-        );
     }
 
     #[cfg(feature = "bright-catalog")]
