@@ -26,7 +26,7 @@ categories = ["science"]
 publish = false
 
 [dependencies]
-xalen-stars = { version = "0.6.0", path = "../xalen-stars" }
+xalen-stars = { version = "0.7.0", path = "../xalen-stars" }
 serde.workspace = true
 
 [lints]

@@ -16,7 +16,7 @@ serde.workspace = true
 # `solar_longitude_approx`. Pulling the published implementation keeps Saju and
 # BaZi astronomically consistent rather than re-deriving (and drifting from) the
 # same ephemeris approximation.
-xalen-chinese = { version = "0.6.0", path = "../xalen-chinese" }
+xalen-chinese = { version = "0.7.0", path = "../xalen-chinese" }
 
 [lints]
 workspace = true

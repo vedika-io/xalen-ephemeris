@@ -57,7 +57,7 @@ default-members = [
 ]
 
 [workspace.package]
-version = "0.6.0"
+version = "0.7.0"
 edition = "2024"
 rust-version = "1.85"
 license = "Apache-2.0"
@@ -99,20 +99,20 @@ exclude = [
 ]
 
 [dependencies]
-xalen-time = { path = "crates/xalen-time", version = "0.6.0" }
-xalen-coords = { path = "crates/xalen-coords", version = "0.6.0" }
-xalen-ephem = { path = "crates/xalen-ephem", version = "0.6.0" }
-xalen-houses = { path = "crates/xalen-houses", version = "0.6.0" }
-xalen-ayanamsa = { path = "crates/xalen-ayanamsa", version = "0.6.0" }
-xalen-vedic = { path = "crates/xalen-vedic", version = "0.6.0" }
-xalen-western = { path = "crates/xalen-western", version = "0.6.0" }
-xalen-stars = { path = "crates/xalen-stars", version = "0.6.0" }
-xalen-chinese = { path = "crates/xalen-chinese", version = "0.6.0" }
-xalen-numerology = { path = "crates/xalen-numerology", version = "0.6.0" }
-xalen-lalkitab = { path = "crates/xalen-lalkitab", version = "0.6.0" }
-xalen-iching = { path = "crates/xalen-iching", version = "0.6.0" }
-xalen-world = { path = "crates/xalen-world", version = "0.6.0" }
-xalen-chart = { path = "crates/xalen-chart", version = "0.6.0" }
+xalen-time = { path = "crates/xalen-time", version = "0.7.0" }
+xalen-coords = { path = "crates/xalen-coords", version = "0.7.0" }
+xalen-ephem = { path = "crates/xalen-ephem", version = "0.7.0" }
+xalen-houses = { path = "crates/xalen-houses", version = "0.7.0" }
+xalen-ayanamsa = { path = "crates/xalen-ayanamsa", version = "0.7.0" }
+xalen-vedic = { path = "crates/xalen-vedic", version = "0.7.0" }
+xalen-western = { path = "crates/xalen-western", version = "0.7.0" }
+xalen-stars = { path = "crates/xalen-stars", version = "0.7.0" }
+xalen-chinese = { path = "crates/xalen-chinese", version = "0.7.0" }
+xalen-numerology = { path = "crates/xalen-numerology", version = "0.7.0" }
+xalen-lalkitab = { path = "crates/xalen-lalkitab", version = "0.7.0" }
+xalen-iching = { path = "crates/xalen-iching", version = "0.7.0" }
+xalen-world = { path = "crates/xalen-world", version = "0.7.0" }
+xalen-chart = { path = "crates/xalen-chart", version = "0.7.0" }
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
