@@ -146,6 +146,12 @@ hand needs them.
 - `xalen-stars` `precessed_ecliptic_of_date` is now public.
 - `tools/gen-star-catalog/regen_western_stars.py` rewrites the numeric columns
   of the `xalen-western` star table from the same two sources.
+- **Python wheels for Linux and Intel Macs.** PyPI now carries `cp38-abi3`
+  wheels for Linux x86_64 and aarch64 (manylinux2014) and macOS x86_64, next to
+  macOS arm64; 0.6.0 had a macOS arm64 wheel only. Other platforms still build
+  from the sdist.
+- `scripts/build-release-artifacts.sh` builds the Python wheels, the sdist and
+  the `@xalen/wasm` package on one Linux host and smoke-tests them.
 
 ### Removed (breaking)
 - The **`hip-catalog` cargo feature** is removed from `xalen-stars`,

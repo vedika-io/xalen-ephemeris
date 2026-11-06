@@ -75,7 +75,11 @@ def test_release_workflow_covers_all_platforms():
     # All three publish channels must be present.
     assert "maturin upload" in text, "PyPI publish step missing"
     assert "napi prepublish" in text, "npm (node) publish step missing"
-    assert "wasm-pack publish" in text, "wasm publish step missing"
+    # The wasm job builds with wasm-pack, renames the package to its npm scope
+    # and publishes it with npm.
+    assert "wasm-pack build --release --target web" in text, "wasm build step missing"
+    assert 'npm pkg set name="@xalen/wasm"' in text, "wasm npm scope step missing"
+    assert "npm publish --access public" in text, "wasm publish step missing"
     assert "cargo publish" in text, "crates.io publish step missing"
     # Tokens must come from secrets, never be hardcoded.
     assert "secrets.PYPI_API_TOKEN" in text
