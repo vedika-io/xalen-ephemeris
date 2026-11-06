@@ -11,8 +11,8 @@ categories = ["science", "mathematics"]
 [dependencies]
 xalen-time = { version = "0.6.0", path = "../xalen-time" }
 xalen-coords = { version = "0.6.0", path = "../xalen-coords" }
-# True Chitra anchors Spica from the commercial-OK anchors crate, NOT the
-# NC-gated fixed-star catalog — so the ayanamsa no longer depends on xalen-stars.
+# True Chitra anchors Spica from the anchors crate, not from the fixed-star
+# catalogue, so the ayanamsa does not depend on xalen-stars.
 xalen-star-anchors = { version = "0.6.0", path = "../xalen-star-anchors" }
 serde.workspace = true
 

@@ -1,9 +1,11 @@
 name: commercial-clean
 
-# Proves that a commercial build (--no-default-features) links NONE of the
-# non-commercial fixed-star data (CC BY-NC Hipparcos / CDS / SIMBAD), while the
-# default open build still includes it. This is the automated enforcement of the
-# `hip-catalog` data gate — see NOTICE Part 3 and crates/xalen-stars-hip-data.
+# Proves that no published crate, built with its DEFAULT features, links the
+# non-commercial Hipparcos data (ESA, CC BY-NC 3.0 IGO). That data lives only in
+# the optional, unpublished `xalen-stars-hip-data` add-on crate. The default star
+# list (`xalen-stars` BRIGHT_CATALOG) is built from the Yale Bright Star
+# Catalogue and the IAU Catalog of Star Names. See NOTICE and
+# crates/xalen-stars-hip-data.
 
 on:
   push:
@@ -15,48 +17,54 @@ permissions:
   contents: read
 
 jobs:
-  no-nc-data-in-commercial-build:
+  no-nc-data-in-published-crates:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
 
-      - name: NC data crate is ABSENT from commercial binding graphs
+      - name: No published crate depends on the NC data crate (default features)
         run: |
           set -euo pipefail
           fail=0
-          for p in xalen-ffi xalen-wasm xalen-node xalen-python; do
-            n=$(cargo tree -p "$p" --no-default-features 2>/dev/null | grep -c 'xalen-stars-hip-data' || true)
-            echo "$p (--no-default-features): xalen-stars-hip-data count = $n"
+          # Every workspace package that may be published (publish is not false).
+          pkgs=$(cargo metadata --format-version 1 --no-deps \
+            | jq -r '.packages[] | select(.publish == null) | .name')
+          test -n "$pkgs"
+          for p in $pkgs; do
+            n=$(cargo tree -p "$p" 2>/dev/null | grep -c 'xalen-stars-hip-data' || true)
+            echo "$p (default features): xalen-stars-hip-data count = $n"
             if [ "$n" -ne 0 ]; then echo "::error::$p links the NC data crate"; fail=1; fi
           done
-          # ...and PRESENT in the default open build (guards against a broken gate
-          # that silently drops the catalog from the funnel build too).
-          d=$(cargo tree -p xalen-ffi 2>/dev/null | grep -c 'xalen-stars-hip-data' || true)
-          echo "xalen-ffi (default): xalen-stars-hip-data count = $d"
-          if [ "$d" -eq 0 ]; then echo "::error::default build is missing the catalog"; fail=1; fi
+          # The add-on crate is a leaf: nothing in the workspace depends on it.
+          rev=$(cargo tree --workspace -i xalen-stars-hip-data 2>/dev/null | grep -c 'xalen-stars-hip-data' || true)
+          echo "reverse-dependency lines for xalen-stars-hip-data = $rev (1 = itself only)"
+          if [ "$rev" -gt 1 ]; then echo "::error::a crate depends on the NC data crate"; fail=1; fi
           test "$fail" -eq 0
 
-      - name: Commercial binary contains no NC symbols
+      - name: Published binding builds contain no Hipparcos symbols
         run: |
           set -euo pipefail
-          cargo build -p xalen-ffi --no-default-features
+          cargo build -p xalen-ffi
           LIB=$(ls target/debug/libxalen_ffi.a target/debug/libxalen_ffi.so 2>/dev/null | head -1)
           echo "scanning $LIB"
-          # Symbols/strings that exist ONLY when the NC data is linked.
           if nm "$LIB" 2>/dev/null | grep -iE 'GENERATED_CATALOG|stars_hip_data'; then
-            echo "::error::NC HIP symbols found in commercial binary"; exit 1
+            echo "::error::NC HIP symbols found in the default binary"; exit 1
           fi
           if strings "$LIB" 2>/dev/null | grep -iE 'hip_main|Hipparcos Main Catalogue'; then
-            echo "::error::NC catalogue marker strings found in commercial binary"; exit 1
+            echo "::error::NC catalogue marker strings found in the default binary"; exit 1
           fi
           echo "clean: no NC symbols/strings"
 
-      - name: Core sidereal output is feature-independent (free == paid)
+      - name: Default star list is present and the lookups work without defaults
         run: |
           set -euo pipefail
-          # The ayanamsa (incl. True Chitra via xalen-star-anchors) must not
-          # depend on the NC data: it has to build and pass with the feature off.
+          cargo test -p xalen-stars
+          cargo test -p xalen-stars --no-default-features
+          cargo test -p xalen-ephem --no-default-features fixstar
+
+      - name: Core sidereal output does not depend on the star catalogue
+        run: |
+          set -euo pipefail
           cargo test -p xalen-star-anchors
-          cargo test -p xalen-ayanamsa --no-default-features 2>/dev/null \
-            || cargo test -p xalen-ayanamsa
+          cargo test -p xalen-ayanamsa

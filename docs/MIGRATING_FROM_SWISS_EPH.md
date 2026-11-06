@@ -385,7 +385,7 @@ const hits = xalen.fixedStarConjunctions(planetLon, 2.0, 2026.0);
 hits = xalen.fixed_star_conjunctions(planet_lon, orb=2.0, year=2026.0)
 ```
 
-XALEN ships a 108-star catalog with proper motion. No external data files needed.
+XALEN ships a 9,096-star catalog (the Yale Bright Star Catalogue, with IAU names) and a 108-star curated core, both with proper motion. No external data files needed. `find_by_name` accepts the IAU or traditional name (case-insensitive); `find_bright_by_hr` and `find_bright_by_hd` look a star up by its Bright Star or Henry Draper number.
 
 ---
 
@@ -559,7 +559,7 @@ file I/O, no `ephe_path`, and no `close()` call.
 | Cleanup | `swe_close()` required | None |
 | Ayanamsa | 47 systems (global `swe_set_sid_mode`) | 47 systems (per-call parameter) |
 | Houses | 23 systems | 23 systems |
-| Fixed stars | File-based catalog | 108-star embedded catalog |
+| Fixed stars | File-based catalog | 9,096-star embedded catalog (Bright Star Catalogue) + 108-star curated core |
 | Eclipses | Yes (comprehensive) | Yes (latitude-based, NASA-verified) |
 | Dasha | No | Vimshottari, Yogini, Ashtottari, Chara, Nadi |
 | Panchang | No | Tithi, Nakshatra, Yoga, Karana, Vara |

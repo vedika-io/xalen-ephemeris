@@ -604,7 +604,7 @@ fn true_chitra(t: f64) -> f64 {
     //     ayanamsa(t) = λ_apparent(Spica, t) − 180 deg
     //
     // We compute λ_apparent from first principles via spica_apparent_longitude():
-    //   J2000 ecliptic (longitude, latitude) (5-decimal Hipparcos-derived catalog)
+    //   J2000 ecliptic (longitude, latitude) (6-decimal IAU-CSN / Bright Star Catalogue anchor)
     //   + proper motion in ecliptic longitude and latitude
     //   + rigorous IAU 2006/P03 precession (Cartesian rotation, latitude-coupled)
     //   + IAU 2000B nutation in longitude (Δψ)
@@ -639,10 +639,10 @@ fn true_chitra(t: f64) -> f64 {
 /// to 0.038″ across the 1900–2100 oracle epochs and 0.11″ across 200 randomly
 /// sampled dates within that span.
 fn spica_apparent_longitude(t: f64) -> f64 {
-    // Spica anchor sourced from the commercial-OK `xalen-star-anchors` crate (a
-    // single factual coordinate, Apache-2.0) rather than the HIP-reconciled
-    // fixed-star catalog, so True Chitra is byte-identical whether or not the
-    // non-commercial `hip-catalog` data is linked. See xalen-star-anchors.
+    // Spica anchor sourced from the `xalen-star-anchors` crate (a single factual
+    // coordinate, Apache-2.0, equal to the Bright Star Catalogue row of Spica)
+    // rather than searched in a star list, so True Chitra does not depend on
+    // which star catalogue features are enabled. See xalen-star-anchors.
     let spica = xalen_star_anchors::SPICA;
 
     // J2000.0 mean ecliptic (longitude, latitude) + linear proper motion.

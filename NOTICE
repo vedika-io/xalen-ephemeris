@@ -38,21 +38,35 @@ Third-Party Acknowledgments:
   https://maia.usno.navy.mil/ser7/historic_deltat.data). The NASA page and the
   USNO file are U.S. Government material, not protected by copyright; the
   formulas are published mathematics.
-- Fixed-star catalog: The Hipparcos and Tycho Catalogues, (C) ESA 1997
-  (ESA SP-1200), distributed by CDS Strasbourg as catalogue I/239. The
-  expanded fixed-star catalog (Vmag <= 6.5) is generated directly from
-  I/239 hip_main.dat (positions, magnitudes, proper motions).
-- Fixed-star traditional names: IAU Catalog of Star Names (IAU-CSN),
+- Fixed-star catalog: Hoffleit D., Warren Jr W.H., The Bright Star Catalogue,
+  5th Revised Ed. (Preliminary Version), Astronomical Data Center,
+  NSSDC/ADC (1991), distributed by CDS Strasbourg as catalogue V/50. The
+  fixed-star list in xalen-stars (9,096 stars) is generated from it
+  (identification, magnitudes, proper motions, positions).
+- Fixed-star names and positions: IAU Catalog of Star Names (IAU-CSN),
   IAU Division C Working Group on Star Names (WGSN), used under
-  Creative Commons Attribution; names carried onto HIP identifiers.
-- Star identities additionally cross-checked against the CDS/SIMBAD
-  Astronomical Database, Strasbourg.
+  Creative Commons Attribution; proper names, constellations and J2000
+  positions of the named stars.
+- Western fixed-star table (xalen-western): Gliese W., Jahreiss H.,
+  Preliminary Version of the Third Catalogue of Nearby Stars (CNS3),
+  Astron. Rechen-Institut Heidelberg (1991), CDS catalogue V/70A (magnitude and
+  proper motion of Barnard's Star, Proxima Centauri and Wolf 359; position of
+  Wolf 359); Harris W.E., A Catalog of Parameters for Globular Clusters in the
+  Milky Way, Astron. J. 112, 1487 (1996), CDS catalogue VII/195 (position and
+  magnitude of Omega Centauri).
+- Hipparcos: The Hipparcos and Tycho Catalogues, (C) ESA 1997 (ESA SP-1200),
+  CDS catalogue I/239, published under CC BY-NC 3.0 IGO (non-commercial).
+  The Hipparcos-derived data is now only in the optional, unpublished
+  crates/xalen-stars-hip-data crate (publish = false, its own non-commercial
+  LICENSE). No published XALEN crate depends on it, and it is not part of the
+  default star list.
 - I-Ching (Yi King) text: James Legge, Sacred Books of the East Vol. XVI (1882), public domain.
 
-NOTE ON COMMERCIAL SCOPE: A 'comprehensive' COMMERCIAL claim over the
-Hipparcos-derived catalog still requires CDS/ESA license clearance for
-redistribution. This release ships under the attribution above; the
-clearance gate is tracked in docs and is NOT yet resolved.
+NOTE ON COMMERCIAL SCOPE: the published crates carry no CC BY-NC data. The
+only non-commercial star data in the repository is the Hipparcos-derived
+catalogue in crates/xalen-stars-hip-data, which is unpublished and must not be
+linked into a commercial build. The commercial-clean CI workflow checks that no
+published crate depends on it.
 
 ---
 

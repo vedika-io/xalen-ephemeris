@@ -13,11 +13,11 @@ code is at:
 
   https://creativecommons.org/licenses/by-nc/3.0/igo/legalcode
 
-KEY TERM: this data may NOT be used for commercial purposes. It is therefore
-included in XALEN Ephemeris ONLY behind the default-on `hip-catalog` Cargo
-feature; commercial builds compile with `--no-default-features`, which links
-none of this data. See the repository NOTICE (Part 3) and
-crates/xalen-stars/README.md.
+KEY TERM: this data may NOT be used for commercial purposes. This crate is an
+optional, unpublished add-on (`publish = false`) that no published XALEN crate
+depends on; the default star list in `xalen-stars` is built from the Yale
+Bright Star Catalogue and the IAU Catalog of Star Names and does not contain
+this data. See the repository NOTICE and crates/xalen-stars/README.md.
 
 The surrounding XALEN Ephemeris *code* (including the analytical engine that
 consumes this data) is licensed Apache-2.0; this NON-COMMERCIAL restriction

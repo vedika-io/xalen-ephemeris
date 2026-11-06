@@ -1,7 +1,8 @@
 //! External star catalog loader — load stars from CSV/TSV files at runtime.
 //!
-//! This module allows loading the full Hipparcos catalog (118,218 stars) or
-//! any custom star catalog from CSV files, and merging them with the built-in
+//! This module allows loading a larger star catalog of the caller's own (for
+//! example a catalogue extract the caller obtained under its own licence terms)
+//! or any custom star catalog from CSV files, and merging it with the built-in
 //! 108-star catalog.
 //!
 //! # CSV Format
@@ -137,7 +138,7 @@ impl From<std::io::Error> for CatalogError {
 /// skipped if it appears to be a header (first field starts with a letter).
 ///
 /// Proper motion values `pm_ra` and `pm_dec` are in equatorial coordinates
-/// (mas/yr) as typically provided by Hipparcos.  They are stored as ecliptic
+/// (mas/yr) as typically provided by astrometric catalogues.  They are stored as ecliptic
 /// proper motion approximations (the conversion is approximate for the
 /// purpose of astrological position tracking).
 pub fn load_catalog_from_csv(path: &Path) -> Result<Vec<CatalogStar>, CatalogError> {

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Cross-validate catalog_generated.rs against the Swiss Ephemeris (pyswisseph).
+"""Cross-validate bright_generated.rs (or the Hipparcos add-on's catalog_generated.rs)
+against the Swiss Ephemeris (pyswisseph).
 
 Oracle = swe.fixstar2 at J2000.0 (JD 2451545.0) with the ASTROMETRIC flag set:
     SEFLG_J2000 | SEFLG_NONUT | SEFLG_NOABERR | SEFLG_NOGDEFL
@@ -17,7 +18,7 @@ Known Swiss name-disambiguation artifacts (NOT catalog errors):
 Run:
   SE_EPHE_PATH=/path/with/sefstars.txt \
     python3 tools/gen-star-catalog/validate_vs_swiss.py \
-      --rs crates/xalen-stars/src/catalog_generated.rs
+      --rs crates/xalen-stars/src/bright_generated.rs
 """
 import argparse
 import math
@@ -30,8 +31,10 @@ JD_J2000 = 2451545.0
 
 def load_named(rs_path):
     out = []
+    # Rows of bright_generated.rs carry `hr: N, hd: .., designation: .., name:
+    # Some(..)`; rows of the Hipparcos add-on carry `hip: N, name: Some(..)`.
     pat = re.compile(
-        r'hip: (\d+), name: Some\("([^"]+)"\),.*'
+        r'(?:hip|hr): (\d+), (?:hd: [^,]+, designation: "[^"]*", )?name: Some\("([^"]+)"\),.*?'
         r"longitude_j2000: ([\d.]+), latitude_j2000: ([-\d.]+),"
     )
     for line in open(rs_path):
@@ -44,7 +47,7 @@ def load_named(rs_path):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--rs", default="crates/xalen-stars/src/catalog_generated.rs")
+    ap.add_argument("--rs", default="crates/xalen-stars/src/bright_generated.rs")
     ap.add_argument("--ephe", default=os.environ.get("SE_EPHE_PATH", ""))
     ap.add_argument("--threshold-arcsec", type=float, default=1.0)
     args = ap.parse_args()
