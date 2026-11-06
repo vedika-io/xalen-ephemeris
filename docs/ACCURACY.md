@@ -386,17 +386,24 @@ asserts them with partial and central controls.
 > genuine published SMH2016 Table-S15 cubic regression spline over [−720, AD 2016]
 > (coefficients read verbatim) and the model's own lod-integral extrapolation tail
 > outside that range — not a polynomial approximation. The spline's last fitted
-> knot is AD 2016; the model carries a published scalar per-epoch σ envelope only,
-> with **no** coefficient covariance matrix, so none is claimed.
+> knot is AD 2016; the paper publishes no coefficient covariance matrix, so none
+> is claimed.
 >
-> `delta_t_with_uncertainty` reproduces the published NAO/SMH scalar σ envelope as
-> a left-continuous step lookup (≈180 s at −720, ≈15 s at AD 1000, ≈0.1 s in the
-> telescopic era; NAO quadratic tails outside [−2000, 2500]).
-> Past the last fitted knot (2016) ΔT is an extrapolation: σ is the **larger** of
-> that envelope and Espenak's Huber Brownian-motion bound (calibration year +2005,
-> ≈15.5 s at 2050 / ≈47.9 s at 2100), so the reported uncertainty never understates
-> — for a process driven by unpredictable core-mantle coupling the conservative
-> random-walk bound is the honest one.
+> `delta_t_with_uncertainty` returns XALEN's own scalar 1-σ envelope, built only
+> from public-domain sources: NASA's *Uncertainty in Delta T* page (F. Espenak) for
+> the Morrison & Stephenson (2004) parabola `0.8·((Y−1820)/100)²` (≈265 s at AD 0,
+> ≈54 s at AD 1000, never below 20 s up to 1657) and Huber's Brownian-motion bound
+> before −1000; and the error column of the U.S. Naval Observatory file
+> `historic_deltat.data` for 1657–1984 (≈12 s at 1700, ≈3.5 s at 1800, ≈0.22 s at
+> 1900, as a non-increasing step function). From about 1922 on it sits at a 0.11 s floor,
+> the RMS departure of the SMH spline from USNO's measured monthly ΔT over
+> 1973–2016.
+> Past the last fitted knot (2016) ΔT is an extrapolation: σ is Huber's bound
+> (calibration year +2005, ≈15.5 s at 2050 / ≈47.9 s at 2100), so the reported
+> uncertainty grows with distance from the last observed epoch — for a process
+> driven by unpredictable core-mantle coupling the random-walk bound is the honest
+> one. The ancient-era values are the 2004 published ones and are larger than the
+> SMH2016 fit alone would justify (≈516 s at −720); they are conservative.
 
 ---
 
