@@ -255,11 +255,11 @@ separate third-party wrapper per language, and pyswisseph is Python-only:
 
 | Binding | Crate | Mechanism | Status |
 |---|---|---|---|
-| Rust | `xalen-ephemeris` (umbrella) | native | Published on crates.io (0.3.1 line; 0.4.x+ not yet) |
-| C / C++ | `xalen-ffi` | `extern "C"` + `repr(C)` | Source-stable; crates.io 0.3.1 line |
-| Python | `xalen-python` | PyO3 — `maturin develop` | Alpha; **not yet on PyPI** (`pip install xalen` forthcoming) |
-| Node.js | `xalen-node` | napi-rs native addon — `napi build` | Alpha; **not yet on npm** (`npm install xalen` forthcoming) |
-| Browser / WASM | `xalen-wasm` | wasm-bindgen — `wasm-pack build` | Alpha; build from source |
+| Rust | `xalen-ephemeris` (umbrella) | native | On crates.io |
+| C / C++ | `xalen-ffi` | `extern "C"` + `repr(C)` | Source-stable; on crates.io |
+| Python | `xalen-python` | PyO3 | Alpha; on PyPI as `xalen` (`pip install xalen`) |
+| Node.js | `xalen-node` | napi-rs native addon — `napi build` | Alpha; **not yet on npm**, build from source |
+| Browser / WASM | `xalen-wasm` | wasm-bindgen | Alpha; on npm as `@xalen/wasm` |
 
 **Migration path.** XALEN provides a Swiss-Ephemeris-compatible shim so existing
 code can move with minimal edits:

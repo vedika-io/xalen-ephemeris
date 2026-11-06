@@ -30,15 +30,15 @@ doctest = false
 # only uses the stable-ABI subset (PyDict / PyList / PyAny via the Bound API),
 # so abi3 is sound here.
 pyo3 = { version = "0.29", features = ["abi3-py38"] }
-xalen-ephem = { version = "0.6.0", path = "../xalen-ephem" }
-xalen-time = { version = "0.6.0", path = "../xalen-time" }
-xalen-ayanamsa = { version = "0.6.0", path = "../xalen-ayanamsa" }
-xalen-vedic = { version = "0.6.0", path = "../xalen-vedic" }
-xalen-houses = { version = "0.6.0", path = "../xalen-houses" }
-xalen-stars = { version = "0.6.0", path = "../xalen-stars" }
-xalen-western = { version = "0.6.0", path = "../xalen-western" }
-xalen-numerology = { version = "0.6.0", path = "../xalen-numerology" }
-xalen-coords = { version = "0.6.0", path = "../xalen-coords" }
+xalen-ephem = { version = "0.7.0", path = "../xalen-ephem" }
+xalen-time = { version = "0.7.0", path = "../xalen-time" }
+xalen-ayanamsa = { version = "0.7.0", path = "../xalen-ayanamsa" }
+xalen-vedic = { version = "0.7.0", path = "../xalen-vedic" }
+xalen-houses = { version = "0.7.0", path = "../xalen-houses" }
+xalen-stars = { version = "0.7.0", path = "../xalen-stars" }
+xalen-western = { version = "0.7.0", path = "../xalen-western" }
+xalen-numerology = { version = "0.7.0", path = "../xalen-numerology" }
+xalen-coords = { version = "0.7.0", path = "../xalen-coords" }
 
 [features]
 # Enable for the published wheel build: `maturin build --features extension-module`.

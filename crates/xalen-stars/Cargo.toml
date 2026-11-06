@@ -9,8 +9,8 @@ keywords = ["fixed-stars", "star-catalog", "precession", "astronomy", "astrology
 categories = ["science", "mathematics"]
 
 [dependencies]
-xalen-time = { version = "0.6.0", path = "../xalen-time" }
-xalen-coords = { version = "0.6.0", path = "../xalen-coords" }
+xalen-time = { version = "0.7.0", path = "../xalen-time" }
+xalen-coords = { version = "0.7.0", path = "../xalen-coords" }
 serde.workspace = true
 
 [features]
@@ -22,7 +22,7 @@ default = ["bright-catalog"]
 bright-catalog = []
 
 [dev-dependencies]
-xalen-star-anchors = { version = "0.6.0", path = "../xalen-star-anchors" }
+xalen-star-anchors = { version = "0.7.0", path = "../xalen-star-anchors" }
 
 [lints]
 workspace = true

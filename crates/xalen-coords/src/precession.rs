@@ -408,7 +408,7 @@ mod tests {
 
     /// SOFA reference time argument in Julian centuries TT from J2000, computed
     /// in the SOFA two-part order for bit-level reproducibility.
-    fn sofa_ref_t() -> f64 {
+    fn reference_epoch_t() -> f64 {
         ((2400000.5 - 2451545.0) + 50123.9999) / 36525.0
     }
 
@@ -432,7 +432,7 @@ mod tests {
         // module are verbatim-identical to ERFA, and pmat06 — which composes
         // these four angles — matches the ERFA matrix golden to 1e-12 below, so
         // these values are independently corroborated end-to-end.
-        let (gamb, phib, psib, epsa) = fw06_angles(sofa_ref_t());
+        let (gamb, phib, psib, epsa) = fw06_angles(reference_epoch_t());
         assert!(
             (gamb - -0.2243387670997995690e-5).abs() < 1e-12,
             "gamb={gamb:.19}"
@@ -472,7 +472,7 @@ mod tests {
             ],
         ];
         assert_mat_eq(
-            precession_bias_matrix_iau2006(sofa_ref_t()),
+            precession_bias_matrix_iau2006(reference_epoch_t()),
             want,
             1e-12,
             "pmat06",

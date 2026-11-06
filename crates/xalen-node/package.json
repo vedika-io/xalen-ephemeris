@@ -1,6 +1,6 @@
 {
   "name": "@xalen/ephemeris",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Node.js bindings for XALEN Ephemeris — pure-Rust astronomical & astrological computation (VSOP87 planets, Vedic/KP, houses, ayanamsa, panchang, numerology)",
   "license": "Apache-2.0",
   "author": "XALEN Technology Pvt Ltd",

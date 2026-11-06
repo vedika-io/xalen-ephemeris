@@ -9,11 +9,11 @@ keywords = ["ephemeris", "vsop87", "planets", "astronomy", "astrology"]
 categories = ["science", "mathematics"]
 
 [dependencies]
-xalen-time = { version = "0.6.0", path = "../xalen-time" }
-xalen-coords = { version = "0.6.0", path = "../xalen-coords" }
-xalen-ayanamsa = { version = "0.6.0", path = "../xalen-ayanamsa" }
-xalen-houses = { version = "0.6.0", path = "../xalen-houses" }
-xalen-stars = { version = "0.6.0", path = "../xalen-stars" }
+xalen-time = { version = "0.7.0", path = "../xalen-time" }
+xalen-coords = { version = "0.7.0", path = "../xalen-coords" }
+xalen-ayanamsa = { version = "0.7.0", path = "../xalen-ayanamsa" }
+xalen-houses = { version = "0.7.0", path = "../xalen-houses" }
+xalen-stars = { version = "0.7.0", path = "../xalen-stars" }
 thiserror.workspace = true
 serde.workspace = true
 vsop87 = "3.0.0"
@@ -40,7 +40,7 @@ dirs = { version = "5", optional = true }
 kernel-autodownload = ["dep:ureq", "dep:sha2", "dep:dirs"]
 
 [dev-dependencies]
-xalen-vedic = { version = "0.6.0", path = "../xalen-vedic" }
+xalen-vedic = { version = "0.7.0", path = "../xalen-vedic" }
 
 [lints]
 workspace = true

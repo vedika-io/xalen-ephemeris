@@ -2,7 +2,7 @@
 
 **Pure-Rust astronomical ephemeris for astrology, compiled to WebAssembly — Vedic charts, panchang, houses, dasha, and compatibility in any browser or Node.js. Zero data files, zero native dependencies.**
 
-[![npm](https://img.shields.io/npm/v/xalen-ephemeris.svg)](https://www.npmjs.com/package/xalen-ephemeris) <!-- coming soon: not yet published -->
+[![npm](https://img.shields.io/npm/v/@xalen/wasm.svg)](https://www.npmjs.com/package/@xalen/wasm)
 [![CI](https://github.com/vedika-io/xalen-ephemeris/actions/workflows/ci.yml/badge.svg)](https://github.com/vedika-io/xalen-ephemeris/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](https://github.com/vedika-io/xalen-ephemeris/blob/main/LICENSE)
 
@@ -15,11 +15,10 @@ This crate wraps the XALEN core crates behind a single `XalenWasm` handle export
 ## Install
 
 ```bash
-# FORTHCOMING — not on npm yet.
-npm install xalen-ephemeris
+npm install @xalen/wasm
 ```
 
-> **Pre-publish note:** `xalen-ephemeris` is **not on npm yet** (the badge above is a placeholder). Until it ships, build the package from the repo:
+To build the package from the repository instead:
 
 ```bash
 git clone https://github.com/vedika-io/xalen-ephemeris.git
@@ -34,20 +33,22 @@ WebAssembly is **platform-independent**: a single `.wasm` artifact runs on every
 CPU and OS — any modern browser and any Node.js ≥ 16. There is no per-platform
 build to select.
 
-`scripts/build-all-platforms.sh wasm` produces the package locally; the durable
-build runs on every `v*` tag in
-[`.github/workflows/release.yml`](https://github.com/vedika-io/xalen-ephemeris/blob/main/.github/workflows/release.yml) (`wasm-pack build --target web` →
-`wasm-pack publish`). The crate compiles `wasm32-unknown-unknown` only; the same
-`XalenWasm` handle also builds natively for `cargo test`.
+The published package is built by
+[`scripts/build-release-artifacts.sh wasm`](https://github.com/vedika-io/xalen-ephemeris/blob/main/scripts/build-release-artifacts.sh)
+(`wasm-pack build --release --target web`, renamed to `@xalen/wasm`), which
+also loads the result in Node as a check. The crate compiles
+`wasm32-unknown-unknown` only; the same `XalenWasm` handle also builds natively
+for `cargo test`.
 
 ---
 
 ## Usage
 
-In the browser (`--target web`):
+In the browser (the npm package is the `--target web` build; for a local build
+import `./pkg/xalen_wasm.js` instead):
 
 ```js
-import init, { XalenWasm } from "./pkg/xalen_wasm.js";
+import init, { XalenWasm } from "@xalen/wasm";
 await init();
 
 const w = new XalenWasm();
@@ -58,10 +59,10 @@ const chart = JSON.parse(w.fullChartJson(J2000, 18.52, 73.85, 0));
 console.log(chart.planets.Sun, chart.ascendant_deg);
 ```
 
-In Node (`--target nodejs`):
+In Node (a local `wasm-pack build --target nodejs` build):
 
 ```js
-const { XalenWasm } = require("xalen-ephemeris");
+const { XalenWasm } = require("./pkg/xalen_wasm.js");
 const w = new XalenWasm();
 const aya = XalenWasm.ayanamsaDeg(2451545.0, 0); // Lahiri at J2000 ≈ 23.85°
 ```

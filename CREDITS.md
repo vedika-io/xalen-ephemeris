@@ -12,7 +12,7 @@ sources the library is built on.
 | Moon | **ELP-2000/82** — Chapront-Touzé, M. & Chapront, J. (1983, 1988), the original lunar theory. Coefficients used are the abridged 60+60-term tabulation reproduced as Meeus Tables 47.A/47.B (*Astronomical Algorithms*, 2nd ed., secondary source). |
 | Pluto | **Goffin (1989)** analytical fit to JPL DE200, the original source of the 43-term periodic series. Coefficients used are the tabulation reproduced as Meeus Table 37.A (Ch. 37, secondary source). Valid ~1885–2099. |
 | Precession | **IAU 2006/P03** — Capitaine, N., Wallace, P. T. & Chapront, J. (2003/2005); Wallace & Capitaine (2006), A&A 459, 981. Fukushima–Williams `pmat06` + ICRS `bp00` frame-bias matrix numerics ported from **ERFA** (liberfa, BSD-3-Clause — the numerical twin of IAU SOFA) and validated element-wise to 1e-12 against the ERFA/SOFA `t_erfa_c.c` golden vectors. The full bias-free P03 rotation matrix (`precession_matrix_p03_nobias`) is wired into the production VSOP87/ELP/Pluto position pipeline — confirmed to machine precision against ERFA/SOFA — superseding the earlier general-precession-in-longitude scalar; see docs/ACCURACY.md. |
-| Nutation | **IAU 2000B** — McCarthy, D. D. & Luzum, B. J. (2003); IERS Conventions (2003/2010). |
+| Nutation | **IAU 2000B** — McCarthy, D. D. & Luzum, B. J. (2003); IERS Conventions (2003/2010). The series layout follows the IAU SOFA routine `nut00b`; see the SOFA section of `NOTICE`. |
 | ΔT (Terrestrial–Universal Time) | **Stephenson, F. R., Morrison, L. V. & Hohenkerk, C. Y. (2016)**, *Measurement of the Earth's rotation: 720 BC to AD 2015*, Proc. R. Soc. A 472:20160404 — the genuine published Table-S15 cubic *regression* spline (coefficients verbatim) over [−720, AD 2016], with the model's own long-term lod-integral extrapolation tail outside that range. The paper publishes no coefficient covariance matrix, so none is claimed. XALEN's scalar 1-σ ΔT envelope (`delta_t_with_uncertainty`) is our own and uses only public-domain material: the Morrison & Stephenson (2004) parabola and the Huber (2000) Brownian-motion bound as printed on NASA's *Uncertainty in Delta T* page (F. Espenak, NASA/GSFC, eclipse.gsfc.nasa.gov; "Eclipse map/figure/table/predictions courtesy of Fred Espenak, NASA/Goddard Space Flight Center, from eclipse.gsfc.nasa.gov"), and the ΔT error column of the U.S. Naval Observatory file `historic_deltat.data` (McCarthy & Babcock 1986, via maia.usno.navy.mil, Distribution Statement A, 1657–1984), with a floor measured against USNO `deltat.data`. Espenak & Meeus (2006) polynomials and Morrison & Stephenson (2004) are also selectable via `DeltaTModel`. |
 | Practical reduction chain (apparent place: light-time, aberration, nutation) | Meeus, J. (1998), *Astronomical Algorithms*, 2nd ed., Willmann-Bell. |
 | Lunar eclipses | **Espenak, F. & Meeus, J. (2009)**, *Five Millennium Canon of Lunar Eclipses: −1999 to +3000*, NASA/TP-2009-214172 — umbral and penumbral radii per **Danjon** (1951), `1.01·π☾ ± s☉ + π☉` (ch. 1, eqs. 1-5 and 1-6). Cross-validated against Swiss Ephemeris `swe_lun_eclipse_when` / `swe_lun_eclipse_how` (`crates/xalen-ephem/tests/data/swiss_lunar_eclipse_oracle.py`). |
@@ -48,5 +48,15 @@ classical and standard references; see each crate's module documentation.
   series coefficients.
 - Cross-checked against the [Swiss Ephemeris](https://www.astro.com/swisseph/)
   (used as an independent reference only — it is **not** a dependency).
+
+## Contributors
+
+Thank you to the people outside the core team whose fixes are in the engine:
+
+- [Kunal Roy Choudhury](https://github.com/kunalgoesbyken) — lunar eclipses
+  from the real shadow geometry, and the classification of non-central solar
+  eclipses (0.7.0).
+- [Vidy Atreya Uppaluru](https://github.com/vauppaluru-ctrl) — the D24
+  (Chaturvimsamsa) fix (0.7.0).
 
 If you believe an attribution is missing or incorrect, please open an issue.

@@ -2,7 +2,7 @@
 
 **Pure-Rust astronomical & astrology ephemeris for Python — VSOP87 planets, Vedic/Western/KP, house systems, ayanamsa, fixed stars, numerology. A drop-in for `pyswisseph`, with no AGPL and no data files to ship.**
 
-[![PyPI](https://img.shields.io/pypi/v/xalen.svg)](https://pypi.org/project/xalen/) <!-- coming soon: not yet published -->
+[![PyPI](https://img.shields.io/pypi/v/xalen.svg)](https://pypi.org/project/xalen/)
 [![CI](https://github.com/vedika-io/xalen-ephemeris/actions/workflows/ci.yml/badge.svg)](https://github.com/vedika-io/xalen-ephemeris/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](https://github.com/vedika-io/xalen-ephemeris/blob/main/LICENSE)
 
@@ -13,15 +13,10 @@
 ## Install
 
 ```bash
-# FORTHCOMING — these ephemeris bindings are NOT on PyPI yet.
 pip install xalen
 ```
 
-> **Pre-publish note:** the `xalen` ephemeris wheel is **not on PyPI yet** (the
-> badge above is a placeholder). Be aware that an **unrelated** package also named
-> `xalen` currently exists on PyPI (a separate "XALEN SDK") — `pip install xalen`
-> today does **not** install these bindings. Until the ephemeris wheel ships, build
-> it locally from the repo:
+To build from the repository instead:
 
 ```bash
 pip install maturin
@@ -41,21 +36,17 @@ Wheels are built with the **abi3** stable ABI (`abi3-py38`), so a **single wheel
 per platform** imports unchanged on CPython 3.8 and every later 3.x — there is no
 per-interpreter-version wheel to pick.
 
-| Platform | Wheel | Built by |
-|----------|-------|----------|
-| Linux x86_64 (manylinux) | `cp38-abi3` | `release.yml` (PyPI) · `build-all-platforms.sh` (zig) |
-| Linux aarch64 (manylinux) | `cp38-abi3` | `release.yml` (PyPI) · `build-all-platforms.sh` (zig) |
-| macOS x86_64 | `cp38-abi3` | `release.yml` · `build-all-platforms.sh` (on a macOS host) |
-| macOS arm64 | `cp38-abi3` | `release.yml` · `build-all-platforms.sh` (native) |
-| Windows x86_64 | `cp38-abi3` | `release.yml` (PyPI) |
-| **Any other platform** | source | `pip install` builds from the **sdist** (needs a Rust toolchain) |
+| Platform | On PyPI |
+|----------|---------|
+| Linux x86_64, glibc ≥ 2.17 (manylinux2014) | `cp38-abi3` wheel |
+| Linux aarch64, glibc ≥ 2.17 (manylinux2014) | `cp38-abi3` wheel |
+| macOS arm64, 11.0 or later | `cp38-abi3` wheel |
+| macOS x86_64, 10.12 or later | `cp38-abi3` wheel |
+| **Windows, musl Linux and any other platform** | **sdist**: `pip install` builds from source (needs a Rust toolchain) |
 
-`scripts/build-all-platforms.sh` produces the wheel matrix locally (macOS targets
-require a macOS host; Linux/Windows cross-builds use `cargo-zigbuild`). The
-durable, per-release builds for **all** five platforms above run on official
-runners in [`.github/workflows/release.yml`](https://github.com/vedika-io/xalen-ephemeris/blob/main/.github/workflows/release.yml) on every `v*` tag. An
-**sdist** is also published, so any platform with a Rust toolchain can
-`pip install` from source.
+The wheels and the sdist are built on one Linux host by
+[`scripts/build-release-artifacts.sh`](https://github.com/vedika-io/xalen-ephemeris/blob/main/scripts/build-release-artifacts.sh),
+which also smoke-tests them. A Windows wheel is not published yet.
 
 ---
 

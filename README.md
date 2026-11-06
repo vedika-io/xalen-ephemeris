@@ -7,7 +7,7 @@
 [![CI](https://github.com/vedika-io/xalen-ephemeris/actions/workflows/ci.yml/badge.svg)](https://github.com/vedika-io/xalen-ephemeris/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-> **Publish status:** the Rust crates, the PyPI `xalen` wheel, and the npm `xalen` (native) / `xalen-ephemeris` (WASM) packages are **not published to their registries yet** — the Crates.io / docs.rs registry badges above are placeholders until first release. Build from source per the per-binding READMEs (`crates/xalen-python`, `crates/xalen-node`, `crates/xalen-wasm`).
+> **Packages:** Rust crates on [crates.io](https://crates.io/crates/xalen-ephemeris), Python on PyPI as [`xalen`](https://pypi.org/project/xalen/), and browser / WASM on npm as [`@xalen/wasm`](https://www.npmjs.com/package/@xalen/wasm). The native Node.js addon (`crates/xalen-node`) is not on npm yet; build it from source.
 
 > **Validated against the references that matter** — JPL Horizons **DE440** (NASA's
 > definitive ephemeris), the real DE440 binary kernel, **Swiss Ephemeris**, and the
@@ -72,28 +72,26 @@ println!("{}", Nakshatra::from_longitude_deg(sid)); // Swati
 
 ## Installation
 
-> **Availability note:** crates.io currently serves the **0.3.1** line (leaf
-> crates). The 0.4.x / 0.5.x releases described in this README are **not yet
-> published to crates.io** — publishing is in progress. Until it lands, either
-> pin `0.3` or depend on this repository directly with a `git`/`path` dependency.
-> The Node.js (`xalen`, npm) and Python (`xalen`, PyPI) packages are **not yet
-> published**; see *Language Bindings* below for building from source.
-
 ```bash
-# crates.io (currently serves the 0.3.1 line):
 cargo add xalen-ephemeris
 ```
 
-Or pick individual crates for a smaller footprint (pin to the latest published
-version):
+Or pick individual crates for a smaller footprint:
 
 ```toml
 [dependencies]
-xalen-ephem = "0.3"         # planetary engine
-xalen-vedic = "0.3"         # Vedic astrology
-xalen-houses = "0.3"        # house systems
-xalen-ayanamsa = "0.3"      # ayanamsa / sidereal conversion
-xalen-time = "0.3"          # Julian Day, delta-T, calendars
+xalen-ephem = "0.7"         # planetary engine
+xalen-vedic = "0.7"         # Vedic astrology
+xalen-houses = "0.7"        # house systems
+xalen-ayanamsa = "0.7"      # ayanamsa / sidereal conversion
+xalen-time = "0.7"          # Julian Day, delta-T, calendars
+```
+
+Python and browser / WASM:
+
+```bash
+pip install xalen
+npm install @xalen/wasm
 ```
 
 ## Quick Start
@@ -223,17 +221,15 @@ magnitude, obscuration, and C1–C4 contact times.
 
 | Language | Crate | Mechanism | Status |
 |----------|-------|-----------|--------|
-| **Rust** | `xalen-ephemeris` (umbrella) | Native (crates.io: 0.3.1 line published; 0.4.x+ not yet) | Published (0.3.1) |
-| **C / C++** | `xalen-ffi` | `extern "C"` + `repr(C)` structs | Source-stable; not yet on crates.io past 0.3.1 |
-| **Python** | `xalen-python` | PyO3 — build with `maturin develop` | Alpha; **not yet on PyPI** (`pip install xalen` is forthcoming) |
-| **Node.js** | `xalen-node` | napi-rs native addon — build with `napi build` | Alpha; **not yet on npm** (`npm install xalen` is forthcoming) |
-| **Browser / WASM** | `xalen-wasm` | wasm-bindgen, build with `wasm-pack build` | Alpha; build from source |
+| **Rust** | `xalen-ephemeris` (umbrella) | Native | On crates.io |
+| **C / C++** | `xalen-ffi` | `extern "C"` + `repr(C)` structs | Source-stable; on crates.io |
+| **Python** | `xalen-python` | PyO3 | Alpha; on PyPI as `xalen` (`pip install xalen`) |
+| **Node.js** | `xalen-node` | napi-rs native addon — build with `napi build` | Alpha; **not yet on npm**, build from source |
+| **Browser / WASM** | `xalen-wasm` | wasm-bindgen | Alpha; on npm as `@xalen/wasm` |
 
-> The `pip install xalen` / `npm install xalen` commands in the migration guides
-> describe the *intended* published interface and are **not live yet**. There is
-> an unrelated `xalen` package on PyPI (a separate XALEN SDK) — it is **not** these
-> ephemeris bindings. Until the bindings are published, build them from this
-> repository with the commands above.
+> The native Node.js addon is not on npm yet. The `npm install xalen` command in
+> the migration guides describes the intended interface; until it is published,
+> build the addon from this repository with `napi build`.
 
 Core computation crates compile to `wasm32-unknown-unknown` without modification.
 

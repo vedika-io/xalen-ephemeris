@@ -9,11 +9,11 @@ keywords = ["ayanamsa", "sidereal", "precession", "lahiri", "vedic"]
 categories = ["science", "mathematics"]
 
 [dependencies]
-xalen-time = { version = "0.6.0", path = "../xalen-time" }
-xalen-coords = { version = "0.6.0", path = "../xalen-coords" }
+xalen-time = { version = "0.7.0", path = "../xalen-time" }
+xalen-coords = { version = "0.7.0", path = "../xalen-coords" }
 # True Chitra anchors Spica from the anchors crate, not from the fixed-star
 # catalogue, so the ayanamsa does not depend on xalen-stars.
-xalen-star-anchors = { version = "0.6.0", path = "../xalen-star-anchors" }
+xalen-star-anchors = { version = "0.7.0", path = "../xalen-star-anchors" }
 serde.workspace = true
 
 [lints]

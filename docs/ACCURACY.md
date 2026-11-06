@@ -1,7 +1,7 @@
 # XALEN Ephemeris -- Accuracy Report
 
 **Last updated:** 2026-06-02
-**Engine version:** 0.6.0
+**Engine version:** 0.7.0
 **Test suite:** `cargo test --workspace` reports **2,199 tests passing** across the
 library and integration suites (0 failures). The committed per-domain Swiss/JPL
 oracle tests (`cargo test`) are the validation you can reproduce from this
