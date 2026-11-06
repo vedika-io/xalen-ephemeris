@@ -23,6 +23,8 @@ struct NutTerm {
 
 // Out-of-phase corrections S'_i*cos(arg) for longitude and C'_i*sin(arg) for obliquity.
 // Only the first ~5 terms have significant out-of-phase components (SOFA nut00b.c).
+// This layout follows SOFA's nut00b; this file is a derived work and is not SOFA
+// software (see the SOFA section of the repository NOTICE for how it differs).
 // Index matches position in TERMS array. Values in 0.1 µas.
 struct OutOfPhaseTerm {
     idx: usize,
