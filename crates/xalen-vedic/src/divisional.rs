@@ -226,22 +226,19 @@ fn vimsamsa(sign_idx: usize, deg: f64) -> Rashi {
     Rashi::from_index((start + part) % 12)
 }
 
-/// D24 (Chaturvimsamsa / Siddhamsa) per BPHS:
+/// D24 (Chaturvimsamsa / Siddhamsa) per BPHS ch. 6 (Shodasavarga):
 /// Odd signs: sequential from Leo (4)
-/// Even signs: reverse from Cancer (3) — Cancer, Gemini, Taurus, Aries, Pisces...
+/// Even signs: sequential from Cancer (3) — Cancer, Leo, Virgo, Libra, Scorpio...
 /// Each part = 30/24 = 1.25°
+///
+/// BPHS gives the *starting sign* for each parity — Leo for odd, Cancer for
+/// even — and the 24 divisions run FORWARD from that start in both cases. The
+/// parity changes where the count begins, not which direction it travels.
 fn chaturvimsamsa(sign_idx: usize, deg: f64) -> Rashi {
     let is_odd_sign = sign_idx.is_multiple_of(2); // 0-indexed: Aries=0=even idx=odd sign
     let part = (deg / 1.25) as usize;
-    if is_odd_sign {
-        // Odd signs: forward from Leo
-        Rashi::from_index((4 + part) % 12)
-    } else {
-        // Even signs: backward from Cancer
-        // Cancer=3, going backward. Use modular arithmetic to avoid overflow:
-        // (3 - part) mod 12, implemented as (3 + 12 - (part % 12)) % 12
-        Rashi::from_index((3 + 12 - (part % 12)) % 12)
-    }
+    let start = if is_odd_sign { 4 } else { 3 }; // Leo : Cancer
+    Rashi::from_index((start + part) % 12)
 }
 
 /// D27 (Bhamsa / Nakshatramsa) per BPHS:
@@ -583,22 +580,46 @@ mod tests {
     }
 
     #[test]
-    fn d24_even_sign_starts_cancer_backward() {
-        // 0° Taurus (even sign, idx=1): part 0 → (3 + 12 - 0) % 12 = 3 = Cancer
+    fn d24_even_sign_starts_cancer() {
+        // 0° Taurus (even sign, idx=1): part 0 → (3 + 0) % 12 = 3 = Cancer
         assert_eq!(compute_varga_sign(30.0, VargaChart::D24), Rashi::Karka);
         // 0° Cancer (even sign, idx=3): part 0 → Cancer
         assert_eq!(compute_varga_sign(90.0, VargaChart::D24), Rashi::Karka);
     }
 
     #[test]
-    fn d24_even_sign_backward_sequence() {
-        // In Taurus (even sign): 1.25° per part, backward from Cancer
-        // Part 0 = Cancer, Part 1 = Gemini, Part 2 = Taurus, Part 3 = Aries
+    fn d24_even_sign_forward_sequence() {
+        // In Taurus (even sign): 1.25° per part, FORWARD from Cancer.
+        // Part 0 = Cancer, Part 1 = Leo, Part 2 = Virgo, Part 3 = Libra, Part 4 = Scorpio
         assert_eq!(compute_varga_sign(30.0, VargaChart::D24), Rashi::Karka); // Part 0
-        assert_eq!(compute_varga_sign(31.3, VargaChart::D24), Rashi::Mithuna); // Part 1
-        assert_eq!(compute_varga_sign(32.6, VargaChart::D24), Rashi::Vrishabha); // Part 2
-        assert_eq!(compute_varga_sign(33.9, VargaChart::D24), Rashi::Mesha); // Part 3
-        assert_eq!(compute_varga_sign(35.1, VargaChart::D24), Rashi::Meena); // Part 4 (wraps)
+        assert_eq!(compute_varga_sign(31.3, VargaChart::D24), Rashi::Simha); // Part 1
+        assert_eq!(compute_varga_sign(32.6, VargaChart::D24), Rashi::Kanya); // Part 2
+        assert_eq!(compute_varga_sign(33.9, VargaChart::D24), Rashi::Tula); // Part 3
+        assert_eq!(compute_varga_sign(35.1, VargaChart::D24), Rashi::Vrishchika); // Part 4
+    }
+
+    /// Regression test against an independent reference chart.
+    ///
+    /// Birth: 19 May 1983, 03:45 IST, New Delhi (28.6139N, 77.2090E).
+    /// Sidereal positions (Lahiri ayanamsa 23.6197°) and the expected D24
+    /// placements come from third-party Vedic astrology software, not from
+    /// this crate.
+    ///
+    /// All three planets below sit in EVEN signs, which is the branch this
+    /// test guards. Before the forward/backward correction each was displaced
+    /// by exactly `2 * part` signs — 6, 2 and 8 respectively — which is the
+    /// signature of counting the divisions in the wrong direction.
+    #[test]
+    fn d24_even_sign_matches_reference_chart() {
+        // Sun at Taurus 3.7794° → part 3 → Cancer + 3 = Libra
+        assert_eq!(compute_varga_sign(33.7794, VargaChart::D24), Rashi::Tula);
+        // Moon at Cancer 24.9529° → part 19 → Cancer + 19 = Aquarius
+        assert_eq!(compute_varga_sign(114.9529, VargaChart::D24), Rashi::Kumbha);
+        // Jupiter at Scorpio 13.5741° → part 10 → Cancer + 10 = Taurus
+        assert_eq!(
+            compute_varga_sign(223.5741, VargaChart::D24),
+            Rashi::Vrishabha
+        );
     }
 
     #[test]
