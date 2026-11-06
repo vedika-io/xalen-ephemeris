@@ -27,21 +27,28 @@ Third-Party Acknowledgments:
 - IAU 2006 precession: N. Capitaine, P.T. Wallace, J. Chapront (2003)
 - IAU 2000B nutation: D.D. McCarthy, G. Petit (IERS TN 32)
 - Delta-T model: F.R. Stephenson, L.V. Morrison, C.Y. Hohenkerk (2016)
-- Fixed-star catalog: The Hipparcos and Tycho Catalogues, (C) ESA 1997
-  (ESA SP-1200), distributed by CDS Strasbourg as catalogue I/239. The
-  expanded fixed-star catalog (Vmag <= 6.5) is generated directly from
-  I/239 hip_main.dat (positions, magnitudes, proper motions).
-- Fixed-star traditional names: IAU Catalog of Star Names (IAU-CSN),
+- Fixed-star catalog: Hoffleit D., Warren Jr W.H., The Bright Star Catalogue,
+  5th Revised Ed. (Preliminary Version), Astronomical Data Center,
+  NSSDC/ADC (1991), distributed by CDS Strasbourg as catalogue V/50. The
+  fixed-star list in xalen-stars (9,096 stars) is generated from it
+  (identification, magnitudes, proper motions, positions).
+- Fixed-star names and positions: IAU Catalog of Star Names (IAU-CSN),
   IAU Division C Working Group on Star Names (WGSN), used under
-  Creative Commons Attribution; names carried onto HIP identifiers.
-- Star identities additionally cross-checked against the CDS/SIMBAD
-  Astronomical Database, Strasbourg.
+  Creative Commons Attribution; proper names, constellations and J2000
+  positions of the named stars.
+- Hipparcos: The Hipparcos and Tycho Catalogues, (C) ESA 1997 (ESA SP-1200),
+  CDS catalogue I/239, published under CC BY-NC 3.0 IGO (non-commercial).
+  The Hipparcos-derived data is now only in the optional, unpublished
+  crates/xalen-stars-hip-data crate (publish = false, its own non-commercial
+  LICENSE). No published XALEN crate depends on it, and it is not part of the
+  default star list.
 - I-Ching (Yi King) text: James Legge, Sacred Books of the East Vol. XVI (1882), public domain.
 
-NOTE ON COMMERCIAL SCOPE: A 'comprehensive' COMMERCIAL claim over the
-Hipparcos-derived catalog still requires CDS/ESA license clearance for
-redistribution. This release ships under the attribution above; the
-clearance gate is tracked in docs and is NOT yet resolved.
+NOTE ON COMMERCIAL SCOPE: the published crates carry no CC BY-NC data. The
+only non-commercial star data in the repository is the Hipparcos-derived
+catalogue in crates/xalen-stars-hip-data, which is unpublished and must not be
+linked into a commercial build. The commercial-clean CI workflow checks that no
+published crate depends on it.
 
 ---
 

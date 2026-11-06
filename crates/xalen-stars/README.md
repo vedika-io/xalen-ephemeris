@@ -1,24 +1,24 @@
 # xalen-stars
-> Astrologically significant fixed stars with rigorously precessed, proper-motion-corrected ecliptic positions, backed by the Hipparcos catalogue.
+> Fixed stars with rigorously precessed, proper-motion-corrected ecliptic positions: the 9,096 stars of the Yale Bright Star Catalogue plus a 108-star curated core with Ptolemaic natures.
 
 Part of the [XALEN Ephemeris](https://github.com/vedika-io/xalen-ephemeris) suite — pure-Rust, thread-safe, Apache-2.0.
 
 ## Catalog layers
 - **Curated `CATALOG`** — 108 traditional fixed stars, each with a `'static` name, Ptolemaic planetary nature, and constellation.
-- **`GENERATED_CATALOG`** — every Hipparcos Main Catalogue star with Vmag ≤ 6.5 (8,870 stars), each derived from a real `hip_main.dat` record (no value invented or interpolated). 106 of the 108 traditional names are joined to their exact Hipparcos row via the IAU Catalog of Star Names (IAU-CSN); the only two without a single HIP star are the open clusters Pleiades and Praesepe.
-- The public `find_by_name` / `find_conjunctions` surface reads a **reconciled catalog**: for every named star it returns the validated Hipparcos position (sub-arcsecond agreement with the source), and falls back to the curated coordinates only for those two clusters.
+- **`BRIGHT_CATALOG`** (feature `bright-catalog`, default-on) — all 9,096 stars of the Yale Bright Star Catalogue, 5th rev. ed. (Hoffleit & Warren 1991, CDS V/50), as `BrightStar { hr, hd, designation, name, constellation, longitude_j2000, latitude_j2000, magnitude, nature, pm_lon_mas_per_year, pm_lat_mas_per_year }`, sorted by HR. 338 stars that are also in the IAU Catalog of Star Names (IAU-CSN) carry the IAU proper name, constellation and the IAU 6-decimal J2000 position; every other star uses the Bright Star Catalogue position (RA to 0.1 s, Dec to 1″). Proper motion and magnitude always come from the Bright Star Catalogue. 106 of the 108 curated names are joined to their star (through the IAU-CSN, or the Bayer designation for Al Jabhah); the two without a single star are the open clusters Pleiades and Praesepe. `constellation` is filled for stars that have an IAU name or a Bayer/Flamsteed designation (3,154 stars) and is `""` for the rest.
+- The public `find_by_name` / `find_conjunctions` surface reads a **reconciled catalog**: for every curated name that joins to a bright star it returns the catalogue position, and it falls back to the curated coordinates only for the two clusters. Without the `bright-catalog` feature (a size switch with no licence meaning) only the 108 curated stars are available and `find_by_name` serves them verbatim.
 
 ## Features
-- `FixedStar::longitude_at_epoch` / `latitude_at_epoch` / `longitude_at_jd` — positions at any decimal year or Julian Date. Precession uses the **rigorous IAU 2006/P03 rotation** (`precessed_ecliptic_of_date`), which couples ecliptic longitude **and** latitude — not a linear-longitude model with frozen latitude. The 50.28796″/yr (IAU 2006 J2000) figure remains the leading-order longitude term but is no longer the propagation method. Validated against `pyswisseph` `swe.fixstar2` at 1000 CE and 3000 CE (worst total separation ≈ 4.4″).
-- `find_by_name` (case-insensitive lookup) and `find_conjunctions` / `find_conjunctions_at_epoch` — stars within a given orb of a planetary longitude, plus `find_conjunctions_expanded` over all 8,870 generated stars.
-- `find_generated_by_hip` / `find_generated_by_name` — direct access to the Hipparcos-derived catalog.
+- `FixedStar::longitude_at_epoch` / `latitude_at_epoch` / `longitude_at_jd` and the same methods on `BrightStar` — positions at any decimal year or Julian Date. Precession uses the **rigorous IAU 2006/P03 rotation** (`precessed_ecliptic_of_date`), which couples ecliptic longitude **and** latitude. Checked against `pyswisseph` `swe.fixstar2` at 1000 CE and 3000 CE (worst total separation 0.34′ with the Bright Star Catalogue proper motions).
+- `find_bright_by_hr` / `find_bright_by_hd` / `find_bright_by_name` (case-insensitive; matches the IAU or curated name, an IAU spelling that differs from the curated one, or the designation) — direct access to the Bright Star Catalogue list.
+- `find_by_name` (case-insensitive lookup) and `find_conjunctions` / `find_conjunctions_at_epoch` — stars within a given orb of a planetary longitude, plus `find_conjunctions_expanded` over all 9,096 bright stars.
 - `nakshatra_yogatara` — maps each of the 27 nakshatra indices (0 = Ashwini … 26 = Revati) to its primary reference star.
 - `catalog` module — load and merge external catalogs from CSV at runtime via `load_catalog_from_csv` / `load_catalog_from_str`, `merge_catalogs`, `find_in_catalog`, and `find_conjunctions_in_catalog`.
-- `serde`-serializable `FixedStar`; no `unsafe`, no global mutable state.
+- `serde`-serializable `FixedStar` and `BrightStar`; no `unsafe`, no global mutable state.
 
 ## Usage
 ```rust
-use xalen_stars::{find_by_name, find_conjunctions, nakshatra_yogatara};
+use xalen_stars::{find_bright_by_hr, find_by_name, find_conjunctions, nakshatra_yogatara};
 
 // Look up a star and compute its precessed longitude in the year 2100.
 let spica = find_by_name("Spica").unwrap();
@@ -29,6 +29,10 @@ println!("Spica longitude in 2100: {lon_2100:.3}°");
 let chitra = nakshatra_yogatara(13).unwrap();
 assert_eq!(chitra.name, "Spica");
 
+// Any Bright Star Catalogue star by its HR number (HR 2491 = Sirius).
+let sirius = find_bright_by_hr(2491).unwrap();
+assert_eq!(sirius.name, Some("Sirius"));
+
 // Find catalog stars within a 2° orb of ecliptic longitude 70°.
 for (star, dist) in find_conjunctions(70.0, 2.0) {
     println!("{} at {:.2}° away", star.name, dist);
@@ -36,16 +40,10 @@ for (star, dist) in find_conjunctions(70.0, 2.0) {
 ```
 
 ## Accuracy & sources
-J2000.0 positions, magnitudes and proper motions are derived from the Hipparcos Main Catalogue (CDS I/239, ESA 1997): each `hip_main.dat` record is propagated J1991.25 → J2000.0 by its measured proper motion, then rotated to the J2000 ecliptic at the IAU 2006 mean obliquity. Traditional names are joined to HIP numbers through the IAU Catalog of Star Names (IAU-CSN). Epoch propagation to other years uses the rigorous IAU 2006/P03 precession rotation plus per-star proper motion (CSV imports apply an approximate equatorial-to-ecliptic PM conversion). The generated catalog is rebuilt by `tools/gen-star-catalog/gen_catalog.py`. See [ACCURACY.md](../../docs/ACCURACY.md) and [CREDITS.md](../../CREDITS.md).
+Positions are equinox J2000, epoch 2000.0, rotated to the J2000 ecliptic at the IAU 2006 mean obliquity. Measured against the Swiss Ephemeris `swe_fixstar2` J2000 places recorded in `tests/common/mod.rs`: the 38 IAU-named oracle stars are within 0.245″ (median 0.026″). Six curated stars (Zuben Elgenubi, Zuben Eschamali, Lambda Orionis, Hyadum II, Bharani 41, Al Jabhah) disagree with their recorded Swiss values by 1.9″ to 27″; the Hipparcos-derived data disagrees with the same values by nearly the same amounts (1.3″ for Al Jabhah), and the tests pin them by name. Stars without an IAU name carry the Bright Star Catalogue rounding: against the Hipparcos-derived positions the median is 0.64″, 95% are within 2.3″, and the tail (close binaries, high proper motion) reaches tens of arcseconds. Proper motions are the FK5 values of the Bright Star Catalogue, so positions propagated by ±1000 years can differ from Swiss by up to 0.34′. The list is rebuilt by `tools/gen-star-catalog/gen_bright_catalog.py`. See [ACCURACY.md](../../docs/ACCURACY.md) and [CREDITS.md](../../CREDITS.md).
 
 ## License
 
-The crate **code** is licensed under Apache-2.0. See [LICENSE](../../LICENSE).
+The crate **code** is licensed under Apache-2.0. See [LICENSE](../../LICENSE). The star data is the Yale Bright Star Catalogue (Hoffleit & Warren 1991) and the IAU Catalog of Star Names (Creative Commons Attribution); see [NOTICE](../../NOTICE).
 
-The **Hipparcos-derived catalogue data** is a separate matter. It ships in the
-optional [`xalen-stars-hip-data`](../xalen-stars-hip-data) crate, which is
-licensed **CC BY-NC 3.0 IGO** (non-commercial) because it derives from the
-Hipparcos Main Catalogue (CDS I/239, © ESA 1997). It is included only via the
-default-on `hip-catalog` feature; commercial builds must compile with
-`--no-default-features`, which links none of the non-commercial data. See
-[NOTICE](../../NOTICE) Part 3.
+The Hipparcos-derived catalogue, which is **CC BY-NC 3.0 IGO** (non-commercial), is not part of this crate. It lives in the optional, unpublished [`xalen-stars-hip-data`](../xalen-stars-hip-data) crate, which depends on `xalen-stars`; no published crate depends on it.
