@@ -104,6 +104,21 @@ cargo test  --workspace --exclude xalen-python
 cargo doc   --no-deps --workspace --exclude xalen-python
 ```
 
+`scripts/gate.sh` runs all of these in one go, plus the release-configuration
+tests (`crates/xalen-python/tests/test_build_config.py` and
+`crates/xalen-node/__test__/platform-matrix.test.mjs`) and the accuracy harness
+in `validation/`. It prints each step, then a summary, and exits non-zero if
+any step failed. The harness runs on 2000 charts by default; for a larger run
+use `bash scripts/gate.sh --harness-n 20000` or `GATE_HARNESS_N=20000 bash
+scripts/gate.sh`. It installs `pyswisseph`, the Swiss Ephemeris bindings it
+compares against, into a temporary directory for the run; that is a test-time
+tool only and nothing from it is committed or shipped.
+
+CI runs on the maintainers' own AWS infrastructure. Every pull request receives
+a `ci/gate` commit status once the maintainers have run `scripts/gate.sh`
+against its head; contributors can run the same script locally or in their
+fork's CI.
+
 Clippy runs with warnings as errors. CI also runs the tests on Linux, macOS
 and Windows, `cargo audit` (RustSec advisories), and the WebAssembly, Python
 and Node binding builds.

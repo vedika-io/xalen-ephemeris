@@ -11,7 +11,7 @@ Two parts:
 | File | Role |
 |------|------|
 | `oracle_pyswisseph.py` | Deterministically samples N random `(jd, lat, lon)` charts and writes one Swiss-Ephemeris reference record per line (JSON Lines). |
-| `src/main.rs` (`xalen-validation` bin crate) | Reads the oracle file, recomputes the same quantities with the pure-Rust XALEN crates, and prints per-body max / mean / RMS absolute delta (arcsec), the worst offender, the `<1″` subset fraction, and an overall PASS/FAIL against a configurable degree threshold. |
+| `src/main.rs` (`xalen-validation` bin crate) | Reads the oracle file, recomputes the same quantities with the pure-Rust XALEN crates, and prints per-body max / p99 / mean / RMS absolute delta (arcsec), the worst offender, the `<1″` subset fraction, and an overall PASS/FAIL against a configurable degree threshold. |
 
 ## Quantities compared, per chart
 
@@ -70,6 +70,22 @@ Both the generator and the runner are fully deterministic for a fixed
   (default `0.1`, the legacy bound). The report also always shows the tighter
   `<1″` subset fraction.
 
+## Run by the gate and by CI
+
+`scripts/gate.sh` runs this harness as its last step: it installs `pyswisseph`
+into a temporary directory, generates an oracle of N charts (seed 42), pipes it
+into `xalen-validation`, and fails the gate if any gated quantity is more than
+0.1 degree from the oracle. N defaults to 2000. For a larger run:
+
+```bash
+bash scripts/gate.sh --harness-n 20000
+GATE_HARNESS_N=20000 bash scripts/gate.sh     # same thing
+GATE_HARNESS_SEED=7 bash scripts/gate.sh      # a different sample
+```
+
+The oracle is a run-time test dependency only; nothing from `pyswisseph` is
+committed.
+
 ## Backend honesty (Moshier vs DE440)
 
 `pyswisseph` is **only as accurate as the data files it can find**. With no
@@ -120,7 +136,7 @@ streamed; standalone it processes well over 100k charts/second.
 
 ## Interpreting the output
 
-The runner prints, per quantity, `count`, `mean(″)`, `rms(″)`, `max(″)`, the
+The runner prints, per quantity, `count`, `mean(″)`, `rms(″)`, `p99(″)` (read from a log-spaced histogram, so it can sit up to about 2.3% above the true percentile but never above the max), `max(″)`, the
 `<1″%` subset, and the worst chart `(jd, lat, lon)`. A `<-- OVER` flag marks any
 quantity with a sample beyond the 0.1° legacy bound. The final line is `PASS`
 (exit 0) or `FAIL` (exit 1).

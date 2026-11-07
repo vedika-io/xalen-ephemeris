@@ -136,6 +136,14 @@ exception that `except swe.Error` can catch
   and so the Shadbala total, changes for every planet (see *Fixed*), and the
   `speed` argument of `compute_full` is no longer used.
 
+### Changed
+
+- The accuracy harness in `validation/` now runs in the gate. `scripts/gate.sh`
+  runs format, clippy, tests, docs, the release-configuration tests and the
+  harness (2000 charts by default, `--harness-n` or `GATE_HARNESS_N` for more,
+  `pyswisseph` oracle) in one go. `xalen-validation` now also prints the
+  99th-percentile error per quantity ([#17](https://github.com/vedika-io/xalen-ephemeris/issues/17)).
+
 ### Fixed
 - **Drik Bala in `Shadbala::compute_full`** used graded aspects (15, 30, 45 or
   60 virupas by the nearest house), so it jumped at sign boundaries and did not
