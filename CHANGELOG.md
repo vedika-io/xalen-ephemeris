@@ -125,6 +125,21 @@ exception that `except swe.Error` can catch
   `speed` argument of `compute_full` is no longer used.
 
 ### Fixed
+- **Drik Bala in `Shadbala::compute_full`** used graded aspects (15, 30, 45 or
+  60 virupas by the nearest house), so it jumped at sign boundaries and did not
+  follow BPHS. It now uses the Sphuta Drishti curve of BPHS Ch. 26, exposed as
+  `shadbala::sphuta_drishti_deg`: 0 up to 30 degrees, rising to 15 at 60, 45 at
+  90, falling to 30 at 120 and 0 at 150, rising to the full 60 at 180, then
+  falling evenly to 0 at 300. Saturn adds 45 over 60 to 90 and 270 to 300
+  degrees, Jupiter 30 over 120 to 150 and 240 to 270, and Mars 15 over 90 to 120
+  and 210 to 240, so each has a full 60 at its special aspect (B.V. Raman's
+  reading in *Graha and Bhava Balas*; checked against his worked example and
+  against PyJHora). The special aspects of Mars, Jupiter and Saturn are added as
+  constants over one sign, so those three planets step at the sign edges
+  (Raman's reading). Drik Bala stays the sum of benefic minus malefic aspect
+  values divided by 4, with the same benefic and malefic rules. Drik Bala and
+  the Shadbala total change for most charts. Refs
+  [#46](https://github.com/vedika-io/xalen-ephemeris/issues/46).
 - **Cheshta Bala in `Shadbala::compute_full`** was a placeholder (a flat 30 for
   the Sun and Moon and 60, 30 or 15 for the others from the direction of
   motion). It now follows BPHS Ch. 27 (Santhanam; B.V. Raman, *Graha and Bhava
