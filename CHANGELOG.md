@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`xalen-cli`** crate with the `xalen` command line (installed with
+  `cargo install xalen-cli`). Nine commands over the library, each with a
+  readable table and `--json`: `positions`, `chart`, `panchang`, `dasha`,
+  `star`, `eclipses`, `rise-set`, `aspects` and `convert`. Dates are ISO-8601
+  (`--date`) or a Julian Day (`--jd`); places are `--lat`/`--lon` or a city
+  from the built-in table (`--place`). Bad input exits 2 with a one-line
+  message, computation errors exit 1. The tool contains no astronomy of its
+  own and works offline.
+
 ## [0.7.0] - 2026-11-07
 
 The first release since 0.6.0. It carries three fixes sent in by outside
