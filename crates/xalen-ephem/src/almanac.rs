@@ -158,8 +158,36 @@ impl Almanac {
         elevation_m: f64,
     ) -> Result<f64, EphemerisError> {
         let topo = self.topocentric_ecliptic(body, jd_ut1, lat_deg, lon_deg, elevation_m)?;
+        Ok(self.altitude_of_ecliptic_deg(&topo, jd_ut1, lat_deg, lon_deg))
+    }
+
+    /// Altitude (degrees) of a body's **geocentric** apparent position with its
+    /// ecliptic latitude set to zero, for an observer at `lat_deg`/`lon_deg`: no
+    /// parallax, the body placed on the ecliptic. This is the "Hindu rising"
+    /// convention of `swe_rise_trans` (`SE_BIT_GEOCTR_NO_ECL_LAT`).
+    pub fn geocentric_ecliptic_altitude_deg(
+        &self,
+        body: Body,
+        jd_ut1: JdUT1,
+        lat_deg: f64,
+        lon_deg: f64,
+    ) -> Result<f64, EphemerisError> {
+        let mut geo = self.geocentric_ecliptic(body, jd_ut1)?;
+        geo.latitude = 0.0;
+        Ok(self.altitude_of_ecliptic_deg(&geo, jd_ut1, lat_deg, lon_deg))
+    }
+
+    /// Altitude (degrees) of an apparent ecliptic-of-date position for an
+    /// observer at `lat_deg`/`lon_deg` at `jd_ut1`.
+    fn altitude_of_ecliptic_deg(
+        &self,
+        pos: &EclipticPosition,
+        jd_ut1: JdUT1,
+        lat_deg: f64,
+        lon_deg: f64,
+    ) -> f64 {
         let jd_tt = jd_ut1.to_tt(&self.delta_t_model);
-        // `topo` is on the TRUE equinox of date (apparent ecliptic-of-date), so
+        // `pos` is on the TRUE equinox of date (apparent ecliptic-of-date), so
         // use the TRUE obliquity (mean + delta_epsilon) for ecliptic→equatorial and
         // APPARENT sidereal time (GMST + equation of equinoxes) for the hour angle —
         // keeping RA and sidereal time on the same equinox. (Matches
@@ -167,7 +195,7 @@ impl Almanac {
         let t = jd_tt.julian_centuries_from_j2000();
         let nut = nutation_2000b(t);
         let eps = mean_obliquity(t) + nut.delta_epsilon; // true obliquity of date
-        let eq = ecliptic_to_equatorial(&topo, eps);
+        let eq = ecliptic_to_equatorial(pos, eps);
         let eq_of_equinoxes = nut.delta_psi * eps.cos();
         let last = (crate::topocentric::gmst_deg(jd_ut1.as_f64()) + lon_deg).to_radians()
             + eq_of_equinoxes;
@@ -175,7 +203,7 @@ impl Almanac {
         let phi = lat_deg.to_radians();
         let alt =
             (phi.sin() * eq.declination.sin() + phi.cos() * eq.declination.cos() * h.cos()).asin();
-        Ok(alt.to_degrees())
+        alt.to_degrees()
     }
 
     /// The body's **topocentric local hour angle** in degrees, wrapped to

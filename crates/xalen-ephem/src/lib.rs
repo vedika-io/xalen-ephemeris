@@ -43,8 +43,8 @@ pub use de440::{
     chebyshev_compute, chebyshev_derivative,
 };
 pub use eclipse::{
-    LunarContacts, LunarEclipse, LunarEclipseType, SolarEclipse, SolarEclipseType,
-    find_lunar_eclipses, find_solar_eclipses,
+    LunarContacts, LunarEclipse, LunarEclipseType, LunarShadowState, SolarEclipse,
+    SolarEclipseType, find_lunar_eclipses, find_solar_eclipses, lunar_shadow_state,
 };
 pub use event_search::{EventSearchResult, find_crossing, find_sign_ingress, find_station};
 #[cfg(feature = "kernel-autodownload")]
@@ -57,7 +57,7 @@ pub use local_eclipse::{
 };
 pub use provider::{EphemerisError, EphemerisProvider};
 pub use returns::{ReturnBody, find_return, find_return_tt};
-pub use rise_set::{RiseTransitSet, Twilight, TwilightTimes};
+pub use rise_set::{DiscPoint, HorizonCrossing, RiseTransitSet, Twilight, TwilightTimes};
 pub use true_node::{mean_lunar_node, south_node, true_lunar_node};
 pub use vsop::Vsop87Provider;
 

@@ -14,8 +14,22 @@
 #  * position-altering flags XALEN does not implement (HELCTR, TOPOCTR, J2000,
 #    EQUATORIAL, BARYCTR, XYZ, RADIANS) raise ValueError when passed to calc_ut.
 #  * set_ephe_path() and close() are no-ops (data is embedded at compile time).
+#  * Every calculation failure raises swe.Error (a RuntimeError); TypeError and
+#    ValueError are raised only for bad arguments.
+#  * rise_trans / eclipse functions return pyswisseph's tuple shapes; slots the
+#    engine does not compute are 0.0 (see each docstring).
 
-from typing import Optional, Tuple, Union
+from typing import Any, Optional, Sequence, Tuple, Union
+
+_Tret = Tuple[float, float, float, float, float, float, float, float, float, float]
+_Attr = Tuple[
+    float, float, float, float, float, float, float, float, float, float,
+    float, float, float, float, float, float, float, float, float, float,
+]
+
+class Error(RuntimeError):
+    """Calculation failure (pyswisseph's swe.Error)."""
+    ...
 
 # --- functions -------------------------------------------------------------
 
@@ -78,6 +92,68 @@ def set_ephe_path(path: Optional[str] = ...) -> None:
 
 def close() -> None:
     """No-op. XALEN holds no resources to release."""
+    ...
+
+# --- rise, set and transit -------------------------------------------------
+
+def rise_trans(
+    tjdut: float,
+    body: Union[int, str],
+    rsmi: int,
+    geopos: Sequence[float],
+    atpress: float = ...,
+    attemp: float = ...,
+    flags: int = ...,
+) -> Tuple[int, _Tret]:
+    """(res, tret): res 0 = found (tret[0] = JD UT), -2 = circumpolar.
+    geopos = (lon, lat, alt_m). rsmi = CALC_* | BIT_*. Star names raise Error."""
+    ...
+
+def rise_trans_true_hor(
+    tjdut: float,
+    body: Union[int, str],
+    rsmi: int,
+    geopos: Sequence[float],
+    atpress: float = ...,
+    attemp: float = ...,
+    horhgt: float = ...,
+    flags: int = ...,
+) -> Tuple[int, _Tret]:
+    """rise_trans with the local horizon at horhgt degrees."""
+    ...
+
+# --- eclipses --------------------------------------------------------------
+
+def sol_eclipse_when_glob(
+    tjdut: float, flags: int = ..., ecltype: int = ..., backwards: Any = ...
+) -> Tuple[int, _Tret]:
+    """(retflag, tret); tret[0] = greatest eclipse (JD UT), tret[1:] = 0.0."""
+    ...
+
+def sol_eclipse_when_loc(
+    tjdut: float, geopos: Sequence[float], flags: int = ..., backwards: Any = ...
+) -> Tuple[int, _Tret, _Attr]:
+    """(retflag, tret, attr): tret = max, C1..C4, sunrise, sunset;
+    attr[0] magnitude, [2] obscuration, [5] Sun altitude, [8] magnitude."""
+    ...
+
+def lun_eclipse_when(
+    tjdut: float, flags: int = ..., ecltype: int = ..., backwards: Any = ...
+) -> Tuple[int, _Tret]:
+    """(retflag, tret): max, -, U1, U4, U2, U3, P1, P4, -, -."""
+    ...
+
+def lun_eclipse_when_loc(
+    tjdut: float, geopos: Sequence[float], flags: int = ..., backwards: Any = ...
+) -> Tuple[int, _Tret, _Attr]:
+    """(retflag, tret, attr); tret[8]/[9] = moonrise/moonset during the eclipse."""
+    ...
+
+def lun_eclipse_how(
+    tjdut: float, geopos: Sequence[float], flags: int = ...
+) -> Tuple[int, _Attr]:
+    """(retflag, attr): attr[0] umbral mag, [1] penumbral mag, [5] Moon
+    altitude, [7] distance from the shadow axis, [8] umbral mag."""
     ...
 
 # --- planet constants (both spellings) -------------------------------------
@@ -172,3 +248,96 @@ GREG_CAL: int
 SE_GREG_CAL: int
 JUL_CAL: int
 SE_JUL_CAL: int
+
+# --- ephemeris-selection flags (accepted; XALEN always uses its engine) ----
+
+FLG_JPLEPH: int
+FLG_MOSEPH: int
+SEFLG_JPLEPH: int
+SEFLG_MOSEPH: int
+
+# --- rise_trans selectors and modifiers (both spellings) -----------------
+
+CALC_RISE: int
+CALC_SET: int
+CALC_MTRANSIT: int
+CALC_ITRANSIT: int
+BIT_DISC_CENTER: int
+BIT_DISC_BOTTOM: int
+BIT_NO_REFRACTION: int
+BIT_CIVIL_TWILIGHT: int
+BIT_NAUTIC_TWILIGHT: int
+BIT_ASTRO_TWILIGHT: int
+BIT_FIXED_DISC_SIZE: int
+BIT_FORCE_SLOW_METHOD: int
+BIT_HINDU_RISING: int
+
+SE_CALC_RISE: int
+SE_CALC_SET: int
+SE_CALC_MTRANSIT: int
+SE_CALC_ITRANSIT: int
+SE_BIT_DISC_CENTER: int
+SE_BIT_DISC_BOTTOM: int
+SE_BIT_NO_REFRACTION: int
+SE_BIT_CIVIL_TWILIGHT: int
+SE_BIT_NAUTIC_TWILIGHT: int
+SE_BIT_ASTRO_TWILIGHT: int
+SE_BIT_FIXED_DISC_SIZE: int
+SE_BIT_FORCE_SLOW_METHOD: int
+SE_BIT_HINDU_RISING: int
+
+# --- eclipse type and visibility bits (both spellings) -------------------
+
+ECL_NUT: int
+ECL_CENTRAL: int
+ECL_NONCENTRAL: int
+ECL_TOTAL: int
+ECL_ANNULAR: int
+ECL_PARTIAL: int
+ECL_ANNULAR_TOTAL: int
+ECL_HYBRID: int
+ECL_PENUMBRAL: int
+ECL_ALLTYPES_SOLAR: int
+ECL_ALLTYPES_LUNAR: int
+ECL_VISIBLE: int
+ECL_MAX_VISIBLE: int
+ECL_1ST_VISIBLE: int
+ECL_PARTBEG_VISIBLE: int
+ECL_2ND_VISIBLE: int
+ECL_TOTBEG_VISIBLE: int
+ECL_3RD_VISIBLE: int
+ECL_TOTEND_VISIBLE: int
+ECL_4TH_VISIBLE: int
+ECL_PARTEND_VISIBLE: int
+ECL_PENUMBBEG_VISIBLE: int
+ECL_PENUMBEND_VISIBLE: int
+ECL_OCC_BEG_DAYLIGHT: int
+ECL_OCC_END_DAYLIGHT: int
+ECL_ONE_TRY: int
+
+SE_ECL_NUT: int
+SE_ECL_CENTRAL: int
+SE_ECL_NONCENTRAL: int
+SE_ECL_TOTAL: int
+SE_ECL_ANNULAR: int
+SE_ECL_PARTIAL: int
+SE_ECL_ANNULAR_TOTAL: int
+SE_ECL_HYBRID: int
+SE_ECL_PENUMBRAL: int
+SE_ECL_ALLTYPES_SOLAR: int
+SE_ECL_ALLTYPES_LUNAR: int
+SE_ECL_VISIBLE: int
+SE_ECL_MAX_VISIBLE: int
+SE_ECL_1ST_VISIBLE: int
+SE_ECL_PARTBEG_VISIBLE: int
+SE_ECL_2ND_VISIBLE: int
+SE_ECL_TOTBEG_VISIBLE: int
+SE_ECL_3RD_VISIBLE: int
+SE_ECL_TOTEND_VISIBLE: int
+SE_ECL_4TH_VISIBLE: int
+SE_ECL_PARTEND_VISIBLE: int
+SE_ECL_PENUMBBEG_VISIBLE: int
+SE_ECL_PENUMBEND_VISIBLE: int
+SE_ECL_OCC_BEG_DAYLIGHT: int
+SE_ECL_OCC_END_DAYLIGHT: int
+SE_ECL_ONE_TRY: int

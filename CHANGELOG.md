@@ -11,7 +11,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 for reporting that Shadbala had only seven of the nine Kala Bala parts
 ([#46](https://github.com/vedika-io/xalen-ephemeris/issues/46)).
 
+**Thank you** to [rephil9](https://github.com/rephil9) for asking for
+rise/set/transit and eclipse search in the Python `swe` shim
+([#47](https://github.com/vedika-io/xalen-ephemeris/issues/47)) and for an
+exception that `except swe.Error` can catch
+([#48](https://github.com/vedika-io/xalen-ephemeris/issues/48)).
+
 ### Added
+- **Python: rise/set/transit, eclipse search and `swe.Error` in `xalen.swe`**
+  ([#47](https://github.com/vedika-io/xalen-ephemeris/issues/47),
+  [#48](https://github.com/vedika-io/xalen-ephemeris/issues/48)).
+  `rise_trans`, `rise_trans_true_hor`, `sol_eclipse_when_glob`,
+  `sol_eclipse_when_loc`, `lun_eclipse_when`, `lun_eclipse_when_loc` and
+  `lun_eclipse_how` with pyswisseph 2.10's signatures, tuple shapes, return
+  codes and `retflag` bits, the `CALC_*`, `BIT_*` and `ECL_*` constants
+  (`ECL_NUT` included, usable as `calc_ut(jd, ECL_NUT)`), and `FLG_MOSEPH` /
+  `FLG_JPLEPH`. `xalen.swe.Error` (a `RuntimeError`) is raised for every
+  calculation failure; `TypeError`/`ValueError` only for bad arguments. The
+  slots the engines do not compute (global solar contact times, azimuths,
+  apparent altitudes, Saros numbers) are listed in the binding README. In
+  `xalen-ephem`: `rise_set::next_horizon_crossing` with `HorizonCrossing`
+  (disc point, refraction from pressure and temperature, horizon height,
+  fixed disc size, twilight, geocentric no-latitude rising),
+  `rise_set::next_transit` (upper and lower), `rise_set::is_above_horizon`,
+  `rise_set::standard_pressure_hpa`,
+  `Almanac::geocentric_ecliptic_altitude_deg`, `eclipse::lunar_shadow_state`,
+  `SolarEclipse::is_central`, `compat::SE_ECL_NUT` and a public
+  `compat::se_planet_to_body` and `compat::SEFLG_UNSUPPORTED_MASK`.
 - **Ayana Bala and Yuddha Bala in `Shadbala::compute_full`**, which now returns
   all nine Kala Bala parts (`KalaBala::ayana_bala`, `KalaBala::yuddha_bala`,
   both included in `KalaBala::total` and so in the Shadbala total). Ayana Bala
@@ -68,6 +94,11 @@ for reporting that Shadbala had only seven of the nine Kala Bala parts
   published with each release from 0.8; Windows has no prebuilt binary yet.
 
 ### Changed (breaking)
+- Python `xalen.swe`: calculation failures that raised `ValueError` (an unknown
+  body number or star name, an ephemeris error) now raise `xalen.swe.Error`, a
+  `RuntimeError`. Code that caught `ValueError` for them should catch
+  `swe.Error`; unsupported `calc_ut` flags still raise `ValueError`, and a
+  `hsys` of the wrong type raises `TypeError`.
 - `xalen_vedic::shadbala::PlanetPosition` has two new fields, `declination`
   (degrees, north positive) and `house` (1 to 12), and `KalaBala` has two new
   fields, so code that builds either struct by hand needs them. To migrate, set

@@ -396,6 +396,225 @@ pub fn twilight(
     Ok(TwilightTimes { dawn, dusk })
 }
 
+/// Standard horizontal refraction (degrees) behind [`rise_set_altitude_deg`]:
+/// 34′, valid for 1013.25 hPa and 15 °C.
+const STANDARD_REFRACTION_DEG: f64 = 0.5667;
+/// Solar semidiameter (degrees) behind [`rise_set_altitude_deg`]
+/// (`−0.8333° = −0.5667° − 0.2666°`).
+const SUN_SEMIDIAMETER_DEG: f64 = 0.2666;
+/// Ratio of the Moon's radius to Earth's equatorial radius (Moon semidiameter
+/// `SD = 0.2725·π`).
+const MOON_RADIUS_RATIO: f64 = 0.2725;
+/// Mean Earth–Moon distance (384 400 km) in AU, for a fixed lunar disc size.
+const MOON_MEAN_DISTANCE_AU: f64 = 384_400.0 / 149_597_870.7;
+/// Pressure (hPa) and temperature (°C) at which the 34′ refraction applies.
+const STANDARD_PRESSURE_HPA: f64 = 1013.25;
+const STANDARD_TEMPERATURE_C: f64 = 15.0;
+
+/// Which point of a body's disc defines a rise or a set.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum DiscPoint {
+    /// The upper limb touches the horizon (the astronomical convention).
+    #[default]
+    UpperLimb,
+    /// The centre of the disc is on the horizon.
+    Center,
+    /// The lower limb touches the horizon.
+    LowerLimb,
+}
+
+/// The conditions that define a horizon crossing for
+/// [`next_horizon_crossing`].
+///
+/// The [`Default`] is the convention [`next_events`] uses: upper limb, 34′
+/// refraction (1013.25 hPa, 15 °C), a true horizon at 0°, the Moon's disc size
+/// from its actual distance, and no twilight depression. With the default the
+/// two searches return the same instants.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct HorizonCrossing {
+    /// Which point of the disc is put on the horizon.
+    pub disc: DiscPoint,
+    /// Apply atmospheric refraction.
+    pub refraction: bool,
+    /// Air pressure at the observer in hPa (scales the refraction).
+    pub pressure_hpa: f64,
+    /// Air temperature at the observer in °C (scales the refraction).
+    pub temperature_c: f64,
+    /// Apparent altitude of the local horizon in degrees (0 = true horizon,
+    /// positive for a raised horizon such as a mountain ridge).
+    pub horizon_height_deg: f64,
+    /// Use the Moon's disc at its mean distance instead of its actual one.
+    pub fixed_disc_size: bool,
+    /// When set, the crossing is the Sun's centre at this twilight depression
+    /// (no refraction or disc term) and the disc, refraction and horizon fields
+    /// are ignored.
+    pub twilight: Option<Twilight>,
+    /// Use the body's geocentric position with its ecliptic latitude set to
+    /// zero instead of its topocentric position (the "Hindu rising"
+    /// convention; see [`Almanac::geocentric_ecliptic_altitude_deg`]).
+    pub geocentric_no_latitude: bool,
+}
+
+/// Air pressure (hPa) of the ICAO standard atmosphere at `elevation_m` metres:
+/// `1013.25 · (1 − 0.0065·h / 288.15)^5.255`. Used when a caller gives no
+/// pressure.
+pub fn standard_pressure_hpa(elevation_m: f64) -> f64 {
+    let ratio = (1.0 - 0.0065 * elevation_m / 288.15).max(0.0);
+    STANDARD_PRESSURE_HPA * ratio.powf(5.255)
+}
+
+impl Default for HorizonCrossing {
+    fn default() -> Self {
+        Self {
+            disc: DiscPoint::UpperLimb,
+            refraction: true,
+            pressure_hpa: STANDARD_PRESSURE_HPA,
+            temperature_c: STANDARD_TEMPERATURE_C,
+            horizon_height_deg: 0.0,
+            fixed_disc_size: false,
+            twilight: None,
+            geocentric_no_latitude: false,
+        }
+    }
+}
+
+/// Bennett's refraction (arcminutes) for an apparent altitude in degrees.
+fn bennett_arcmin(apparent_alt_deg: f64) -> f64 {
+    let h = apparent_alt_deg.max(-3.0);
+    1.0 / (h + 7.31 / (h + 4.4)).to_radians().tan()
+}
+
+impl HorizonCrossing {
+    /// Refraction (degrees) at the horizon altitude: the standard 34′ scaled by
+    /// Bennett's altitude dependence and by pressure / absolute temperature.
+    /// Zero when [`Self::refraction`] is off.
+    pub fn refraction_deg(&self) -> f64 {
+        if !self.refraction {
+            return 0.0;
+        }
+        let shape = bennett_arcmin(self.horizon_height_deg) / bennett_arcmin(0.0);
+        let air = (self.pressure_hpa / STANDARD_PRESSURE_HPA)
+            * ((273.15 + STANDARD_TEMPERATURE_C) / (273.15 + self.temperature_c));
+        STANDARD_REFRACTION_DEG * shape * air
+    }
+
+    /// Angular semidiameter (degrees) of the body's disc; zero for point sources.
+    /// `dist_au` is the body's geocentric distance (used for the Moon).
+    pub fn semidiameter_deg(&self, body: Body, dist_au: f64) -> f64 {
+        match body {
+            Body::Sun => SUN_SEMIDIAMETER_DEG,
+            Body::Moon => {
+                let d = if self.fixed_disc_size {
+                    MOON_MEAN_DISTANCE_AU
+                } else {
+                    dist_au
+                };
+                MOON_RADIUS_RATIO * (EARTH_RADIUS_AU / d).asin().to_degrees()
+            }
+            _ => 0.0,
+        }
+    }
+
+    /// Topocentric altitude (degrees) of the body's **centre** at the crossing.
+    pub fn target_altitude_deg(&self, body: Body, dist_au: f64) -> f64 {
+        if let Some(t) = self.twilight {
+            return t.altitude_deg();
+        }
+        let limb = match self.disc {
+            DiscPoint::UpperLimb => -self.semidiameter_deg(body, dist_au),
+            DiscPoint::Center => 0.0,
+            DiscPoint::LowerLimb => self.semidiameter_deg(body, dist_au),
+        };
+        self.horizon_height_deg - self.refraction_deg() + limb
+    }
+
+    /// Whether the target depends on the Moon's distance at each instant.
+    fn needs_distance(&self, body: Body) -> bool {
+        body == Body::Moon
+            && self.twilight.is_none()
+            && self.disc != DiscPoint::Center
+            && !self.fixed_disc_size
+    }
+}
+
+/// Search forward from `jd_start` (UT1) for the **next** rise (`rising = true`)
+/// or set of `body` under the given [`HorizonCrossing`], refined to sub-second
+/// precision. Returns `None` when no such crossing occurs within ~1.2 days
+/// (the body stays above or below the crossing altitude: polar day or night,
+/// circumpolar stars).
+pub fn next_horizon_crossing(
+    almanac: &Almanac,
+    body: Body,
+    jd_start: JdUT1,
+    lat_deg: f64,
+    lon_deg: f64,
+    elevation_m: f64,
+    rising: bool,
+    crossing: &HorizonCrossing,
+) -> Result<Option<JdUT1>, EphemerisError> {
+    let resid = |t: f64| -> Result<f64, EphemerisError> {
+        let jd = JdUT1(t);
+        let alt = if crossing.geocentric_no_latitude {
+            almanac.geocentric_ecliptic_altitude_deg(body, jd, lat_deg, lon_deg)?
+        } else {
+            almanac.topocentric_altitude_deg(body, jd, lat_deg, lon_deg, elevation_m)?
+        };
+        let dist = if crossing.needs_distance(body) {
+            almanac.geocentric_ecliptic(body, jd)?.distance
+        } else {
+            1.0 // unused
+        };
+        Ok(alt - crossing.target_altitude_deg(body, dist))
+    };
+    Ok(next_crossing(&resid, jd_start.as_f64(), rising, 5.0, 1.2)?.map(JdUT1))
+}
+
+/// Search forward from `jd_start` (UT1) for the next **upper** (`upper = true`,
+/// local hour angle 0) or **lower** (hour angle 180°) meridian transit of
+/// `body`. Returns `None` only if no transit occurs within ~1.2 days.
+pub fn next_transit(
+    almanac: &Almanac,
+    body: Body,
+    jd_start: JdUT1,
+    lat_deg: f64,
+    lon_deg: f64,
+    elevation_m: f64,
+    upper: bool,
+) -> Result<Option<JdUT1>, EphemerisError> {
+    let alt = altitude_fn(almanac, body, lat_deg, lon_deg, elevation_m);
+    let ha = hour_angle_fn(almanac, body, lat_deg, lon_deg, elevation_m);
+    let t0 = jd_start.as_f64();
+    let found = if upper {
+        next_meridian_transit(&ha, &alt, t0, 5.0, 1.2)?
+    } else {
+        // Lower transit: shift the hour angle by 180° so that HA = 180° maps to
+        // the same "rises through zero" condition as an upper transit.
+        let ha_lower = |t: f64| -> Result<f64, EphemerisError> {
+            let mut h = (ha(t)? + 180.0).rem_euclid(360.0);
+            if h > 180.0 {
+                h -= 360.0;
+            }
+            Ok(h)
+        };
+        next_meridian_transit(&ha_lower, &alt, t0, 5.0, 1.2)?
+    };
+    Ok(found.map(|(t, _)| JdUT1(t)))
+}
+
+/// Whether `body` is above the standard rise/set altitude (upper limb, 34′
+/// refraction) for the observer at `jd` (UT1), i.e. whether it can be seen.
+pub fn is_above_horizon(
+    almanac: &Almanac,
+    body: Body,
+    jd: JdUT1,
+    lat_deg: f64,
+    lon_deg: f64,
+    elevation_m: f64,
+) -> Result<bool, EphemerisError> {
+    let resid = residual_fn(almanac, body, lat_deg, lon_deg, elevation_m);
+    Ok(resid(jd.as_f64())? >= 0.0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -683,6 +902,145 @@ mod tests {
         assert!(
             n.rise.is_none() && n.set.is_none(),
             "no horizon crossing during polar day"
+        );
+    }
+
+    #[test]
+    fn default_horizon_crossing_is_the_standard_altitude() {
+        let c = HorizonCrossing::default();
+        for (body, dist) in [(Body::Sun, 1.0), (Body::Mars, 1.5), (Body::Moon, 0.00257)] {
+            let got = c.target_altitude_deg(body, dist);
+            let want = rise_set_altitude_deg(body, dist);
+            assert!((got - want).abs() < 1e-12, "{body:?}: {got} vs {want}");
+        }
+    }
+
+    #[test]
+    fn default_horizon_crossing_matches_next_events() {
+        let a = Almanac::default_vedic();
+        let jd = JdUT1(2460482.5);
+        for body in [Body::Sun, Body::Moon] {
+            let n = next_events(&a, body, jd, 28.6139, 77.2090, 216.0).unwrap();
+            let c = HorizonCrossing::default();
+            let rise =
+                next_horizon_crossing(&a, body, jd, 28.6139, 77.2090, 216.0, true, &c).unwrap();
+            let set =
+                next_horizon_crossing(&a, body, jd, 28.6139, 77.2090, 216.0, false, &c).unwrap();
+            let transit = next_transit(&a, body, jd, 28.6139, 77.2090, 216.0, true).unwrap();
+            assert!(secs(rise.unwrap(), n.rise.unwrap().as_f64()) < 0.01);
+            assert!(secs(set.unwrap(), n.set.unwrap().as_f64()) < 0.01);
+            assert!(secs(transit.unwrap(), n.transit.unwrap().as_f64()) < 0.01);
+        }
+    }
+
+    #[test]
+    fn disc_centre_without_refraction_rises_later_and_sets_earlier() {
+        let a = Almanac::default_vedic();
+        let jd = JdUT1(2460482.5);
+        let standard = HorizonCrossing::default();
+        let geo = HorizonCrossing {
+            disc: DiscPoint::Center,
+            refraction: false,
+            ..HorizonCrossing::default()
+        };
+        let at = |c: &HorizonCrossing, rising: bool| {
+            next_horizon_crossing(&a, Body::Sun, jd, 28.6139, 77.2090, 0.0, rising, c)
+                .unwrap()
+                .unwrap()
+                .as_f64()
+        };
+        // The target altitude rises from −0.8333° to 0°: about 3-4 minutes at Delhi.
+        let rise_delay = (at(&geo, true) - at(&standard, true)) * 1440.0;
+        let set_advance = (at(&standard, false) - at(&geo, false)) * 1440.0;
+        assert!(
+            (2.5..5.0).contains(&rise_delay),
+            "rise delay {rise_delay} min"
+        );
+        assert!(
+            (2.5..5.0).contains(&set_advance),
+            "set advance {set_advance} min"
+        );
+    }
+
+    #[test]
+    fn raised_horizon_delays_rise_and_cuts_refraction() {
+        let raised = HorizonCrossing {
+            horizon_height_deg: 2.0,
+            ..HorizonCrossing::default()
+        };
+        // Refraction at 2° apparent altitude is about 18′, roughly half of 34′.
+        let r = raised.refraction_deg() * 60.0;
+        assert!(
+            (16.0..20.0).contains(&r),
+            "refraction at 2 deg = {r} arcmin"
+        );
+        let a = Almanac::default_vedic();
+        let jd = JdUT1(2460482.25); // 2024-06-20 23:30 IST, before the next sunrise
+        let standard = next_horizon_crossing(
+            &a,
+            Body::Sun,
+            jd,
+            28.6139,
+            77.2090,
+            0.0,
+            true,
+            &HorizonCrossing::default(),
+        )
+        .unwrap()
+        .unwrap();
+        let high = next_horizon_crossing(&a, Body::Sun, jd, 28.6139, 77.2090, 0.0, true, &raised)
+            .unwrap()
+            .unwrap();
+        assert!(high.as_f64() > standard.as_f64() + 5.0 / 1440.0);
+    }
+
+    #[test]
+    fn standard_pressure_falls_with_height() {
+        assert!((standard_pressure_hpa(0.0) - 1013.25).abs() < 1e-9);
+        // ICAO standard atmosphere: about 898.7 hPa at 1000 m.
+        assert!((standard_pressure_hpa(1000.0) - 898.7).abs() < 0.5);
+    }
+
+    #[test]
+    fn hindu_rising_sun_matches_disc_centre_without_refraction() {
+        // The Sun's ecliptic latitude and parallax are both arcseconds, so the
+        // geocentric no-latitude convention moves its rise by well under a second.
+        let a = Almanac::default_vedic();
+        let jd = JdUT1(2460482.5);
+        let centre = HorizonCrossing {
+            disc: DiscPoint::Center,
+            refraction: false,
+            ..HorizonCrossing::default()
+        };
+        let hindu = HorizonCrossing {
+            geocentric_no_latitude: true,
+            ..centre
+        };
+        let r1 = next_horizon_crossing(&a, Body::Sun, jd, 28.6139, 77.2090, 0.0, true, &centre)
+            .unwrap()
+            .unwrap();
+        let r2 = next_horizon_crossing(&a, Body::Sun, jd, 28.6139, 77.2090, 0.0, true, &hindu)
+            .unwrap()
+            .unwrap();
+        assert!(secs(r1, r2.as_f64()) < 2.0);
+    }
+
+    #[test]
+    fn lower_transit_is_half_a_day_from_upper() {
+        let a = Almanac::default_vedic();
+        let jd = JdUT1(2460482.5);
+        let up = next_transit(&a, Body::Sun, jd, 28.6139, 77.2090, 0.0, true)
+            .unwrap()
+            .unwrap()
+            .as_f64();
+        let low = next_transit(&a, Body::Sun, jd, 28.6139, 77.2090, 0.0, false)
+            .unwrap()
+            .unwrap()
+            .as_f64();
+        let gap_h = ((low - up).abs() * 24.0 - 12.0).abs();
+        assert!(
+            gap_h < 0.05,
+            "upper/lower transit gap off 12 h by {gap_h} h"
         );
     }
 }
