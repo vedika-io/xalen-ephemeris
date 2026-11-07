@@ -48,7 +48,9 @@ so they load on any glibc 2.17 or newer system (CentOS 7 and later, for example)
 | Windows x64 | `@xalen/ephemeris-win32-x64-msvc` | `x86_64-pc-windows-msvc` |
 
 The Windows binary is linked with a static C runtime, so it does not need the
-Visual C++ Redistributable. It is built on Linux and checked there (file type,
+Visual C++ Redistributable. It is expected to load on 64-bit Windows 10 /
+Server 2016 or later with Node 16 or later (unverified; no Windows run yet).
+It is built on Linux and checked there (file type,
 exports, imported DLLs), not loaded on a Windows machine before release; please
 [open an issue](https://github.com/vedika-io/xalen-ephemeris/issues) if it does
 not load for you.

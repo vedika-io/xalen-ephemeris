@@ -41,9 +41,16 @@
 # Microsoft licence: the CRT and SDK files come under Microsoft's licence
 # (https://go.microsoft.com/fwlink/?LinkId=2086102). cargo-xwin takes running it
 # as acceptance of those terms; the project accepted them for these builds on
-# 7 November 2026. The downloaded files stay in $TOOLS/xwin and are never copied
-# into the repository or into a package; the addon links only to Windows system
-# DLLs.
+# 7 November 2026. The downloaded files stay in $TOOLS/xwin; no Microsoft file
+# is committed or packed. The addon does contain statically linked Microsoft
+# C-runtime code, as every Rust binary for this target does, redistributed under
+# the distributable-code terms of the Visual Studio licence (the licence accepted
+# on 7 November 2026). At run time it links only to Windows system DLLs.
+#
+# The CRT and SDK come from the Visual Studio 17 manifest (--xwin-version 17,
+# pinned below); inside it, cargo-xwin picks the newest CRT and SDK, so those
+# float with Microsoft's manifest. The build prints the payloads cargo-xwin
+# downloaded, with their versions, so each rebuild can be traced.
 #
 # Tools are installed into a private directory (XALEN_RELEASE_TOOLS, default: a
 # fresh temp dir) and the host Python is left untouched:
@@ -66,7 +73,7 @@
 #     both Linux addons need glibc 2.17 or older, both macOS addons pass the
 #     __LINKEDIT alignment check, the Windows addon is a PE32+ x86-64 DLL under
 #     20 MB that exports napi_register_module_v1 and imports only Windows system
-#     DLLs (no vcruntime140.dll), the packed root and platform tarballs for this
+#     DLLs (no vcruntime140.dll, no dynamic UCRT), the packed root and platform tarballs for this
 #     host are installed into a scratch project and the Node smoke test runs there.
 # Wheels for other architectures and operating systems cannot run here; import
 # each one on its own platform before uploading it.
@@ -361,7 +368,7 @@ JS
   cd "$REPO_ROOT" || return
 }
 
-# --- Node: four prebuilt N-API addons as npm packages -------------------------
+# --- Node: five prebuilt N-API addons as npm packages -------------------------
 # rust target -> the platform suffix napi-rs puts in the file and package name
 node_platform() {
   case "$1" in
@@ -378,8 +385,9 @@ node_platform() {
 # on. $1 is the .node file, $2 the llvm-readobj to read it with. It must be a
 # PE32+ x86-64 DLL under 20 MB that exports the N-API entry point
 # (napi_register_module_v1) and imports nothing but Windows system DLLs. The
-# Visual C++ runtime (vcruntime140.dll, msvcp140.dll) is not a system DLL: the
-# addon is linked with +crt-static so that it does not need it.
+# addon is linked with +crt-static, so neither the Visual C++ runtime
+# (vcruntime140.dll) nor the dynamic UCRT (api-ms-win-crt-*.dll) may appear: an
+# import of either means the static C runtime was lost.
 check_windows_addon() {
   local f="$1" readobj="$2" name desc size dll imports
   name="$(basename "$f")"
@@ -407,14 +415,14 @@ check_windows_addon() {
     while IFS= read -r dll; do
       case "$(echo "$dll" | tr 'A-Z' 'a-z')" in
         kernel32.dll | ntdll.dll | advapi32.dll | bcrypt.dll | bcryptprimitives.dll \
-          | ws2_32.dll | userenv.dll | api-ms-win-core-*.dll | api-ms-win-crt-*.dll) ;;
+          | ws2_32.dll | userenv.dll | api-ms-win-core-*.dll) ;;
         *) foreign+=("$dll") ;;
       esac
     done <<< "$imports"
     if [ "${#foreign[@]}" -eq 0 ]; then
       ok "$name imports only Windows system DLLs"
     else
-      fail "$name imports DLLs that are not part of Windows: ${foreign[*]}"
+      fail "$name imports DLLs outside the allowed Windows system set: ${foreign[*]}"
     fi
   fi
 
@@ -569,13 +577,24 @@ build_node() {
     plat="$(node_platform "$tgt")"
     if env XWIN_CACHE_DIR="$TOOLS/xwin" XWIN_ARCH=x86_64 \
          RUSTFLAGS="-C target-feature=+crt-static" \
-         cargo xwin build --release -p xalen-node --target "$tgt" \
+         cargo xwin build --xwin-version 17 --release -p xalen-node --target "$tgt" \
        && cp "$target_dir/$tgt/release/xalen_node.dll" "$art/xalen.$plat.node"; then
       ok "addon $plat"
     else
       fail "addon $plat"
     fi
   done
+  # cargo-xwin prints no versions itself; its record of the payloads it
+  # downloaded ($TOOLS/xwin/DONE: the arches, then one file name per line) names
+  # the CRT and SDK versions. Information only, never a failure.
+  if [ -f "$TOOLS/xwin/DONE" ]; then
+    echo "   xwin payloads (Visual Studio 17 manifest):"
+    tail -n +2 "$TOOLS/xwin/DONE" | sort | sed 's/^/     /'
+    echo "   Windows SDK: $(grep -oE '10\.0\.[0-9]+(\.[0-9]+)?' "$TOOLS/xwin/DONE" | sort -uV | tr '\n' ' ')"
+    echo "   MSVC CRT: $(grep -oE 'VC\.[0-9]+\.[0-9]+(\.[0-9]+)*\.CRT' "$TOOLS/xwin/DONE" | sed 's/^VC\.//; s/\.CRT$//' | sort -uV | tr '\n' ' ')"
+  else
+    echo "   xwin payload record $TOOLS/xwin/DONE not found"
+  fi
   for tgt in "${LINUX_TARGETS[@]}" "${MACOS_TARGETS[@]}" "${WINDOWS_TARGETS[@]}"; do
     plat="$(node_platform "$tgt")"
     [ -f "$art/xalen.$plat.node" ] || { fail "addon $plat is missing, stopping"; cd "$REPO_ROOT" || true; return; }

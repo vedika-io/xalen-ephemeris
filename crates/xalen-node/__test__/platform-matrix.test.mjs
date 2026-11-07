@@ -32,6 +32,15 @@ test('package.json declares the full napi target matrix', () => {
   for (const t of EXPECTED) {
     assert.ok(targets.includes(t), `napi.targets missing ${t}`);
   }
+  assert.equal(targets.length, EXPECTED.length, 'napi.targets has targets beyond the published five');
+});
+
+test('committed loader names the Windows x64 package', () => {
+  const loader = readFileSync(join(NODE_DIR, 'index.js'), 'utf8');
+  assert.ok(
+    loader.includes('@xalen/ephemeris-win32-x64-msvc'),
+    'index.js does not load @xalen/ephemeris-win32-x64-msvc',
+  );
 });
 
 test('release workflow builds every package.json napi target', () => {

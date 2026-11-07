@@ -96,14 +96,17 @@ exception that `except swe.Error` can catch
   and macOS arm64 and x64, as one npm package per platform plus a loader that
   names them as optional dependencies. `scripts/build-release-artifacts.sh node`
   (also part of `all`) builds, checks and packs the five tarballs. The package is
-  published with each release from 0.8; Windows has no prebuilt binary yet.
+  published with each release from 0.8.
 - **Node.js package `@xalen/ephemeris`: prebuilt Windows x64 addon** from 0.8,
   as the platform package `@xalen/ephemeris-win32-x64-msvc`
   (`x86_64-pc-windows-msvc`). `scripts/build-release-artifacts.sh node` now
   builds it on the same Linux host with cargo-xwin, which downloads the
-  Microsoft CRT and Windows SDK import libraries for the link; none of those
-  files is shipped. The addon is linked with a static C runtime, so it needs no
-  Visual C++ Redistributable. Since no Windows machine loads it during the
+  Microsoft CRT and Windows SDK libraries for the link. The addon is linked
+  with a static C runtime, so it needs no Visual C++ Redistributable. No
+  Microsoft file is committed or packed, but the addon contains statically
+  linked Microsoft C-runtime code, as every Rust binary for this target does,
+  redistributed under the distributable-code terms of the Visual Studio
+  licence. Since no Windows machine loads it during the
   build, the script checks it is a PE32+ x86-64 DLL under 20 MB that exports
   `napi_register_module_v1` and imports only Windows system DLLs.
 
