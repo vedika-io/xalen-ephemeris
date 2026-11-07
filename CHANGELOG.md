@@ -149,6 +149,26 @@ exception that `except swe.Error` can catch
   `node --test`, which fails on Node 24. It now names the two test files, which
   works on Node 20 and 24, as proposed by Serlin2175 in #45.
 
+### Documentation
+- **`docs/BINDING_IDS.md`** lists every numeric ID the C, WebAssembly, Node and
+  Python bindings take (bodies, ayanamsas, house systems, WebAssembly
+  divisional charts) next to the Swiss Ephemeris number where one exists, plus
+  the `xalen.swe` Swiss numbers, flags and calendar constants and the C status
+  codes. The tables are generated from the Rust sources by
+  `tests/binding_ids.rs`, which fails with a diff when the file and the
+  sources disagree; `scripts/regen-binding-ids.sh` rewrites them. Linked from
+  the README, each binding README and the migration guides
+  ([#16](https://github.com/vedika-io/xalen-ephemeris/issues/16)).
+- **Issue-to-pull-request workflow in `CONTRIBUTING.md`**: filing an issue,
+  branch names, the `type(scope): subject` commit style with `Refs #N`, one
+  pull request per change with `Closes #N`, the checks a pull request must
+  pass, the contributor agreement for outside contributions, and squash
+  merging. The pull request template is shorter and asks for the same things
+  ([#15](https://github.com/vedika-io/xalen-ephemeris/issues/15)).
+
+Thanks to Semak12345: both documents were added as proposed by
+Semak12345 in #42 and #43.
+
 ## [0.7.0] - 2026-11-07
 
 The first release since 0.6.0. It carries three fixes sent in by outside

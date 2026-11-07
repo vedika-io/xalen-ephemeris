@@ -13,7 +13,7 @@ Built as both `cdylib` and `staticlib`, this crate exposes a small, stable `exte
 - **`xalen_ayanamsa(jd_ut1, ayanamsa_id) -> double`** — ayanamsa offset in degrees at the given epoch.
 - **`xalen_houses(jd_ut1, lat, lon, system_id, *out XalenHouses) -> int`** — 12 house cusps, Ascendant, and MC (deg).
 - **`xalen_version() -> const char*`** — static version string.
-- **Canonical integer IDs** (documented inline in `lib.rs`): bodies `0=Sun … 12=Chiron`, `9=Rahu/MeanNode`, `10=TrueNode`, `13=Ketu` (Rahu + 180°); 17 ayanamsa systems (`0=Lahiri … 16=LahiriVP285`); 14 house systems (`0=WholeSign … 13=Krusinski`).
+- **Canonical integer IDs** (documented inline in `lib.rs`): bodies `0=Sun … 12=Chiron`, `9=Rahu/MeanNode`, `10=TrueNode`, `13=Ketu` (Rahu + 180°); 17 ayanamsa systems (`0=Lahiri … 16=LahiriVP285`); 14 house systems (`0=WholeSign … 13=Krusinski`). The full tables, with the status codes, are in [docs/BINDING_IDS.md](https://github.com/vedika-io/xalen-ephemeris/blob/main/docs/BINDING_IDS.md).
 - **Negative status codes** on error: `-1` null pointer, `-2` invalid body/system/ayanamsa ID **or non-finite/out-of-range numeric input** (NaN/Inf `jd`/`lat`/`lon`, latitude outside ±90°), `-3` computation failure.
 
 ## Usage

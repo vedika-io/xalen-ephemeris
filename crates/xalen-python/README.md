@@ -180,6 +180,8 @@ ketu = xalen.planet_position(jd, 13)
 
 `0`=Sun · `1`=Moon · `2`=Mercury · `3`=Venus · `4`=Mars · `5`=Jupiter · `6`=Saturn · `7`=Uranus · `8`=Neptune · `9`=MeanNode (Rahu) · `10`=TrueNode · `11`=Pluto · `12`=Chiron · `13`=Ketu (Rahu+180).
 
+The ayanamsa and house-system IDs, and the Swiss Ephemeris numbers `xalen.swe` takes instead, are listed in [docs/BINDING_IDS.md](https://github.com/vedika-io/xalen-ephemeris/blob/main/docs/BINDING_IDS.md).
+
 ### Other native functions
 
 ```python
