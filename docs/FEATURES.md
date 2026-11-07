@@ -172,4 +172,4 @@ xalen davison --a-date 1990-03-15T06:30:00Z --a-place delhi --b-date 1992-08-02T
 xalen relocate --date 1990-03-15T06:30:00Z --place delhi --to-place london
 ```
 
-See [`crates/xalen-cli`](crates/xalen-cli/README.md) for every command.
+See [`crates/xalen-cli`](../crates/xalen-cli/README.md) for every command.

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="700" height="750" viewBox="0 0 700 750" role="img" aria-labelledby="t d">
+<svg xmlns="http://www.w3.org/2000/svg" width="700" height="770" viewBox="0 0 700 770" role="img" aria-labelledby="t d">
 <title id="t">Birth chart wheel computed by xalen chart</title>
 <desc id="d">Indian independence, 15 August 1947, 00:00 IST (UTC+05:30), Delhi. Sidereal zodiac, Lahiri (Chitrapaksha) ayanamsa, Placidus houses. Planets at their computed longitudes.</desc>
 <g font-family="system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" fill="none" stroke-linecap="round">
@@ -173,8 +173,9 @@
 <text x="563.9" y="355.6" fill="#59636e" font-size="11" text-anchor="middle" dominant-baseline="middle" paint-order="stroke" stroke="#f6f8fa" stroke-width="3">5°04′</text>
 <text x="350" y="330" fill="#1f2328" stroke="none" font-size="14" font-weight="600" text-anchor="middle">Lahiri (Chitrapaksha)</text>
 <text x="350" y="350" fill="#59636e" stroke="none" font-size="12" text-anchor="middle">Placidus houses</text>
-<text x="350" y="698" fill="#1f2328" stroke="none" font-size="15" font-weight="600" text-anchor="middle">15 Aug 1947, 00:00 IST (UTC+05:30) · Delhi</text>
-<text x="350" y="720" fill="#59636e" stroke="none" font-size="13" text-anchor="middle">28.61°N 77.21°E · sidereal, Lahiri (Chitrapaksha) 23.1216° · Placidus</text>
-<text x="350" y="740" fill="#59636e" stroke="none" font-size="11" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', 'DejaVu Sans Mono', monospace">xalen chart --date 1947-08-15T00:00:00+05:30 --place delhi --sidereal --house-system placidus</text>
+<text x="350" y="700" fill="#1f2328" stroke="none" font-size="15" font-weight="600" text-anchor="middle">15 Aug 1947, 00:00 IST (UTC+05:30) · Delhi</text>
+<text x="350" y="722" fill="#59636e" stroke="none" font-size="13" text-anchor="middle">28.61°N 77.21°E · sidereal, Lahiri (Chitrapaksha) 23.1216° · Placidus</text>
+<text x="350" y="742" fill="#59636e" stroke="none" font-size="11" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', 'DejaVu Sans Mono', monospace">xalen chart --date 1947-08-15T00:00:00+05:30 --place delhi --sidereal --house-system placidus</text>
+<text x="350" y="760" fill="#59636e" stroke="none" font-size="11" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', 'DejaVu Sans Mono', monospace">--bodies sun,moon,mercury,venus,mars,jupiter,saturn,uranus,neptune,pluto,rahu,ketu --json</text>
 </g>
 </svg>

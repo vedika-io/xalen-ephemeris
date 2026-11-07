@@ -6,7 +6,7 @@
 </p>
 
 <p align="center">
-  <b>A pure-Rust astronomical ephemeris for astrology — JPL-class planet accuracy, zero <code>unsafe</code> core, Apache-2.0.</b>
+  <b>A pure-Rust astronomical ephemeris for astrology — validated against JPL DE440, zero <code>unsafe</code> core, Apache-2.0.</b>
 </p>
 
 <p align="center">
@@ -40,7 +40,7 @@ Horizons, Swiss Ephemeris and the public calculators, is thread-safe, has no
     <td width="58%" align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/map-dark.svg"><img alt="Astrocartography lines of the seven classical planets for the same moment over a world map" src="docs/assets/map.svg"></picture></td>
   </tr>
   <tr>
-    <td><sub><b>Chart wheel.</b> 15 August 1947, 00:00 IST (UTC+05:30), Delhi (28.6139° N, 77.209° E, built-in city table), sidereal Lahiri, Placidus houses: <code>xalen chart --date 1947-08-15T00:00:00+05:30 --place delhi --sidereal --house-system placidus --json</code></sub></td>
+    <td><sub><b>Chart wheel.</b> 15 August 1947, 00:00 IST (UTC+05:30), Delhi (28.6139° N, 77.209° E, built-in city table), sidereal Lahiri, Placidus houses: <code>xalen chart --date 1947-08-15T00:00:00+05:30 --place delhi --sidereal --house-system placidus --bodies sun,moon,mercury,venus,mars,jupiter,saturn,uranus,neptune,pluto,rahu,ketu --json</code></sub></td>
     <td><sub><b>Astrocartography.</b> The same moment: MC, IC, ascendant and descendant lines of the Sun to Saturn, their zenith points, and the three parans nearest Delhi's latitude: <code>xalen map --date 1947-08-15T00:00:00+05:30 --bodies sun,moon,mercury,venus,mars,jupiter,saturn --geojson --parans</code></sub></td>
   </tr>
 </table>
@@ -90,16 +90,13 @@ print(nak["name"], nak["pada"])
 `import xalen.swe as swe` is a near-drop-in for `import swisseph as swe` for the
 common calls; see [crates/xalen-python](crates/xalen-python/README.md).
 
-**Node.js** — `npm install @xalen/ephemeris`
+**Node.js** — `npm install @xalen/ephemeris` (published from 0.8; until then build from source, see [crates/xalen-node](crates/xalen-node/README.md))
 
 ```js
 const xalen = require('@xalen/ephemeris');
 const p = xalen.planetPosition('sun', 2451545.0);  // J2000
 console.log(p.longitude, p.isRetrograde);
 ```
-
-The native addon is published to npm with each release from 0.8; until then
-build it from source ([crates/xalen-node](crates/xalen-node/README.md)).
 
 **Browser / WASM** — `npm install @xalen/wasm`
 
@@ -188,7 +185,7 @@ covered in [docs/MIGRATING_FROM_SWISS_EPH.md](docs/MIGRATING_FROM_SWISS_EPH.md).
 | **Rust** | `xalen-ephemeris` (umbrella) | Native | On crates.io |
 | **C / C++** | `xalen-ffi` | `extern "C"` + `repr(C)` structs | Source-stable; on crates.io |
 | **Python** | `xalen-python` | PyO3 | Alpha; on PyPI as `xalen` (`pip install xalen`) |
-| **Node.js** | `xalen-node` | napi-rs native addon, prebuilt for Linux, macOS and Windows x64 | Alpha; on npm as `@xalen/ephemeris` with each release from 0.8, build from source until then |
+| **Node.js** | `xalen-node` | napi-rs native addon, prebuilt for Linux x64 and arm64, macOS x64 and arm64, and Windows x64 | Alpha; on npm as `@xalen/ephemeris` with each release from 0.8, build from source until then |
 | **Browser / WASM** | `xalen-wasm` | wasm-bindgen | Alpha; on npm as `@xalen/wasm` |
 
 The integer IDs the bindings take are in [docs/BINDING_IDS.md](docs/BINDING_IDS.md);
@@ -196,8 +193,8 @@ the crate map and binding details are in [docs/CRATES.md](docs/CRATES.md).
 
 ## Architecture
 
-Pure Rust with no C FFI dependencies in any core crate, and no `unsafe` outside
-`xalen-ffi` (which needs it for `extern "C"`). No global state: all computation
+Pure Rust with no C FFI dependencies in any core crate, and no `unsafe` in library
+code outside `xalen-ffi` (which needs it for `extern "C"`). No global state: all computation
 goes through owned or `Arc<T>` references, and `Almanac` and all position types
 are `Send + Sync`. Core crates target `wasm32-unknown-unknown`, DE440 stacks on
 top of VSOP87 with automatic body and epoch fallback, and all data types derive
@@ -218,7 +215,7 @@ the binding, WASM and benchmark builds are in [docs/CRATES.md](docs/CRATES.md#bu
 
 - 24 crates in `crates/`, plus the umbrella crate and the `validation/` runner
 - over 130,000 lines of Rust in 234 files, 168 of them library sources
-- 2,447 tests passing, 0 failures (`cargo test --workspace --exclude xalen-python`)
+- over 2,400 tests passing, 0 failures (`cargo test --workspace --exclude xalen-python`)
 - zero `unsafe` in the core crates' library code; only `xalen-ffi` uses it, for `extern "C"`
 
 ## License
@@ -230,8 +227,9 @@ Copyright 2024-2026 XALEN Technology Pvt Ltd.
 ```
 
 For commercial licensing inquiries, contact [hello@xalen.io](mailto:hello@xalen.io).
-"XALEN" and "XALEN Ephemeris" are trademarks of XALEN Technology Pvt Ltd; see
-[TRADEMARK.md](TRADEMARK.md).
+The XALEN name and mark (the logo in `docs/assets/`) are trademarks of XALEN
+Technology Pvt Ltd and are governed by [TRADEMARK.md](TRADEMARK.md), not by the
+Apache licence.
 
 ## Enterprise
 

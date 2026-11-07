@@ -52,7 +52,7 @@ that compares XALEN against a `pyswisseph` oracle at any chart count (see
 | **Rust** | `xalen-ephemeris` (umbrella) | Native | On crates.io |
 | **C / C++** | `xalen-ffi` | `extern "C"` + `repr(C)` structs | Source-stable; on crates.io |
 | **Python** | `xalen-python` | PyO3 | Alpha; on PyPI as `xalen` (`pip install xalen`) |
-| **Node.js** | `xalen-node` | napi-rs native addon, prebuilt for Linux, macOS and Windows x64 | Alpha; on npm as `@xalen/ephemeris` with each release from 0.8, build from source until then |
+| **Node.js** | `xalen-node` | napi-rs native addon, prebuilt for Linux x64 and arm64, macOS x64 and arm64, and Windows x64 | Alpha; on npm as `@xalen/ephemeris` with each release from 0.8, build from source until then |
 | **Browser / WASM** | `xalen-wasm` | wasm-bindgen | Alpha; on npm as `@xalen/wasm` |
 
 > The native Node.js addon is published to npm as `@xalen/ephemeris` with each

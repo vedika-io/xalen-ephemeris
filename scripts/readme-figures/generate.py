@@ -10,8 +10,9 @@ Without --xalen the script builds the CLI first (`cargo build --release -p
 xalen-cli`) and uses the binary from the workspace target directory. It needs
 Python 3.8 or newer and nothing outside the standard library. It needs network
 access once, to download the Natural Earth 110m coastline (public domain) for
-the map; the coastline is simplified and embedded in the SVG, and the GeoJSON
-is not kept.
+the map, pinned to natural-earth-vector commit ca96624 (VERSION 5.2.0-pre);
+the coastline is simplified and embedded in the SVG, and the GeoJSON is not
+kept.
 
 Every SVG is written into docs/assets/:
 
@@ -20,7 +21,8 @@ Every SVG is written into docs/assets/:
     accuracy.svg, accuracy-dark.svg         error per body, the figures of docs/ACCURACY.md
     terminal.svg                            one `xalen positions` run, its output verbatim
 
-The logo files (docs/assets/logo*.svg) are drawn by hand and not written here.
+The logo files (docs/assets/logo.svg, logo-dark.svg and xalen-mark.svg, the
+official XALEN mark) are hand-made assets; this script does not write them.
 
 The example birth is the moment of Indian independence, 15 August 1947 00:00
 IST (UTC+05:30) at Delhi from the built-in city table, the same moment as the
@@ -39,9 +41,12 @@ from xml.sax.saxutils import escape
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 OUT = os.path.join(REPO, "docs", "assets")
 
+# Pinned to one commit of nvkelso/natural-earth-vector (master of 2 June 2022,
+# VERSION 5.2.0-pre) so the map is reproducible.
+NATURAL_EARTH_COMMIT = "ca96624a56bd078437bca8184e78163e5039ad19"
 COASTLINE_URL = (
     "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/"
-    "master/geojson/ne_110m_coastline.geojson"
+    f"{NATURAL_EARTH_COMMIT}/geojson/ne_110m_coastline.geojson"
 )
 
 # The example birth. The date carries its own offset; the CLI turns it into UT.
@@ -166,7 +171,7 @@ def spread(angles, min_gap):
 
 
 def chart_wheel(chart, pal, dark):
-    W, H = 700, 750
+    W, H = 700, 770
     cx, cy = 350, 340
     r_out, r_sign, r_lab, r_tick, r_house, r_num = 300, 262, 214, 252, 132, 112
     asc = chart["ascendant"]["longitude"]
@@ -258,9 +263,10 @@ def chart_wheel(chart, pal, dark):
     cap1 = "15 Aug 1947, 00:00 IST (UTC+05:30) · Delhi"
     cap2 = (f"{abs(lat):.2f}°{'N' if lat >= 0 else 'S'} {abs(lon):.2f}°{'E' if lon >= 0 else 'W'}"
             f" · sidereal, {aya['name']} {aya['value_deg']:.4f}° · {chart['house_system_name']}")
-    lines.append(f'<text x="{cx}" y="{H - 52}" fill="{pal["fg"]}" stroke="none" font-size="15" font-weight="600" text-anchor="middle">{escape(cap1)}</text>')
-    lines.append(f'<text x="{cx}" y="{H - 30}" fill="{pal["muted"]}" stroke="none" font-size="13" text-anchor="middle">{escape(cap2)}</text>')
-    lines.append(f'<text x="{cx}" y="{H - 10}" fill="{pal["muted"]}" stroke="none" font-size="11" text-anchor="middle" font-family="{MONO}">xalen chart --date {BIRTH_DATE} --place {BIRTH_PLACE} --sidereal --house-system {HOUSE_SYSTEM}</text>')
+    lines.append(f'<text x="{cx}" y="{H - 70}" fill="{pal["fg"]}" stroke="none" font-size="15" font-weight="600" text-anchor="middle">{escape(cap1)}</text>')
+    lines.append(f'<text x="{cx}" y="{H - 48}" fill="{pal["muted"]}" stroke="none" font-size="13" text-anchor="middle">{escape(cap2)}</text>')
+    lines.append(f'<text x="{cx}" y="{H - 28}" fill="{pal["muted"]}" stroke="none" font-size="11" text-anchor="middle" font-family="{MONO}">xalen chart --date {BIRTH_DATE} --place {BIRTH_PLACE} --sidereal --house-system {HOUSE_SYSTEM}</text>')
+    lines.append(f'<text x="{cx}" y="{H - 10}" fill="{pal["muted"]}" stroke="none" font-size="11" text-anchor="middle" font-family="{MONO}">--bodies {",".join(CHART_BODIES)} --json</text>')
     lines.append("</g>")
     lines.append("</svg>")
     return lines

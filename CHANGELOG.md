@@ -151,13 +151,13 @@ exception that `except swe.Error` can catch
 
 ### Changed
 
-- The README is now a product page: a logo, a chart wheel, an astrocartography
-  map and a terminal run drawn from real `xalen` output, and a chart of the
-  docs/ACCURACY.md figures. `scripts/readme-figures/generate.py` writes the
-  figures into `docs/assets/` (light and dark variants). The page has get-started
-  snippets for Rust, Python, Node.js, WASM and the CLI. The crate map moved to
-  `docs/CRATES.md` and the full feature list and accuracy-by-theory table to
-  `docs/FEATURES.md`.
+- The README is now a product page: the official XALEN mark, and a chart wheel,
+  an astrocartography map and a terminal run drawn from real `xalen` output,
+  and a chart of the docs/ACCURACY.md figures.
+  `scripts/readme-figures/generate.py` writes the figures into `docs/assets/`
+  (light and dark variants). The page has get-started snippets for Rust,
+  Python, Node.js, WASM and the CLI. The crate map moved to `docs/CRATES.md`
+  and the full feature list and accuracy-by-theory table to `docs/FEATURES.md`.
 - SECURITY.md: disclosure timeline, scope and supply-chain sections; SUPPORT.md added; CODEOWNERS and issue forms refreshed.
 - The accuracy harness in `validation/` now runs in the gate. `scripts/gate.sh`
   runs format, clippy, tests, docs, the release-configuration tests and the
