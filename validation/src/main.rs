@@ -2,8 +2,8 @@
 //!
 //! Reads a pyswisseph oracle file (JSON Lines, produced by
 //! `validation/oracle_pyswisseph.py`), recomputes the SAME quantities with the
-//! pure-Rust XALEN crates, and prints per-body max / mean / RMS absolute delta
-//! in arcseconds plus the worst offender, an overall PASS/FAIL against a
+//! pure-Rust XALEN crates, and prints per-body max / mean / RMS / p99 absolute delta
+//! (p99 from a log histogram) in arcseconds plus the worst offender, an overall PASS/FAIL against a
 //! configurable degree threshold (default 0.1deg legacy bound), and the tighter
 //! <1" subset fraction.
 //!
@@ -106,11 +106,12 @@ impl ReportAcc {
             ""
         };
         println!(
-            "{:<20} {:>10} {:>12.4} {:>12.4} {:>12.4} {:>8.1}% {:>22}{}",
+            "{:<20} {:>10} {:>12.4} {:>12.4} {:>12.4} {:>12.4} {:>8.1}% {:>22}{}",
             label,
             s.count,
             s.mean_arcsec(),
             s.rms_arcsec(),
+            s.p99_arcsec(),
             s.max_arcsec,
             s.within_1_arcsec_frac() * 100.0,
             worst,
@@ -390,10 +391,17 @@ fn print_report(
     println!();
 
     println!(
-        "{:<20} {:>10} {:>12} {:>12} {:>12} {:>9} {:>22}",
-        "quantity", "count", "mean(\")", "rms(\")", "max(\")", "<1\"%", "worst(jd,lat,lon)"
+        "{:<20} {:>10} {:>12} {:>12} {:>12} {:>12} {:>9} {:>22}",
+        "quantity",
+        "count",
+        "mean(\")",
+        "rms(\")",
+        "p99(\")",
+        "max(\")",
+        "<1\"%",
+        "worst(jd,lat,lon)"
     );
-    println!("{}", "-".repeat(100));
+    println!("{}", "-".repeat(113));
 
     let mut acc = ReportAcc::new(threshold_arcsec);
 

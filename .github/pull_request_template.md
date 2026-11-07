@@ -14,6 +14,7 @@ Closes #
 - [ ] `cargo clippy --workspace --exclude xalen-python -- -D warnings`
 - [ ] `cargo test --workspace --exclude xalen-python`
 - [ ] `cargo doc --no-deps --workspace --exclude xalen-python`
+- [ ] or all of the above plus the release-config tests and the accuracy harness: `bash scripts/gate.sh`
 - [ ] New or changed behaviour has a test; a fix has a test that fails without it
 - [ ] Numeric changes are checked against a reference (Swiss Ephemeris, JPL DE440, IAU SOFA or the cited text) with the measured difference stated; no claim beyond what a committed test shows
 

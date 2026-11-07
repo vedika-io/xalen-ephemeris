@@ -472,6 +472,41 @@ positions from Swiss Ephemeris (swetest) output and Meeus "Astronomical Algorith
 > `swiss_eph_crossval`, `accuracy_vs_de440` with a kernel). See
 > `validation/README.md`.
 
+**Measured with the committed harness** (`validation/`, seed 42, JD 1500-2400,
+pyswisseph 2.10.03 on its built-in Moshier theory, so these are XALEN versus
+Moshier, not versus DE431/DE440; arcseconds). Run by
+`scripts/gate.sh` (N = 2000 by default, `--harness-n` for more); the figures
+below are from runs of both sizes on the maintainers' AWS CI. The
+99th percentile is read from a log histogram, so it can sit up to about 2.3%
+above the true value. These are a different sample and a different oracle from
+the historical table that follows, so the two are not comparable row for row.
+
+| Quantity | N=2000 p99 | N=2000 max | N=20000 p99 | N=20000 max |
+|----------|----:|----:|----:|----:|
+| Sun | 3.7 | 4.1 | 3.6 | 4.2 |
+| Moon | 50.1 | 59.2 | 49.0 | 61.1 |
+| Mercury | 5.9 | 7.6 | 5.9 | 7.8 |
+| Venus | 4.3 | 4.9 | 4.3 | 5.0 |
+| Mars | 2.5 | 4.4 | 2.4 | 5.4 |
+| Jupiter | 1.1 | 1.4 | 1.1 | 2.0 |
+| Saturn | 1.2 | 1.8 | 1.2 | 2.2 |
+| Uranus | 7.1 | 7.9 | 7.2 | 8.0 |
+| Neptune | 11.2 | 11.5 | 11.2 | 11.6 |
+| Pluto (1885-2099 only) | 1.7 | 1.8 | 1.7 | 1.8 |
+| Mean node | 1.2 | 1.3 | 1.3 | 1.3 |
+| True node (not gated) | 52.5 | 70.0 | 51.3 | 71.9 |
+| Ascendant (\|lat\| <= 66 deg) | 35.5 | 64.9 | 36.3 | 75.1 |
+| Midheaven | 22.9 | 26.4 | 21.4 | 26.8 |
+| House cusps | 26.3 | 64.9 | 26.3 | 75.1 |
+| Ayanamsa (Lahiri) | 0.74 | 0.74 | 0.74 | 0.74 |
+
+The harness gates on 0.1 deg (360") and both runs passed; the worst gated
+quantity was the ascendant at 75.1" (0.021 deg). The mean and osculating
+apogees are not gated (their definitions differ between ephemeris programs).
+The Moon's 61" maximum over 1500-2400 is wider than the "RMS ~2.8", max ~12"
+over AD 1600-2100" figure quoted for the modern era, because the analytic Moon
+series degrades at the far ends of this wider span.
+
 Beyond the fixed reference epochs above, every body was diffed against Swiss
 Ephemeris across **5,000,000 deterministically-sampled charts** -- ten SplitMix64
 shards of 500,000 each (seeds 1-10), dates 1850-2150, worldwide
