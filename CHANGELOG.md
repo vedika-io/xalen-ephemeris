@@ -18,6 +18,19 @@ exception that `except swe.Error` can catch
 ([#48](https://github.com/vedika-io/xalen-ephemeris/issues/48)).
 
 ### Added
+- **Parans in `xalen-maps` and `xalen map --parans`.** `parans(&map,
+  &ParanOptions)` returns every crossing of one body's line with another's (a
+  body rising or setting while another culminates or anti-culminates, or two
+  bodies on the horizon together; Brady), ordered by latitude, with a `skipped`
+  list of line pairs that do not cross in the latitude range and why.
+  `parans_near` gives those within an orb of one latitude. Crossings are solved
+  in closed form from the right ascensions, declinations and sidereal time, and
+  are checked against the topocentric altitude and hour angle in `xalen-ephem`
+  to 0.01 degrees (the Moon's horizon crossings to its parallax, about one
+  degree, since the map is geocentric). `xalen map --parans` prints them (a `parans` array in
+  `--json`, `PARAN` points in `--geojson`), and `--parans --lat <deg> [--orb
+  <deg>]` lists the parans within the orb of that latitude (`--orb` needs
+  `--lat`).
 - **Python: rise/set/transit, eclipse search and `swe.Error` in `xalen.swe`**
   ([#47](https://github.com/vedika-io/xalen-ephemeris/issues/47),
   [#48](https://github.com/vedika-io/xalen-ephemeris/issues/48)).

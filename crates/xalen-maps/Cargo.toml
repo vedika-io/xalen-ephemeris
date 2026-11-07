@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Astrocartography for XALEN Ephemeris — MC, IC, ascendant and descendant lines and zenith points"
+description = "Astrocartography for XALEN Ephemeris — MC, IC, ascendant and descendant lines, zenith points and parans"
 keywords = ["astrocartography", "astrology", "map", "ephemeris", "horizon"]
 categories = ["science", "mathematics"]
 

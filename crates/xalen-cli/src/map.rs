@@ -3,8 +3,8 @@
 use serde_json::{Value, json};
 use xalen_ephemeris::ephem::{Almanac, Body};
 use xalen_ephemeris::maps::{
-    AstroMap, BodyLines, HorizonCrossing, LineKind, MapOptions, astro_map, horizon_half_arc,
-    mc_longitude_deg,
+    AstroMap, BodyLines, HorizonCrossing, LineKind, MapOptions, Paran, ParanOptions, astro_map,
+    horizon_half_arc, mc_longitude_deg, parans, parans_near,
 };
 
 use crate::cli::MapArgs;
@@ -50,9 +50,42 @@ fn horizon_at(lines: &BodyLines, gast: f64, lat: f64, altitude: f64) -> Horizon 
     }
 }
 
-/// A GeoJSON FeatureCollection (RFC 7946): one LineString per line segment and
-/// one Point per zenith, coordinates `[longitude, latitude]`.
-fn geojson(map: &AstroMap) -> Value {
+/// The parans as a table, south to north.
+fn paran_table(found: &[Paran]) -> String {
+    let rows: Vec<Vec<String>> = found
+        .iter()
+        .map(|p| {
+            vec![
+                num(p.latitude_deg, 4),
+                num(p.longitude_deg, 4),
+                Point::Body(p.body_a).name().to_string(),
+                kind_name(p.kind_a).to_string(),
+                Point::Body(p.body_b).name().to_string(),
+                kind_name(p.kind_b).to_string(),
+            ]
+        })
+        .collect();
+    table(
+        &[
+            "Latitude",
+            "Longitude",
+            "Body A",
+            "Angle A",
+            "Body B",
+            "Angle B",
+        ],
+        &rows,
+    )
+}
+
+fn encode(value: serde_json::Result<Value>, what: &str) -> Result<Value> {
+    value.map_err(|e| CliError::compute(format!("cannot encode {what}: {e}")))
+}
+
+/// A GeoJSON FeatureCollection (RFC 7946): one LineString per line segment,
+/// one Point per zenith and one Point per paran, coordinates
+/// `[longitude, latitude]`.
+fn geojson(map: &AstroMap, found: &[Paran]) -> Value {
     let mut features = Vec::new();
     for body in &map.bodies {
         let id = point_id(body.body);
@@ -75,6 +108,22 @@ fn geojson(map: &AstroMap) -> Value {
             "geometry": {
                 "type": "Point",
                 "coordinates": [body.zenith.1, body.zenith.0],
+            },
+        }));
+    }
+    for p in found {
+        features.push(json!({
+            "type": "Feature",
+            "properties": {
+                "kind": "PARAN",
+                "body_a": point_id(p.body_a),
+                "kind_a": kind_name(p.kind_a),
+                "body_b": point_id(p.body_b),
+                "kind_b": kind_name(p.kind_b),
+            },
+            "geometry": {
+                "type": "Point",
+                "coordinates": [p.longitude_deg, p.latitude_deg],
             },
         }));
     }
@@ -120,12 +169,34 @@ pub fn run(args: &MapArgs) -> Result<Report> {
         }
         (bodies, true)
     };
+    let orb = args.orb.unwrap_or(1.0);
+    if !(0.0..90.0).contains(&orb) {
+        return Err(CliError::usage(
+            "--orb must be at least 0 and less than 90 degrees",
+        ));
+    }
     let (bodies, skipped) = available_bodies(&almanac, &[inst.jd_ut], named, explicit)?;
     let map = astro_map(&almanac, inst.ut1(), &bodies, &options)?;
+    let paran_options = ParanOptions {
+        min_lat_deg: options.lat_min_deg,
+        max_lat_deg: options.lat_max_deg,
+        horizon_altitude_deg: options.horizon_altitude_deg,
+        ..ParanOptions::default()
+    };
+    let paran_set = if args.parans {
+        Some(parans(&map, &paran_options)?)
+    } else {
+        None
+    };
+    let near = match (&paran_set, args.lat) {
+        (Some(_), Some(lat)) => Some(parans_near(&map, lat, orb, &paran_options)?),
+        _ => None,
+    };
 
     if args.geojson {
+        let found = paran_set.as_ref().map_or(&[][..], |s| &s.parans[..]);
         return Ok(Report {
-            json: geojson(&map),
+            json: geojson(&map, found),
             text: String::new(),
         });
     }
@@ -207,10 +278,38 @@ pub fn run(args: &MapArgs) -> Result<Report> {
         text.push_str(note);
         text.push('\n');
     }
+    if let (Some(found), Some(lat)) = (&near, args.lat) {
+        text.push_str(&format!(
+            "\nParans within {} deg of latitude {} (bodies on angles at the same moment):\n",
+            num(orb, 2),
+            num(lat, 4)
+        ));
+        if found.is_empty() {
+            text.push_str("none\n");
+        } else {
+            text.push_str(&paran_table(found));
+        }
+    } else if let Some(set) = &paran_set {
+        text.push_str(&format!(
+            "\nParans, latitudes {} to {} (bodies on angles at the same moment):\n",
+            num(paran_options.min_lat_deg, 2),
+            num(paran_options.max_lat_deg, 2)
+        ));
+        if set.parans.is_empty() {
+            text.push_str("none\n");
+        } else {
+            text.push_str(&paran_table(&set.parans));
+        }
+        if !set.skipped.is_empty() {
+            text.push_str(&format!(
+                "{} line pairs have no crossing in this range (parans_skipped in --json).\n",
+                set.skipped.len()
+            ));
+        }
+    }
     text.push_str(&skipped_note(&skipped));
 
-    let mut json = serde_json::to_value(&map)
-        .map_err(|e| CliError::compute(format!("cannot encode the map: {e}")))?;
+    let mut json = encode(serde_json::to_value(&map), "the map")?;
     json["command"] = json!("map");
     json["date"] = json!(inst.iso());
     json["jd_ut"] = json!(inst.jd_ut);
@@ -219,6 +318,18 @@ pub fn run(args: &MapArgs) -> Result<Report> {
         .map_err(|e| CliError::compute(format!("cannot encode the options: {e}")))?;
     if let Some(lat) = args.lat {
         json["at_latitude"] = json!({ "latitude": lat, "bodies": at_latitude });
+    }
+    if let Some(set) = &paran_set {
+        json["parans"] = encode(serde_json::to_value(&set.parans), "the parans")?;
+        json["parans_skipped"] = encode(serde_json::to_value(&set.skipped), "the skipped parans")?;
+        json["paran_options"] = encode(serde_json::to_value(paran_options), "the paran options")?;
+    }
+    if let (Some(found), Some(lat)) = (&near, args.lat) {
+        json["parans_near"] = json!({
+            "latitude": lat,
+            "orb": orb,
+            "parans": encode(serde_json::to_value(found), "the parans")?,
+        });
     }
     json["skipped"] = skipped_value(&skipped);
     Ok(Report { json, text })

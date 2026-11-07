@@ -739,7 +739,9 @@ fn absurd_dates_and_julian_days_exit_two() {
 // map, synastry, composite, davison, relocate
 // ---------------------------------------------------------------------------
 
-use xalen_ephemeris::maps::{MapOptions, astro_map};
+use xalen_ephemeris::maps::{
+    AstroMap, MapOptions, Paran, ParanOptions, astro_map, parans, parans_near,
+};
 
 fn with_flags(base: &[&str], more: &[&str]) -> Vec<String> {
     base.iter().chain(more).map(|s| (*s).to_string()).collect()
@@ -1396,6 +1398,29 @@ fn the_relationship_and_map_commands_exit_two_on_bad_input() {
         vec!["map", "--date", "2024-06-21", "--json", "--geojson"],
         vec!["map", "--date", "2024-06-21", "--geojson", "--lat", "40"],
         vec!["map", "--date", "2024-06-21", "--bodies", "earth"],
+        // map: a negative or non-finite orb, and an orb without --parans.
+        vec![
+            "map",
+            "--date",
+            "2024-06-21",
+            "--parans",
+            "--lat",
+            "40",
+            "--orb",
+            "-1",
+        ],
+        vec![
+            "map",
+            "--date",
+            "2024-06-21",
+            "--parans",
+            "--lat",
+            "40",
+            "--orb",
+            "nan",
+        ],
+        vec!["map", "--date", "2024-06-21", "--lat", "40", "--orb", "1"],
+        vec!["map", "--date", "2024-06-21", "--parans", "--orb", "1"],
         vec!["map"],
     ];
     for args in cases {
@@ -1866,6 +1891,132 @@ fn map_geojson_positions_follow_the_library() {
             }
             assert_eq!(count, vertices.len(), "{id} {kind} vertex count");
         }
+    }
+}
+
+fn paran_map() -> AstroMap {
+    astro_map(
+        &Almanac::default_vedic(),
+        calendar_to_jd(2024, 6, 21, 0.0, CalendarSystem::ProlepticGregorian),
+        &[Body::Sun, Body::Moon, Body::Mars, Body::Jupiter],
+        &MapOptions::default(),
+    )
+    .expect("the library maps the bodies")
+}
+
+const PARAN_ARGS: [&str; 6] = [
+    "map",
+    "--date",
+    "2024-06-21T00:00:00Z",
+    "--bodies",
+    "sun,moon,mars,jupiter",
+    "--parans",
+];
+
+/// The JSON parans equal the library's, field by field, to 1e-9.
+fn assert_parans_match(json: &Value, want: &[Paran]) {
+    let got = json.as_array().expect("an array of parans");
+    assert_eq!(got.len(), want.len(), "{json}");
+    for (item, p) in got.iter().zip(want) {
+        assert_eq!(item["body_a"], format!("{:?}", p.body_a));
+        assert_eq!(item["kind_a"], format!("{:?}", p.kind_a));
+        assert_eq!(item["body_b"], format!("{:?}", p.body_b));
+        assert_eq!(item["kind_b"], format!("{:?}", p.kind_b));
+        assert!((num(&item["latitude_deg"]) - p.latitude_deg).abs() < 1e-9);
+        assert!((num(&item["longitude_deg"]) - p.longitude_deg).abs() < 1e-9);
+    }
+}
+
+#[test]
+fn map_parans_json_matches_the_library() {
+    let want = parans(&paran_map(), &ParanOptions::default()).expect("the library finds parans");
+    assert!(!want.parans.is_empty());
+    let json = json_of_owned(&with_flags(&PARAN_ARGS, &["--json"]));
+    assert_parans_match(&json["parans"], &want.parans);
+    let skipped = json["parans_skipped"].as_array().expect("parans_skipped");
+    assert_eq!(skipped.len(), want.skipped.len());
+    assert_eq!(json["paran_options"]["include_horizon_pairs"], true);
+    // Without --parans the map JSON has no parans.
+    let plain = json_of_owned(&with_flags(&PARAN_ARGS[..5], &["--json"]));
+    assert!(plain.get("parans").is_none());
+}
+
+#[test]
+fn map_parans_geojson_points_are_lon_lat() {
+    let want = parans(&paran_map(), &ParanOptions::default()).expect("the library finds parans");
+    assert!(!want.parans.is_empty());
+    let json = json_of_owned(&with_flags(&PARAN_ARGS, &["--geojson"]));
+    let points: Vec<&Value> = json["features"]
+        .as_array()
+        .expect("features")
+        .iter()
+        .filter(|f| f["properties"]["kind"] == "PARAN")
+        .collect();
+    assert_eq!(points.len(), want.parans.len());
+    for (feature, p) in points.iter().zip(&want.parans) {
+        assert_eq!(feature["geometry"]["type"], "Point");
+        let at = &feature["geometry"]["coordinates"];
+        assert!((num(&at[0]) - p.longitude_deg).abs() < 1e-9, "{feature}");
+        assert!((num(&at[1]) - p.latitude_deg).abs() < 1e-9, "{feature}");
+        let props = &feature["properties"];
+        assert_eq!(props["body_a"], format!("{:?}", p.body_a).to_lowercase());
+        assert_eq!(props["body_b"], format!("{:?}", p.body_b).to_lowercase());
+        assert_eq!(props["kind_a"], format!("{:?}", p.kind_a).to_uppercase());
+        assert_eq!(props["kind_b"], format!("{:?}", p.kind_b).to_uppercase());
+    }
+}
+
+#[test]
+fn map_parans_at_a_latitude_match_parans_near() {
+    let map = paran_map();
+    let options = ParanOptions::default();
+    let all = parans(&map, &options)
+        .expect("the library finds parans")
+        .parans;
+    assert!(!all.is_empty());
+    // A latitude just off a known paran, so the band holds at least one.
+    let lat = all[all.len() / 2].latitude_deg + 0.25;
+    let want = parans_near(&map, lat, 2.0, &options).expect("parans near the latitude");
+    assert!(!want.is_empty());
+    let lat_arg = format!("{lat}");
+    let near = ["--lat", lat_arg.as_str(), "--orb", "2"];
+    let mut args = with_flags(&PARAN_ARGS, &near);
+    args.push("--json".to_string());
+    let json = json_of_owned(&args);
+    assert!((num(&json["parans_near"]["latitude"]) - lat).abs() < 1e-12);
+    assert_eq!(num(&json["parans_near"]["orb"]), 2.0);
+    assert_parans_match(&json["parans_near"]["parans"], &want);
+    // The full set is still in "parans".
+    assert_parans_match(&json["parans"], &all);
+    // The table lists exactly those parans.
+    let args = with_flags(&PARAN_ARGS, &near);
+    let refs: Vec<&str> = args.iter().map(String::as_str).collect();
+    let out = xalen(&refs);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    assert!(
+        out.stdout.contains("Parans within 2.00 deg of latitude"),
+        "{}",
+        out.stdout
+    );
+    let section = out
+        .stdout
+        .split("Parans within")
+        .nth(1)
+        .expect("the paran section");
+    let rows: Vec<&str> = section
+        .lines()
+        .skip(3)
+        .take_while(|l| {
+            l.split_whitespace()
+                .next()
+                .is_some_and(|c| c.parse::<f64>().is_ok())
+        })
+        .collect();
+    assert_eq!(rows.len(), want.len(), "{section}");
+    for (row, p) in rows.iter().zip(&want) {
+        let cells: Vec<&str> = row.split_whitespace().collect();
+        assert_eq!(cells[0], format!("{:.4}", p.latitude_deg), "{row}");
+        assert_eq!(cells[1], format!("{:.4}", p.longitude_deg), "{row}");
     }
 }
 

@@ -606,12 +606,28 @@ pub struct MapArgs {
         allow_negative_numbers = true
     )]
     pub altitude: f64,
-    /// Also show where each body rises and sets on this latitude
+    /// Also show where each body rises and sets on this latitude (with
+    /// --parans, list only the parans within --orb of it)
     #[arg(long, value_name = "DEG", allow_negative_numbers = true)]
     pub lat: Option<f64>,
-    /// Print a GeoJSON FeatureCollection (one LineString per line segment and a
-    /// Point per zenith) instead of a table; cannot be combined with --lat or
-    /// --json, and leaves out bodies the ephemeris cannot reach at the date
+    /// Also list the parans: the places where two bodies are on angles at once
+    /// (the crossings of one body's lines with another's)
+    #[arg(long)]
+    pub parans: bool,
+    /// The latitude orb of the parans listed with --lat, in degrees, at least 0
+    /// and under 90 (default 1); needs --parans and --lat
+    #[arg(
+        long,
+        value_name = "DEG",
+        requires = "parans",
+        requires = "lat",
+        allow_negative_numbers = true
+    )]
+    pub orb: Option<f64>,
+    /// Print a GeoJSON FeatureCollection (one LineString per line segment, a
+    /// Point per zenith and, with --parans, a Point per paran) instead of a
+    /// table; cannot be combined with --lat or --json, and leaves out bodies
+    /// the ephemeris cannot reach at the date
     #[arg(long, conflicts_with_all = ["json", "lat"])]
     pub geojson: bool,
     #[command(flatten)]
@@ -853,6 +869,9 @@ pub fn build_command() -> clap::Command {
                 "{}\n\n{bodies}\n\nWith --geojson the output loads in any GIS tool or geojson.io; it cannot be \
                  combined with --lat, and it silently leaves out the bodies the ephemeris cannot \
                  reach at the date (--json and the table list them as skipped). \
+                 --parans adds the crossings of the lines (Brady's parans) within --lat-min and \
+                 --lat-max; with --lat it lists only those within --orb (default 1) of that \
+                 latitude, for example --parans --lat 28.61 for New Delhi. \
                  Positions are geocentric (the Moon's lines can be off by up to one degree of \
                  parallax). The map has no zodiac.",
                 example("map --date 2024-06-21T00:00:00Z --bodies sun,moon --geojson")
