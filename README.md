@@ -147,6 +147,31 @@ cargo run --example chinese_bazi     # BaZi Four Pillars with Wu Xing
 
 ---
 
+## Command line
+
+The `xalen` tool puts the library in the terminal: positions, charts, panchang,
+dasha, fixed stars, eclipses, rise and set times, aspects and time conversions,
+as a table or with `--json`. It works offline and has no data files.
+
+```bash
+cargo install xalen-cli
+```
+
+```bash
+# Sidereal (Lahiri) positions with nakshatra and pada
+xalen positions --date 2026-11-07T00:00:00Z --sidereal --bodies sun,moon
+
+# Whole-sign Vedic chart for a place in the built-in city table
+xalen chart --date 1990-03-15T06:30:00Z --place delhi --sidereal
+
+# Solar eclipses of 2024 as JSON (the 8 April total eclipse is the first)
+xalen eclipses --from 2024-01-01 --to 2024-12-31 --type solar --json
+```
+
+See [`crates/xalen-cli`](crates/xalen-cli/README.md) for every command.
+
+---
+
 ## Accuracy
 
 | Theory | Bodies | Accuracy | Data Files Needed? |

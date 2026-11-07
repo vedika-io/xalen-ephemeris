@@ -58,7 +58,9 @@ impl HouseCusps {
     /// and every angle (ASC, MC, IC, DSC, Vertex and the four auxiliary
     /// ascendants) is shifted by `−ayanamsa` and re-normalized to `[0, 2π)`,
     /// exactly as Swiss Ephemeris does for `swe_houses_ex(..., SEFLG_SIDEREAL)`.
-    /// `system` and `fallback_used` are preserved.
+    /// `system` and `fallback_used` are preserved. For [`HouseSystem::WholeSign`]
+    /// the cusps are rebuilt from the sidereal ascendant, so they stay on
+    /// 30-degree sign boundaries of the sidereal zodiac.
     ///
     /// Validated against pyswisseph 2.10.03: tropical cusps/angles minus the
     /// Lahiri ayanamsa reproduce `swe.houses_ex(jd, lat, lon, b'P',
@@ -69,6 +71,14 @@ impl HouseCusps {
         let mut cusps = [0.0; 12];
         for (i, c) in cusps.iter_mut().enumerate() {
             *c = shift(self.cusps[i]);
+        }
+        // Whole Sign cusps sit on sign boundaries of the zodiac they are
+        // quoted in. Shifting the tropical boundaries would leave them
+        // `ayanamsa` degrees off the sidereal sign boundaries, so snap the
+        // SIDEREAL ascendant instead (as Swiss does in sidereal mode). Equal
+        // and Vehlow cusps are offsets of the ascendant and shift correctly.
+        if self.system == HouseSystem::WholeSign {
+            cusps = whole_sign_cusps(shift(self.ascendant));
         }
         HouseCusps {
             system: self.system,
@@ -4207,5 +4217,57 @@ mod tests {
             total += step;
         }
         assert!((total - 360.0).abs() < 1e-6, "polar arcs sum to 360°");
+    }
+
+    /// Sidereal Whole Sign cusps are the sign boundaries of the SIDEREAL
+    /// zodiac, and the ascendant lies in house 1. Before the fix the tropical
+    /// boundaries were shifted by the ayanamsa and landed off the boundaries.
+    #[test]
+    fn sidereal_whole_sign_cusps_are_sign_boundaries() {
+        let epsilon = 23.4393_f64.to_radians();
+        let ayanamsa = 24.2_f64.to_radians();
+        for jd in [2451545.0, 2461351.5, 2447965.77] {
+            let h = compute_houses_sidereal(
+                jd,
+                &test_location(),
+                epsilon,
+                ayanamsa,
+                HouseSystem::WholeSign,
+            );
+            for (i, cusp) in h.cusps.iter().enumerate() {
+                let deg = cusp.to_degrees().rem_euclid(360.0);
+                let off = (deg / 30.0 - (deg / 30.0).round()).abs() * 30.0;
+                assert!(off < 1e-9, "cusp {} = {deg} is not a multiple of 30", i + 1);
+            }
+            let asc = h.ascendant.to_degrees().rem_euclid(360.0);
+            assert!((asc - h.cusp_deg(0)).rem_euclid(360.0) < 30.0);
+            assert_eq!(h.planet_in_house(h.ascendant), 1);
+            // A planet in the ascendant's sidereal sign is in house 1.
+            let sign_start = (asc / 30.0).floor() * 30.0;
+            assert_eq!(h.planet_in_house((sign_start + 0.001).to_radians()), 1);
+            assert_eq!(h.planet_in_house((sign_start + 29.999).to_radians()), 1);
+            assert_eq!(h.planet_in_house((sign_start + 30.001).to_radians()), 2);
+        }
+    }
+
+    /// Sidereal Equal cusps are the sidereal ascendant plus 30 degrees times
+    /// the house index.
+    #[test]
+    fn sidereal_equal_cusps_are_ascendant_plus_thirty_steps() {
+        let epsilon = 23.4393_f64.to_radians();
+        let ayanamsa = 24.2_f64.to_radians();
+        let h = compute_houses_sidereal(
+            2461351.5,
+            &test_location(),
+            epsilon,
+            ayanamsa,
+            HouseSystem::Equal,
+        );
+        let asc = h.ascendant.to_degrees().rem_euclid(360.0);
+        for i in 0..12 {
+            let expected = (asc + 30.0 * i as f64).rem_euclid(360.0);
+            let d = (h.cusp_deg(i) - expected).rem_euclid(360.0);
+            assert!(d.min(360.0 - d) < 1e-9, "cusp {} off by {d}", i + 1);
+        }
     }
 }

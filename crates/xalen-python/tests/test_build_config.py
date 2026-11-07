@@ -99,7 +99,13 @@ def test_crates_publish_order_is_topological():
     crates_dir = REPO_ROOT / "crates"
     dep_re = re.compile(r"^xalen-([a-z]+)\s*=", re.MULTILINE)
     for name in order:
-        cargo = _read(crates_dir / f"xalen-{name}" / "Cargo.toml")
+        # `ephemeris` is the umbrella crate at the repository root.
+        manifest = (
+            REPO_ROOT / "Cargo.toml"
+            if name == "ephemeris"
+            else crates_dir / f"xalen-{name}" / "Cargo.toml"
+        )
+        cargo = _read(manifest)
         for dep in dep_re.findall(cargo):
             if dep in position:  # only intra-published-set deps
                 assert position[dep] < position[name], (
