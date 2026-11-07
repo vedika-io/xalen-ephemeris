@@ -369,7 +369,7 @@ asserts them with partial and central controls.
 | Exaltation/debilitation | Classical lordship table | All 7 planets: exaltation and debilitation exactly 6 signs apart |
 | Ashtottari Dasha | 108-year cycle | Implemented |
 | Yogini Dasha | 36-year cycle | Implemented |
-| Shadbala | Six-fold strength | Implemented |
+| Shadbala | Six-fold strength, all nine Kala Bala parts including Ayana (declination) and Yuddha (planetary war, Sripati convention, northern planet wins) | Implemented; Drik Bala is graded, not continuous Sphuta Drishti |
 | Ashtakavarga | Bindu computation | Implemented |
 | KP (Krishnamurti) | Sub-lord table | Implemented |
 | Jaimini | Chara karakas, Chara dasha | Implemented |

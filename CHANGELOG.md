@@ -7,7 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+**Thank you** to [Vidy Atreya Uppaluru](https://github.com/vauppaluru-ctrl)
+for reporting that Shadbala had only seven of the nine Kala Bala parts
+([#46](https://github.com/vedika-io/xalen-ephemeris/issues/46)).
+
 ### Added
+- **Ayana Bala and Yuddha Bala in `Shadbala::compute_full`**, which now returns
+  all nine Kala Bala parts (`KalaBala::ayana_bala`, `KalaBala::yuddha_bala`,
+  both included in `KalaBala::total` and so in the Shadbala total). Ayana Bala
+  is `(24 + k) * 60 / 48` virupas from the declination (BPHS Ch. 27), with `k`
+  the declination for the Sun, Mars, Jupiter and Venus, minus the declination
+  for the Moon and Saturn, and its absolute value for Mercury; `k` is clamped to
+  24 degrees and the Sun's result is doubled. Yuddha Bala applies to Mars,
+  Mercury, Jupiter, Venus and Saturn within one degree of each other: the
+  northern planet (greater declination) wins, and the winner gains, and the
+  loser loses, the difference of their Sthana, Dig, Nathonnatha, Paksha,
+  Tribhaga and Hora Bala divided by the difference of their disc diameters
+  (Sripati). The convention and the literal-BPHS alternative that is not
+  implemented are written out in the rustdoc of `compute_full`.
+  `shadbala::kranti_deg` gives the classical declination from a tropical
+  longitude for callers without ecliptic latitudes.
 - **`xalen-cli`** crate with the `xalen` command line (installed with
   `cargo install xalen-cli`). Nine commands over the library, each with a
   readable table and `--json`: `positions`, `chart`, `panchang`, `dasha`,
@@ -47,6 +66,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   names them as optional dependencies. `scripts/build-release-artifacts.sh node`
   (also part of `all`) builds, checks and packs the five tarballs. The package is
   published with each release from 0.8; Windows has no prebuilt binary yet.
+
+### Changed (breaking)
+- `xalen_vedic::shadbala::PlanetPosition` has two new fields, `declination`
+  (degrees, north positive) and `house` (1 to 12), and `KalaBala` has two new
+  fields, so code that builds either struct by hand needs them. To migrate, set
+  `declination` from the planet's true declination or from
+  `kranti_deg(tropical_longitude, obliquity_deg)`, and `house` to the house the
+  planet occupies, the same value you pass to `compute_full`. Totals of
+  `compute_full` change by the added Ayana and Yuddha Bala.
 
 ### Fixed
 - **Sidereal Whole Sign houses** (`HouseCusps::to_sidereal`,
