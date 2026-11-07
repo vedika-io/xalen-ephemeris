@@ -75,8 +75,29 @@ for reporting that Shadbala had only seven of the nine Kala Bala parts
   `kranti_deg(tropical_longitude, obliquity_deg)`, and `house` to the house the
   planet occupies, the same value you pass to `compute_full`. Totals of
   `compute_full` change by the added Ayana and Yuddha Bala.
+- `xalen_vedic::shadbala::ShadBalaInput` has a new field `ayanamsa_deg`: the
+  ayanamsa in degrees that was subtracted to make the sidereal longitudes in
+  the input (0.0 if they are already tropical). Cheshta Bala needs it because
+  its mean longitudes are tropical. To migrate, set it to the value you used
+  to convert, for example `Ayanamsa::Lahiri.compute_deg(jd)`. Cheshta Bala,
+  and so the Shadbala total, changes for every planet (see *Fixed*), and the
+  `speed` argument of `compute_full` is no longer used.
 
 ### Fixed
+- **Cheshta Bala in `Shadbala::compute_full`** was a placeholder (a flat 30 for
+  the Sun and Moon and 60, 30 or 15 for the others from the direction of
+  motion). It now follows BPHS Ch. 27 (Santhanam; B.V. Raman, *Graha and Bhava
+  Balas*): the Sun's Cheshta Bala is its Ayana Bala, the Moon's is its Paksha
+  Bala, and Mars, Mercury, Jupiter, Venus and Saturn get the Cheshta Kendra
+  divided by 3, 0 to 60 virupas. The Kendra is the Seeghrocca minus the mean of
+  the Madhya and the true longitude; the Seeghrocca is the Sun's mean longitude
+  for Mars, Jupiter and Saturn and the planet's own mean heliocentric longitude
+  for Mercury and Venus, with the Madhya the other one. The mean longitudes
+  are the Meeus polynomials (mean equinox of date), exposed as
+  `shadbala::mean_sun_longitude_deg` and
+  `shadbala::mean_heliocentric_longitude_deg`, and checked against VSOP87D in
+  the test suite. The deprecated `Shadbala::compute` keeps its old rule. Reported
+  in [#46](https://github.com/vedika-io/xalen-ephemeris/issues/46).
 - **Sidereal Whole Sign houses** (`HouseCusps::to_sidereal`,
   `compute_houses_sidereal`, `compat::swe_houses_ex` with the sidereal flag)
   shifted the tropical sign boundaries by the ayanamsa, so the cusps were not

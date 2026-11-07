@@ -101,6 +101,12 @@ pub struct ShadBalaInput {
     /// Positions of all 7 planets (Sun through Saturn) for Drik Bala, Ayana
     /// Bala and Yuddha Bala.
     pub all_planets: Vec<PlanetPosition>,
+    /// The ayanamsa in degrees that was subtracted to make the sidereal
+    /// longitudes in this input; 0.0 if they are already tropical. Cheshta
+    /// Bala compares the sidereal longitudes with mean longitudes that are
+    /// tropical (mean equinox of date), so it adds this value back. See
+    /// [`Shadbala::compute_full`].
+    pub ayanamsa_deg: f64,
 }
 
 impl Shadbala {
@@ -112,7 +118,7 @@ impl Shadbala {
         let sthana = compute_sthana_bala(planet, lon_deg, house);
         let dig = compute_dig_bala(planet, house);
         let naisargika = naisargika_bala(planet);
-        let cheshta = compute_cheshta_bala(planet, speed);
+        let cheshta = cheshta_bala_by_speed(planet, speed);
         let kala = KalaBala {
             total: 30.0,
             ..Default::default()
@@ -181,6 +187,46 @@ impl Shadbala {
     /// totals run to several hundred virupas while the six partial sums
     /// are roughly half of that.
     ///
+    /// # Cheshta Bala
+    ///
+    /// Cheshta Bala is the motional strength of the five true planets, taken
+    /// from the Cheshta Kendra (BPHS Ch. 27, Santhanam's translation; B.V.
+    /// Raman, *Graha and Bhava Balas*). The Sun's Cheshta Bala is its Ayana
+    /// Bala ([`KalaBala::ayana_bala`], so 0 to 120 virupas) and the Moon's is
+    /// its Paksha Bala ([`KalaBala::paksha_bala`]), as BPHS prescribes.
+    ///
+    /// For Mars, Jupiter and Saturn the Seeghrocca is the mean longitude of
+    /// the Sun and the Madhya is the planet's own mean heliocentric
+    /// longitude. For Mercury and Venus the two swap: the Seeghrocca is the
+    /// planet's mean heliocentric longitude and the Madhya is the mean
+    /// longitude of the Sun. With the Sphuta, the true geocentric longitude of
+    /// the planet,
+    ///
+    /// ```text
+    /// Cheshta Kendra = Seeghrocca - (Madhya + Sphuta) / 2
+    /// Cheshta Bala   = Cheshta Kendra / 3         (Kendra reduced to 0..180)
+    /// ```
+    ///
+    /// so the result is 0 to 60 virupas: 60 for an outer planet at opposition
+    /// or an inner planet at inferior conjunction, 0 at conjunction or
+    /// superior conjunction. The half-sum of Madhya and Sphuta is taken on
+    /// the shorter arc between them, and a Kendra over 180 degrees is
+    /// replaced by 360 minus itself, so nothing breaks at the 0/360 wrap.
+    ///
+    /// The three longitudes must be in one frame. The mean longitudes are
+    /// tropical (mean equinox of date, Meeus, *Astronomical Algorithms*,
+    /// eq. 25.2 for the Sun and Table 31.A for the planets). The
+    /// longitudes in `input` are sidereal, so
+    /// [`ShadBalaInput::ayanamsa_deg`] is added to the planet's longitude
+    /// to get the Sphuta. The `speed` argument is not used: direction of
+    /// motion is already contained in the Kendra. `input.jd` is UT1 and
+    /// the polynomials expect TT; the difference (Delta T, about 70 seconds)
+    /// moves a mean longitude by under 0.001 degree.
+    ///
+    /// The earlier simplified rule (flat values from the direction of motion)
+    /// is gone from `compute_full`; the deprecated [`Shadbala::compute`]
+    /// still uses it.
+    ///
     /// # Inputs
     ///
     /// `input.all_planets` must contain the planet being computed, found by
@@ -196,14 +242,14 @@ impl Shadbala {
         planet: &str,
         lon_deg: f64,
         house: usize,
-        speed: f64,
+        _speed: f64,
         input: &ShadBalaInput,
     ) -> Self {
         let sthana = compute_sthana_bala_full(planet, lon_deg, house);
         let dig = compute_dig_bala(planet, house);
         let naisargika = naisargika_bala(planet);
-        let cheshta = compute_cheshta_bala(planet, speed);
         let kala = compute_kala_bala(planet, input);
+        let cheshta = compute_cheshta_bala(planet, lon_deg, input, &kala);
         let drik = compute_drik_bala(planet, lon_deg, &input.all_planets, input.moon_lon);
 
         let total = sthana.total + dig + kala.total + cheshta + naisargika + drik;
@@ -932,16 +978,81 @@ fn naisargika_bala(planet: &str) -> f64 {
     }
 }
 
-fn compute_cheshta_bala(planet: &str, speed_deg_day: f64) -> f64 {
+/// The old speed-based placeholder, kept only for the deprecated
+/// [`Shadbala::compute`].
+fn cheshta_bala_by_speed(planet: &str, speed_deg_day: f64) -> f64 {
     if matches!(planet, "Sun" | "Moon") {
-        return 30.0; // simplified
+        return 30.0;
     }
     if speed_deg_day < 0.0 {
-        60.0 // retrograde = maximum cheshta bala
+        60.0
     } else if speed_deg_day.abs() < 0.01 {
-        30.0 // stationary
+        30.0
     } else {
-        15.0 // direct
+        15.0
+    }
+}
+
+/// Reduce an angle in degrees to the range -180 to 180.
+fn wrap_signed_deg(x: f64) -> f64 {
+    let r = x.rem_euclid(360.0);
+    if r > 180.0 { r - 360.0 } else { r }
+}
+
+/// Mean longitude of the Sun in degrees (0 to 360), tropical, mean equinox of
+/// date. Meeus, *Astronomical Algorithms*, 2nd ed., eq. 25.2. `jd` is the
+/// Julian date; UT1 is accepted in place of TT because Delta T (about 70
+/// seconds) moves the result by under 0.001 degree.
+pub fn mean_sun_longitude_deg(jd: f64) -> f64 {
+    let t = (jd - 2_451_545.0) / 36_525.0;
+    (280.466_46 + 36_000.769_83 * t + 0.000_303_2 * t * t).rem_euclid(360.0)
+}
+
+/// Mean heliocentric longitude of a planet in degrees (0 to 360), tropical,
+/// mean equinox of date. Meeus, *Astronomical Algorithms*, 2nd ed., Table 31.A.
+/// `planet` is one of Mercury, Venus, Mars, Jupiter, Saturn; any other name
+/// returns `None`. `jd` is as for [`mean_sun_longitude_deg`].
+pub fn mean_heliocentric_longitude_deg(planet: &str, jd: f64) -> Option<f64> {
+    let t = (jd - 2_451_545.0) / 36_525.0;
+    let (l0, l1, l2, l3) = match planet {
+        "Mercury" => (252.250_906, 149_474.072_249_1, 0.000_303_50, 0.000_000_018),
+        "Venus" => (181.979_801, 58_519.213_030_2, 0.000_310_14, 0.000_000_015),
+        "Mars" => (355.433_000, 19_141.696_447_1, 0.000_310_52, 0.000_000_016),
+        "Jupiter" => (34.351_519, 3_036.302_774_8, 0.000_223_30, 0.000_000_037),
+        "Saturn" => (50.077_444, 1_223.511_068_6, 0.000_519_08, -0.000_000_030),
+        _ => return None,
+    };
+    Some((l0 + l1 * t + l2 * t * t + l3 * t * t * t).rem_euclid(360.0))
+}
+
+/// Cheshta Kendra in degrees, 0 to 180: the distance of the Seeghrocca from
+/// the mean of the Madhya and the Sphuta, the mean taken on the shorter arc.
+fn cheshta_kendra_deg(seeghrocca: f64, madhya: f64, sphuta: f64) -> f64 {
+    let half_sum = sphuta + wrap_signed_deg(madhya - sphuta) / 2.0;
+    wrap_signed_deg(seeghrocca - half_sum).abs()
+}
+
+/// Cheshta Bala per BPHS Ch. 27; see [`Shadbala::compute_full`]. `lon_deg` is
+/// the planet's sidereal true longitude and `kala` supplies the Sun's Ayana
+/// Bala and the Moon's Paksha Bala.
+fn compute_cheshta_bala(planet: &str, lon_deg: f64, input: &ShadBalaInput, kala: &KalaBala) -> f64 {
+    match planet {
+        "Sun" => kala.ayana_bala,
+        "Moon" => kala.paksha_bala,
+        "Mars" | "Jupiter" | "Saturn" | "Mercury" | "Venus" => {
+            let sphuta = (lon_deg + input.ayanamsa_deg).rem_euclid(360.0);
+            let sun_mean = mean_sun_longitude_deg(input.jd);
+            let Some(planet_mean) = mean_heliocentric_longitude_deg(planet, input.jd) else {
+                return 0.0;
+            };
+            let (seeghrocca, madhya) = if matches!(planet, "Mercury" | "Venus") {
+                (planet_mean, sun_mean)
+            } else {
+                (sun_mean, planet_mean)
+            };
+            cheshta_kendra_deg(seeghrocca, madhya, sphuta) / 3.0
+        }
+        _ => 0.0,
     }
 }
 
@@ -1019,9 +1130,11 @@ mod tests {
     }
 
     #[test]
-    fn retrograde_cheshta() {
-        let cb = compute_cheshta_bala("Mars", -0.5);
-        assert_eq!(cb, 60.0, "Retrograde should give max cheshta bala");
+    #[allow(deprecated)]
+    fn deprecated_compute_keeps_the_speed_based_cheshta() {
+        assert_eq!(cheshta_bala_by_speed("Mars", -0.5), 60.0);
+        assert_eq!(cheshta_bala_by_speed("Mars", 0.5), 15.0);
+        assert_eq!(Shadbala::compute("Mars", 10.0, 1, -0.5).cheshta_bala, 60.0);
     }
 
     #[test]
@@ -1204,6 +1317,7 @@ mod tests {
                     house: 1,
                 },
             ],
+            ayanamsa_deg: 0.0,
         }
     }
 
@@ -2056,5 +2170,249 @@ mod tests {
             .sum();
         assert!(sum.abs() < 1e-9, "sum {sum}");
         assert!(yuddha_of(&input, "Jupiter") != 0.0);
+    }
+
+    // === Cheshta Bala from the Cheshta Kendra (issue #46) ===
+
+    const FIVE: [&str; 5] = ["Mars", "Mercury", "Jupiter", "Venus", "Saturn"];
+    const J2000: f64 = 2_451_545.0;
+
+    fn input_at(jd: f64, ayanamsa_deg: f64) -> ShadBalaInput {
+        ShadBalaInput {
+            jd,
+            ayanamsa_deg,
+            ..make_test_input()
+        }
+    }
+
+    /// Cheshta Bala of `planet` for a tropical true longitude, through the
+    /// real code path (the input carries sidereal longitudes).
+    fn cheshta_for_tropical(planet: &str, tropical: f64, jd: f64, ayanamsa: f64) -> f64 {
+        let input = input_at(jd, ayanamsa);
+        let kala = KalaBala::default();
+        let sidereal = (tropical - ayanamsa).rem_euclid(360.0);
+        compute_cheshta_bala(planet, sidereal, &input, &kala)
+    }
+
+    /// The jd in `[start, start + span]` (step 0.01 day) at which
+    /// `wrap_signed_deg(f(jd) - target)` is closest to zero.
+    fn find_jd(start: f64, span: f64, target: f64, f: impl Fn(f64) -> f64) -> f64 {
+        let n = (span / 0.01) as usize;
+        let mut best = (f64::MAX, start);
+        for i in 0..=n {
+            let jd = start + i as f64 * 0.01;
+            let e = wrap_signed_deg(f(jd) - target).abs();
+            if e < best.0 {
+                best = (e, jd);
+            }
+        }
+        best.1
+    }
+
+    fn helio(planet: &str, jd: f64) -> f64 {
+        mean_heliocentric_longitude_deg(planet, jd).unwrap()
+    }
+
+    #[test]
+    fn mean_longitudes_at_j2000_are_the_published_constants() {
+        assert!((mean_sun_longitude_deg(J2000) - 280.466_46).abs() < 1e-9);
+        let expected = [
+            ("Mercury", 252.250_906),
+            ("Venus", 181.979_801),
+            ("Mars", 355.433_000),
+            ("Jupiter", 34.351_519),
+            ("Saturn", 50.077_444),
+        ];
+        for (name, l0) in expected {
+            assert!((helio(name, J2000) - l0).abs() < 1e-9, "{name}");
+        }
+        assert!(mean_heliocentric_longitude_deg("Moon", J2000).is_none());
+    }
+
+    #[test]
+    fn mean_longitudes_advance_at_the_published_rates() {
+        // One Julian century later, the linear term dominates; the result is
+        // the rate reduced modulo 360 (the T^2 and T^3 terms are below 0.001).
+        let rates: [(&str, f64); 5] = [
+            ("Mercury", 149_474.072_249_1),
+            ("Venus", 58_519.213_030_2),
+            ("Mars", 19_141.696_447_1),
+            ("Jupiter", 3_036.302_774_8),
+            ("Saturn", 1_223.511_068_6),
+        ];
+        for (name, rate) in rates {
+            let l0 = helio(name, J2000);
+            let l1 = helio(name, J2000 + 36_525.0);
+            let moved = (l1 - l0).rem_euclid(360.0);
+            assert!(
+                (moved - rate.rem_euclid(360.0)).abs() < 0.002,
+                "{name}: moved {moved}"
+            );
+        }
+    }
+
+    #[test]
+    fn cheshta_kendra_anchors_on_synthetic_longitudes() {
+        // Outer planet at opposition: Seeghrocca (Sun) 100, Madhya = Sphuta = 280.
+        assert!((cheshta_kendra_deg(100.0, 280.0, 280.0) - 180.0).abs() < 1e-9);
+        // Outer planet at conjunction: all three equal.
+        assert!(cheshta_kendra_deg(100.0, 100.0, 100.0).abs() < 1e-9);
+        // Inner planet at inferior conjunction: Seeghrocca (planet) = Sun + 180,
+        // Madhya (Sun) = Sphuta = 100.
+        assert!((cheshta_kendra_deg(280.0, 100.0, 100.0) - 180.0).abs() < 1e-9);
+        // Inner planet at superior conjunction.
+        assert!(cheshta_kendra_deg(100.0, 100.0, 100.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn cheshta_kendra_survives_the_zero_360_wrap() {
+        // Madhya 359 and Sphuta 3 average to 1 on the shorter arc, not to 181.
+        assert!((cheshta_kendra_deg(1.0, 359.0, 3.0)).abs() < 1e-9);
+        assert!((cheshta_kendra_deg(181.0, 359.0, 3.0) - 180.0).abs() < 1e-9);
+        // A Kendra above 180 is folded: 200 degrees becomes 160.
+        assert!((cheshta_kendra_deg(200.0, 0.0, 0.0) - 160.0).abs() < 1e-9);
+        assert!((cheshta_kendra_deg(0.0, 200.0, 200.0) - 160.0).abs() < 1e-9);
+        for s in [0.0, 90.0, 179.9, 180.0, 270.0, 359.9] {
+            for m in [0.0, 45.0, 180.0, 359.0] {
+                for h in [0.0, 100.0, 359.0] {
+                    let k = cheshta_kendra_deg(s, m, h);
+                    assert!((0.0..=180.0).contains(&k), "{s} {m} {h} -> {k}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn outer_planets_give_60_at_opposition_and_0_at_conjunction() {
+        let ayanamsa = 24.0;
+        for name in ["Mars", "Jupiter", "Saturn"] {
+            // Opposition: mean Sun 180 degrees from the planet's mean
+            // heliocentric longitude, true longitude equal to the mean.
+            let jd = find_jd(J2000, 800.0, 180.0, |jd| {
+                helio(name, jd) - mean_sun_longitude_deg(jd)
+            });
+            let opposition = cheshta_for_tropical(name, helio(name, jd), jd, ayanamsa);
+            assert!((opposition - 60.0).abs() < 0.05, "{name}: {opposition}");
+            // Conjunction: the planet's mean longitude equals the Sun's.
+            let jd = find_jd(J2000, 800.0, 0.0, |jd| {
+                helio(name, jd) - mean_sun_longitude_deg(jd)
+            });
+            let conjunction = cheshta_for_tropical(name, helio(name, jd), jd, ayanamsa);
+            assert!(conjunction.abs() < 0.05, "{name}: {conjunction}");
+        }
+    }
+
+    #[test]
+    fn inner_planets_give_60_at_inferior_and_0_at_superior_conjunction() {
+        let ayanamsa = 24.0;
+        for name in ["Mercury", "Venus"] {
+            // Inferior conjunction: the planet's mean heliocentric longitude is
+            // the Sun's mean longitude plus 180, and the planet is seen in the
+            // direction of the Sun.
+            let jd = find_jd(J2000, 800.0, 180.0, |jd| {
+                helio(name, jd) - mean_sun_longitude_deg(jd)
+            });
+            let sun = mean_sun_longitude_deg(jd);
+            let inferior = cheshta_for_tropical(name, sun, jd, ayanamsa);
+            assert!((inferior - 60.0).abs() < 0.05, "{name}: {inferior}");
+            // Superior conjunction: the planet's mean heliocentric longitude is
+            // the Sun's, and the planet is seen in the direction of the Sun.
+            let jd = find_jd(J2000, 800.0, 0.0, |jd| {
+                helio(name, jd) - mean_sun_longitude_deg(jd)
+            });
+            let sun = mean_sun_longitude_deg(jd);
+            let superior = cheshta_for_tropical(name, sun, jd, ayanamsa);
+            assert!(superior.abs() < 0.05, "{name}: {superior}");
+        }
+    }
+
+    #[test]
+    fn cheshta_uses_the_ayanamsa_to_reach_the_tropical_frame() {
+        // The same tropical longitude gives the same Cheshta Bala whatever
+        // ayanamsa was used to make the sidereal input.
+        let jd = J2000 + 1234.5;
+        for name in FIVE {
+            let a = cheshta_for_tropical(name, 77.7, jd, 0.0);
+            let b = cheshta_for_tropical(name, 77.7, jd, 24.1);
+            let c = cheshta_for_tropical(name, 77.7, jd, 23.0);
+            assert!((a - b).abs() < 1e-9 && (a - c).abs() < 1e-9, "{name}");
+        }
+        // And forgetting it changes the answer, so the field matters.
+        let input = input_at(jd, 0.0);
+        let kala = KalaBala::default();
+        let wrong = compute_cheshta_bala("Mars", 77.7 - 24.1, &input, &kala);
+        let right = cheshta_for_tropical("Mars", 77.7, jd, 24.1);
+        assert!((wrong - right).abs() > 1.0);
+    }
+
+    #[test]
+    fn cheshta_stays_in_zero_to_sixty_for_the_five_planets() {
+        let kala = KalaBala::default();
+        for step in 0..60 {
+            let jd = J2000 + step as f64 * 613.7 - 15_000.0;
+            let input = input_at(jd, 23.0 + step as f64 * 0.01);
+            for name in FIVE {
+                for lon in (0..360).step_by(7) {
+                    let c = compute_cheshta_bala(name, lon as f64, &input, &kala);
+                    assert!((0.0..=60.0).contains(&c), "{name} {lon} {jd}: {c}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn cheshta_ignores_the_speed_argument() {
+        let input = input_at(J2000 + 500.0, 24.0);
+        let a = Shadbala::compute_full("Mars", 120.0, 3, -0.5, &input);
+        let b = Shadbala::compute_full("Mars", 120.0, 3, 0.5, &input);
+        assert_eq!(a.cheshta_bala, b.cheshta_bala);
+        assert!(a.cheshta_bala > 0.0 && a.cheshta_bala != 15.0 && a.cheshta_bala != 60.0);
+    }
+
+    #[test]
+    fn sun_cheshta_is_its_ayana_and_moon_cheshta_is_its_paksha() {
+        let planets = vec![
+            pos("Sun", 280.0, 10.0, 10),
+            pos("Moon", 130.0, -5.0, 4),
+            pos("Mars", 30.0, 3.0, 2),
+            pos("Mercury", 270.0, 6.0, 10),
+            pos("Jupiter", 50.0, 12.0, 2),
+            pos("Venus", 310.0, -8.0, 11),
+            pos("Saturn", 70.0, 4.0, 3),
+        ];
+        // Elongation 210 degrees: a waning Moon, Paksha Bala strictly inside 0..60.
+        let input = ShadBalaInput {
+            sun_lon: 280.0,
+            moon_lon: 130.0,
+            ..input_with(planets)
+        };
+        let sun = Shadbala::compute_full("Sun", 280.0, 10, 1.0, &input);
+        assert_eq!(sun.cheshta_bala, sun.kala_bala.ayana_bala);
+        assert!((sun.cheshta_bala - 2.0 * (24.0 + 10.0) * 60.0 / 48.0).abs() < 1e-9);
+        let moon = Shadbala::compute_full("Moon", 130.0, 4, 13.0, &input);
+        assert_eq!(moon.cheshta_bala, moon.kala_bala.paksha_bala);
+        assert!(moon.cheshta_bala > 0.0 && moon.cheshta_bala < 60.0);
+        // Neither is the old flat 30.
+        assert!(sun.cheshta_bala != 30.0 && moon.cheshta_bala != 30.0);
+    }
+
+    #[test]
+    fn compute_full_total_is_the_sum_of_six_balas_with_the_new_cheshta() {
+        let input = input_at(J2000 + 4000.25, 23.8);
+        for name in [
+            "Sun", "Moon", "Mars", "Mercury", "Jupiter", "Venus", "Saturn",
+        ] {
+            let sb = Shadbala::compute_full(name, 150.0, 5, 1.0, &input);
+            let expected = sb.sthana_bala.total
+                + sb.dig_bala
+                + sb.kala_bala.total
+                + sb.cheshta_bala
+                + sb.naisargika_bala
+                + sb.drik_bala;
+            assert!((sb.total - expected).abs() < 1e-9, "{name}");
+            let kala = compute_kala_bala(name, &input);
+            let c = compute_cheshta_bala(name, 150.0, &input, &kala);
+            assert_eq!(sb.cheshta_bala, c, "{name}");
+        }
     }
 }
