@@ -44,6 +44,25 @@ body:
       required: true
 
   - type: textarea
+    id: discrepancy
+    attributes:
+      label: Ephemeris discrepancy details (if this is an accuracy report)
+      description: Fill in what applies so we can reproduce the comparison exactly. Leave blank for other bugs.
+      placeholder: |
+        Date/time: 2000-01-01 12:00:00 UTC (or Julian day 2451545.0, state UT or TT)
+        Timezone of any local time: Asia/Kolkata
+        Latitude / longitude / altitude: 28.6139 N, 77.2090 E, 0 m
+        Ayanamsa: Lahiri (or tropical)
+        House system: Placidus
+        Flags / options: sidereal, true node, topocentric, ...
+        Reference tool and version: Swiss Ephemeris 2.10.03 / JPL Horizons / SOFA
+        XALEN value: ...
+        Reference value: ...
+        Difference: ...
+    validations:
+      required: false
+
+  - type: textarea
     id: reproduction
     attributes:
       label: Steps to Reproduce

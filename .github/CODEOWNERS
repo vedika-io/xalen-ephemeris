@@ -1,16 +1,23 @@
 # Code owners for xalen-ephemeris.
-# Requested for review on every PR, and required by the protect-main ruleset's
-# "Require review from Code Owners" rule.
+# GitHub requests a review from the matching owner on every pull request.
 #
-# @vedika-io/core-team must keep write access to this repo; an unresolvable
-# owner here silently disables the code-owner review requirement.
+# @vedika-io/core-team must keep write access to this repository; an
+# unresolvable owner makes this file invalid and no review is requested.
 
 *                         @vedika-io/core-team
 
-# Accuracy- and physics-critical paths — these carry the public accuracy claims.
+# Accuracy- and physics-critical paths. These carry the public accuracy claims.
 /crates/xalen-ephem/      @vedika-io/core-team
 /crates/xalen-coords/     @vedika-io/core-team
 /crates/xalen-houses/     @vedika-io/core-team
 /crates/xalen-ayanamsa/   @vedika-io/core-team
+/crates/xalen-maps/       @vedika-io/core-team
+/crates/xalen-cli/        @vedika-io/core-team
 /docs/ACCURACY.md         @vedika-io/core-team
 /CHANGELOG.md             @vedika-io/core-team
+
+# Security, licensing and community policy.
+/SECURITY.md              @vedika-io/core-team
+/SUPPORT.md               @vedika-io/core-team
+/CLA.md                   @vedika-io/core-team
+/.github/                 @vedika-io/core-team
