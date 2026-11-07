@@ -15,7 +15,7 @@ Part of the [XALEN Ephemeris](https://github.com/vedika-io/xalen-ephemeris) suit
 | Part | Source |
 |------|--------|
 | Synastry grid, house overlays | Robert Hand, *Horoscope Symbols* (1981). Orbs are the `xalen-western` defaults times a multiplier. |
-| Composite midpoints and houses | Robert Hand, *Planets in Composite* (1975). The composite MC is the exact midpoint of the MCs; RAMC is recovered with `tan RAMC = tan MC / cos ε` and fed to the house engine at the mean latitude. |
+| Composite midpoints and houses | Robert Hand, *Planets in Composite* (1975). The composite MC is the exact midpoint of the MCs; RAMC is recovered with `tan RAMC = tan MC · cos ε` and fed to the house engine at the mean latitude. |
 | Davison chart | Ronald Davison, *Synastry* (1977). |
 | Sidereal time, obliquity | Meeus, *Astronomical Algorithms*, 2nd ed., ch. 12 and 13; houses use `xalen_houses::compute_houses_true` (apparent sidereal time, true obliquity). |
 
@@ -49,7 +49,7 @@ println!("composite MC {:.2}", comp.houses.mc.to_degrees());
 
 - Geocentric positions only; lunar parallax (up to about 1 degree) is ignored.
 - The built-in Pluto series covers 1885-2099; outside it `NatalChart::compute` returns `RelationshipError::Ephemeris`.
-- Two points exactly 180 degrees apart have no unique midpoint. `xalen_western::midpoints::compute_midpoint` picks `lon_a + 90`, so a composite of such a pair depends on the order of the charts.
+- Two points exactly 180 degrees apart have no unique midpoint. `xalen_western::midpoints::compute_midpoint` picks `lon_a + 90`, so a composite of such a pair, and the arithmetic Davison midpoint of two birthplaces exactly 180 degrees apart in longitude, depend on the order of the charts.
 - The midpoint-of-ascendants composite supports only Equal and Whole Sign houses, and its Ascendant and Midheaven are not geometrically linked.
 - Aspects are tested with default orbs (no per-body orb policy) and with zero speeds, so applying/separating is not reported.
 
