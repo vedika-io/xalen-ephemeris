@@ -73,6 +73,9 @@ fn main() {
         moon_lon: lons[1],
         day_fraction,
         all_planets,
+        // Cheshta Bala compares the sidereal longitudes above with tropical
+        // mean longitudes, so it needs the ayanamsa that was subtracted.
+        ayanamsa_deg: aya_deg,
     };
 
     println!("=== Shadbala: India Independence Chart ===\n");
