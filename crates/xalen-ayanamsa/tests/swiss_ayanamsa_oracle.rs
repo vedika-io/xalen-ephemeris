@@ -21,8 +21,8 @@
 //!   * The return tuple order is `(retflags, aya)` — the ayanamsa is the SECOND
 //!     element. (Reversing it silently yields the retflag 2.0 for every row.)
 //!   * `swe.julday(y, 1, 1, 12.0)` gives the JDs baked into `JDS` below:
-//!       1900 -> 2415021.0, 1950 -> 2433283.0, 2000 -> 2451545.0,
-//!       2050 -> 2469808.0, 2100 -> 2488070.0.
+//!     1900 -> 2415021.0, 1950 -> 2433283.0, 2000 -> 2451545.0,
+//!     2050 -> 2469808.0, 2100 -> 2488070.0.
 //!
 //! What this validates: `Ayanamsa::compute_deg` reproduces Swiss
 //! `get_ayanamsa_ex(jd, 0)` (the WITH-nutation apparent ayanamsa) to under 1"
@@ -35,6 +35,7 @@
 //!     TrueMula and the galactic-centre / galactic-equator frames): a fixed
 //!     J2000 reference direction rotated to the ecliptic of date (IAU 2006/P03)
 //!     plus Δψ.
+//!
 //! This replaced an earlier single-rate-linear / hand-typed-constant
 //! approximation that diverged from ~17" (nutation-omitted) to >100000"
 //! (GalacticCenterCochrane's J2000 anchor was 28.5° wrong — Swiss places that

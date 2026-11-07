@@ -871,12 +871,8 @@ fn online_house_cusps_pune_j2000_structural() {
     let desc_deg = h.descendant.to_degrees().rem_euclid(360.0);
 
     // Property 1: All angles must be valid (0-360)
-    assert!(
-        asc_deg >= 0.0 && asc_deg < 360.0,
-        "ASC invalid: {}",
-        asc_deg
-    );
-    assert!(mc_deg >= 0.0 && mc_deg < 360.0, "MC invalid: {}", mc_deg);
+    assert!((0.0..360.0).contains(&asc_deg), "ASC invalid: {}", asc_deg);
+    assert!((0.0..360.0).contains(&mc_deg), "MC invalid: {}", mc_deg);
 
     // Property 2: MC and IC must be exactly 180 deg apart
     let mc_ic_sep = angle_delta(mc_deg, ic_deg);
@@ -902,7 +898,7 @@ fn online_house_cusps_pune_j2000_structural() {
     for i in 0..12 {
         let cusp = h.cusp_deg(i);
         assert!(
-            cusp >= 0.0 && cusp < 360.0 && !cusp.is_nan(),
+            (0.0..360.0).contains(&cusp) && !cusp.is_nan(),
             "Cusp {} invalid: {}",
             i + 1,
             cusp
@@ -1007,7 +1003,7 @@ fn online_house_cusps_london_j2000_structural() {
     for i in 0..12 {
         let cusp = h.cusp_deg(i);
         assert!(
-            cusp >= 0.0 && cusp < 360.0 && !cusp.is_nan(),
+            (0.0..360.0).contains(&cusp) && !cusp.is_nan(),
             "London cusp {} invalid: {}",
             i + 1,
             cusp

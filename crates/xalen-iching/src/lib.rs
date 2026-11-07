@@ -2269,7 +2269,7 @@ mod tests {
         // character — proof we did not silently flatten the source to ASCII.
         let has_non_ascii = (1..=64u8)
             .flat_map(|n| line_texts(n).unwrap().iter())
-            .any(|t| t.chars().any(|c| !c.is_ascii()));
+            .any(|t| !t.is_ascii());
         assert!(
             has_non_ascii,
             "expected Legge diacritics (non-ASCII) to be preserved in line texts"

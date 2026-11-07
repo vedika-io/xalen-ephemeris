@@ -142,7 +142,10 @@ mod tests {
     fn lst_pune() {
         let g = gmst(2_451_545.0);
         let lst = local_sidereal_time(g, 73.85);
-        assert!(lst >= 0.0 && lst < 24.0, "LST should be 0-24h, got {lst}h");
+        assert!(
+            (0.0..24.0).contains(&lst),
+            "LST should be 0-24h, got {lst}h"
+        );
     }
 
     #[test]

@@ -498,7 +498,7 @@ fn house_cusps_pune_j2000() {
     let ic = h.ic.to_degrees().rem_euclid(360.0);
     let desc = h.descendant.to_degrees().rem_euclid(360.0);
 
-    assert!(asc >= 0.0 && asc < 360.0 && !asc.is_nan());
+    assert!((0.0..360.0).contains(&asc) && !asc.is_nan());
     assert!(
         (angle_delta(mc, ic) - 180.0).abs() < 0.01,
         "MC-IC not opposite"
@@ -511,7 +511,7 @@ fn house_cusps_pune_j2000() {
     for i in 0..12 {
         let c = h.cusp_deg(i);
         assert!(
-            c >= 0.0 && c < 360.0 && !c.is_nan(),
+            (0.0..360.0).contains(&c) && !c.is_nan(),
             "Cusp {} invalid: {c}",
             i + 1
         );
@@ -616,6 +616,9 @@ fn all_vsop87_bodies_compute() {
         let r = p.geocentric_ecliptic(body, jd);
         assert!(r.is_ok(), "{body} failed: {:?}", r.err());
         let lon = r.unwrap().longitude.to_degrees().rem_euclid(360.0);
-        assert!(lon >= 0.0 && lon < 360.0, "{body} out of range: {lon:.4}°");
+        assert!(
+            (0.0..360.0).contains(&lon),
+            "{body} out of range: {lon:.4}°"
+        );
     }
 }

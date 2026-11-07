@@ -874,7 +874,7 @@ mod tests {
         let lon = pos.longitude * RAD_TO_DEG;
         let lat = pos.latitude * RAD_TO_DEG;
         assert!(
-            lon >= 0.0 && lon < 360.0,
+            (0.0..360.0).contains(&lon),
             "Longitude should be in [0,360), got {lon}°"
         );
         assert!(
@@ -1045,7 +1045,7 @@ mod tests {
             let lon = pos.longitude * RAD_TO_DEG;
             let lat = pos.latitude * RAD_TO_DEG;
             assert!(
-                lon >= 0.0 && lon < 360.0,
+                (0.0..360.0).contains(&lon),
                 "{}: lon out of range: {lon}°",
                 ast.name()
             );
@@ -1070,7 +1070,7 @@ mod tests {
         let pos = asteroid_position(Asteroid::Eros, JdTT::J2000).unwrap();
         let lon = pos.longitude * RAD_TO_DEG;
         let lat = pos.latitude * RAD_TO_DEG;
-        assert!(lon >= 0.0 && lon < 360.0, "Eros lon out of range: {lon}°");
+        assert!((0.0..360.0).contains(&lon), "Eros lon out of range: {lon}°");
         assert!(lat.abs() < 20.0, "Eros lat too large: {lat}°");
         // Eros is a near-Earth asteroid, geocentric distance ~0.15-2.5 AU
         assert!(
@@ -1096,7 +1096,7 @@ mod tests {
             let lon = pos.longitude * RAD_TO_DEG;
             let lat = pos.latitude * RAD_TO_DEG;
             assert!(
-                lon >= 0.0 && lon < 360.0,
+                (0.0..360.0).contains(&lon),
                 "{}: lon out of range: {lon}°",
                 ast.name()
             );
@@ -1138,7 +1138,7 @@ mod tests {
             let lon = pos.longitude * RAD_TO_DEG;
             let lat = pos.latitude * RAD_TO_DEG;
             assert!(
-                lon >= 0.0 && lon < 360.0,
+                (0.0..360.0).contains(&lon),
                 "{}: lon out of range: {lon}°",
                 ast.name()
             );
@@ -1426,7 +1426,7 @@ TestAsteroid,2451545.0,3.0,0.1,5.0,100.0,200.0,45.0,0.19
         let lon = pos.longitude * RAD_TO_DEG;
         let lat = pos.latitude * RAD_TO_DEG;
 
-        assert!(lon >= 0.0 && lon < 360.0, "Lon out of range: {lon}");
+        assert!((0.0..360.0).contains(&lon), "Lon out of range: {lon}");
         assert!(lat.abs() < 15.0, "Lat too large for i=5 deg: {lat}");
         assert!(
             pos.distance > 0.5 && pos.distance < 7.0,

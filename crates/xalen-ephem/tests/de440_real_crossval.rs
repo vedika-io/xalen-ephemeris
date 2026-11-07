@@ -773,11 +773,11 @@ fn de440_positions_stable_across_multiple_epochs() {
     for (jd, label) in &epochs {
         let lon = almanac
             .geocentric_longitude_deg(Body::Sun, JdUT1(*jd))
-            .expect(&format!("Sun at {}", label));
+            .unwrap_or_else(|_| panic!("Sun at {}", label));
 
         // Sun longitude should always be 0-360.
         assert!(
-            lon >= 0.0 && lon < 360.0,
+            (0.0..360.0).contains(&lon),
             "Sun at {}: longitude out of range: {:.4} deg",
             label,
             lon
@@ -805,7 +805,7 @@ fn de440_positions_stable_across_multiple_epochs() {
             );
             let lon = result.unwrap();
             assert!(
-                lon >= 0.0 && lon < 360.0,
+                (0.0..360.0).contains(&lon),
                 "{} at {}: longitude out of range: {:.4} deg",
                 body,
                 label,
