@@ -482,12 +482,12 @@ fn line_diff(old: &str, new: &str) -> String {
         if i < a.len() && j < b.len() && a[i] == b[j] {
             i += 1;
             j += 1;
-        } else if j < b.len() && (i == a.len() || lcs[i][j + 1] >= lcs[i + 1][j]) {
-            out.push_str(&format!("+ line {}: {}\n", i + 1, b[j]));
-            j += 1;
-        } else {
+        } else if i < a.len() && (j == b.len() || lcs[i + 1][j] >= lcs[i][j + 1]) {
             out.push_str(&format!("- line {}: {}\n", i + 1, a[i]));
             i += 1;
+        } else {
+            out.push_str(&format!("+ line {}: {}\n", i + 1, b[j]));
+            j += 1;
         }
     }
     out
