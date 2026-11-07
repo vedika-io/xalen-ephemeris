@@ -261,7 +261,13 @@ impl Shadbala {
         let naisargika = naisargika_bala(planet);
         let kala = compute_kala_bala(planet, input);
         let cheshta = compute_cheshta_bala(planet, lon_deg, input, &kala);
-        let drik = compute_drik_bala(planet, lon_deg, &input.all_planets, input.moon_lon);
+        let drik = compute_drik_bala(
+            planet,
+            lon_deg,
+            &input.all_planets,
+            input.sun_lon,
+            input.moon_lon,
+        );
 
         let total = sthana.total + dig + kala.total + cheshta + naisargika + drik;
         let required = required_minimum(planet);
@@ -816,12 +822,12 @@ fn hora_lord_from_jd(jd: f64, day_fraction: f64) -> &'static str {
 /// 60 and approaches 90 at 90 degrees. The result is not capped, so it
 /// stays within 0 to 60 except for Saturn between 60 and 90 degrees.
 ///
-/// This is the reading of Raman and of PyJHora (`strength.py`, the drishti
-/// that its Shadbala uses), the open implementation users compare with. Checked
-/// against Raman's worked example (16 October 1918, 14:22:16 IST,
-/// Bangalore) with this crate's positions, it gives every planet's Drik
-/// Bala within 0.03 virupa of the published figures once Mercury is
-/// classed as Raman classes it in that chart.
+/// This additive form is B.V. Raman's reading. Checked against Raman's
+/// worked example (16 October 1918, 14:22:16 IST, Bangalore) with this
+/// crate's positions, it gives every planet's Drik Bala within 0.03 virupa
+/// of the published figures once Mercury is classed as Raman classes it in
+/// that chart (a test in this module pins this). It was also checked
+/// against PyJHora (`strength.py`).
 ///
 /// A more literal reading of the Sanskrit special-aspect verses (Ch. 26
 /// vv. 9-12 in the editions that number them so) replaces the curve
@@ -832,9 +838,12 @@ fn hora_lord_from_jd(jd: f64, day_fraction: f64) -> &'static str {
 /// 60 on 180..210 and `60 - (d - 210)` on 210..240; for Jupiter
 /// `45 + (d - 90) / 2` on 90..120 and 210..240 and `60 - 2 * (d - 120)` and
 /// `60 - 2 * (d - 240)` on 120..150 and 240..270. It is not implemented: it
-/// does not reproduce Raman's example (it is off by up to 8 virupas there),
-/// and the reference implementations follow the additive form.
+/// does not reproduce Raman's example (it is off by up to 8 virupas there).
+///
+/// `distance_deg` must be finite; NaN or an infinity returns 0 (and fails a
+/// debug assertion).
 pub fn sphuta_drishti_deg(aspecting: &str, distance_deg: f64) -> f64 {
+    debug_assert!(distance_deg.is_finite(), "distance_deg must be finite");
     let d = distance_deg.rem_euclid(360.0);
     let general = if d < 30.0 {
         0.0
@@ -869,23 +878,17 @@ pub fn sphuta_drishti_deg(aspecting: &str, distance_deg: f64) -> f64 {
 /// malefic one, and the sum divided by 4. The result is negative when the
 /// malefic aspects outweigh the benefic ones.
 ///
-/// Benefic and malefic follow [`is_natural_benefic`]. Ch. 27 also tells the
+/// Benefic and malefic follow [`is_natural_benefic`]; `sun_lon` and
+/// `moon_lon` decide whether the Moon is waxing. Ch. 27 also tells the
 /// reader to add the whole drishti of Mercury and Jupiter on top of the
-/// quarter; like Raman's worked example and PyJHora, this function does not.
+/// quarter; as in Raman's worked example, this function does not.
 fn compute_drik_bala(
     planet: &str,
     planet_lon: f64,
     all_planets: &[PlanetPosition],
+    sun_lon: f64,
     moon_lon: f64,
 ) -> f64 {
-    // The Moon is benefic while waxing, judged from its elongation from the
-    // Sun.
-    let sun_lon = all_planets
-        .iter()
-        .find(|p| p.name == "Sun")
-        .map(|p| p.longitude)
-        .unwrap_or(0.0);
-
     let mut drik = 0.0;
     for other in all_planets {
         if other.name == planet {
@@ -1545,7 +1548,7 @@ mod tests {
     #[test]
     fn drik_bala_no_aspects() {
         // Planet alone, no other planets
-        let drik = compute_drik_bala("Sun", 0.0, &[], 100.0);
+        let drik = compute_drik_bala("Sun", 0.0, &[], 0.0, 100.0);
         assert_eq!(drik, 0.0, "No other planets = 0 drik bala");
     }
 
@@ -1560,7 +1563,7 @@ mod tests {
             declination: 0.0,
             house: 1,
         }];
-        let drik = compute_drik_bala("Sun", 0.0, &planets, 0.0);
+        let drik = compute_drik_bala("Sun", 0.0, &planets, 0.0, 0.0);
         assert!(
             (drik - 15.0).abs() < 0.01,
             "Benefic full opposition should give +15 drik bala (60/4), got {drik}"
@@ -1578,7 +1581,7 @@ mod tests {
             declination: 0.0,
             house: 1,
         }];
-        let drik = compute_drik_bala("Sun", 0.0, &planets, 0.0);
+        let drik = compute_drik_bala("Sun", 0.0, &planets, 0.0, 0.0);
         assert!(
             (drik - (-15.0)).abs() < 0.01,
             "Malefic full opposition should give -15 drik bala (-60/4), got {drik}"
@@ -1588,8 +1591,9 @@ mod tests {
     #[test]
     fn drik_bala_within_bphs_virupa_scale() {
         // After the BPHS /4 normalization every single-aspect contribution is at
-        // most ±15 virupas; even with several overlapping aspects the magnitude
-        // stays on the Drik Bala scale (well within ±90).
+        // most ±15 virupas except Saturn's 3rd, which can reach ±22.5; even with
+        // several overlapping aspects the magnitude stays on the Drik Bala scale
+        // (well within ±90).
         let planets = vec![
             PlanetPosition {
                 name: "Jupiter",
@@ -1630,7 +1634,7 @@ mod tests {
         for target in [
             "Sun", "Moon", "Mars", "Mercury", "Jupiter", "Venus", "Saturn",
         ] {
-            let drik = compute_drik_bala(target, 0.0, &planets, 30.0);
+            let drik = compute_drik_bala(target, 0.0, &planets, 60.0, 30.0);
             assert!(
                 drik.abs() <= 90.0,
                 "{target} Drik Bala {drik} should stay on the BPHS virupa scale (|x| <= 90)"
@@ -1654,7 +1658,7 @@ mod tests {
             declination: 0.0,
             house: 1,
         }];
-        let drik = compute_drik_bala("Mercury", 90.0, &planets, 0.0);
+        let drik = compute_drik_bala("Mercury", 90.0, &planets, 0.0, 0.0);
         assert!(
             drik < 0.0,
             "Mars's 4th-house special aspect (malefic) should give negative drik bala, got {drik}"
@@ -1670,8 +1674,8 @@ mod tests {
             declination: 0.0,
             house: 1,
         }];
-        let drik_4th = compute_drik_bala("Mercury", 90.0, &planets, 0.0);
-        let drik_10th = compute_drik_bala("Mercury", 0.0, &reversed, 0.0);
+        let drik_4th = compute_drik_bala("Mercury", 90.0, &planets, 0.0, 0.0);
+        let drik_10th = compute_drik_bala("Mercury", 0.0, &reversed, 0.0, 0.0);
         assert!(
             drik_4th < drik_10th,
             "4th-aspect (−60/4) must be more negative than the 10th-aspect (−15/4): \
@@ -1699,7 +1703,7 @@ mod tests {
                 house: 1,
             },
         ];
-        let drik = compute_drik_bala("Sun", 0.0, &planets, 0.0);
+        let drik = compute_drik_bala("Sun", 0.0, &planets, 0.0, 0.0);
         assert!(
             drik.abs() < 0.01,
             "Equal benefic + malefic full aspects should net ~0, got {drik}"
@@ -1725,7 +1729,7 @@ mod tests {
                 house: 1,
             },
         ];
-        let drik = compute_drik_bala("Venus", 0.0, &planets, 0.0);
+        let drik = compute_drik_bala("Venus", 0.0, &planets, 0.0, 0.0);
         assert!(
             drik < 0.0,
             "Multiple malefic aspects should produce negative drik bala, got {drik}"
@@ -1884,6 +1888,13 @@ mod tests {
             assert!(exact(sphuta_drishti_deg(planet, 240.0), 30.0), "{planet}");
             assert!(exact(sphuta_drishti_deg(planet, 270.0), 15.0), "{planet}");
         }
+        // Each special planet follows the general curve on the other two
+        // planets' special signs.
+        assert!(exact(sphuta_drishti_deg("Jupiter", 210.0), 45.0));
+        assert!(exact(sphuta_drishti_deg("Saturn", 240.0), 30.0));
+        assert!(exact(sphuta_drishti_deg("Mars", 75.0), 30.0));
+        assert!(exact(sphuta_drishti_deg("Jupiter", 75.0), 30.0));
+        assert!(exact(sphuta_drishti_deg("Saturn", 105.0), 37.5));
     }
 
     #[test]
@@ -1927,17 +1938,88 @@ mod tests {
         ];
         for (name, want) in expected {
             let lon = planets.iter().find(|p| p.name == name).unwrap().longitude;
-            let got = compute_drik_bala(name, lon, &planets, 100.0);
+            let got = compute_drik_bala(name, lon, &planets, 10.0, 100.0);
             assert!(exact(got, want), "{name}: want {want}, got {got}");
         }
 
         // compute_full carries the same figure.
         let input = ShadBalaInput {
+            sun_lon: 10.0,
             moon_lon: 100.0,
             ..input_with(planets)
         };
         let sb = Shadbala::compute_full("Venus", 55.0, 2, 1.0, &input);
         assert!(exact(sb.drik_bala, -19.375), "got {}", sb.drik_bala);
+    }
+
+    /// Drik Bala with Mercury's sign chosen by the caller, as Raman classes
+    /// Mercury by its company. Otherwise the same rule as `compute_drik_bala`.
+    fn drik_bala_with_mercury(
+        planet: &str,
+        planets: &[(&'static str, f64)],
+        moon_benefic: bool,
+        mercury_benefic: bool,
+    ) -> f64 {
+        let lon = planets.iter().find(|p| p.0 == planet).unwrap().1;
+        let mut sum = 0.0;
+        for &(name, other_lon) in planets {
+            if name == planet {
+                continue;
+            }
+            let benefic = match name {
+                "Jupiter" | "Venus" => true,
+                "Moon" => moon_benefic,
+                "Mercury" => mercury_benefic,
+                _ => false,
+            };
+            let value = sphuta_drishti_deg(name, (lon - other_lon).rem_euclid(360.0));
+            sum += if benefic { value } else { -value };
+        }
+        sum / 4.0
+    }
+
+    #[test]
+    fn drik_bala_reproduces_ramans_worked_example() {
+        // B.V. Raman, Graha and Bhava Balas: the chart of 16 October 1918,
+        // 14:22:16 IST, Bangalore. Tropical longitudes for 08:52:16 UT from
+        // this crate's ephemeris (`xalen positions`); Drik Bala depends only
+        // on their differences, so the ayanamsa does not matter. The Moon is
+        // 130 degrees ahead of the Sun (waxing, benefic). Raman classes
+        // Mercury, which sits with the Sun, as malefic.
+        let planets = [
+            ("Sun", 202.186_236_64),
+            ("Moon", 332.517_715_70),
+            ("Mars", 250.733_694_11),
+            ("Mercury", 202.783_732_84),
+            ("Jupiter", 105.285_141_87),
+            ("Venus", 192.425_537_66),
+            ("Saturn", 145.653_418_34),
+        ];
+        // Raman's published Drik Bala, in virupas.
+        let published = [
+            ("Sun", 15.86),
+            ("Moon", -21.73),
+            ("Mars", 0.95),
+            ("Mercury", 15.64),
+            ("Jupiter", -16.04),
+            ("Venus", 18.47),
+            ("Saturn", 7.21),
+        ];
+        for (name, want) in published {
+            let got = drik_bala_with_mercury(name, &planets, true, false);
+            assert!((got - want).abs() < 0.03, "{name}: {got} vs {want}");
+        }
+
+        // With Mercury benefic the helper agrees with compute_drik_bala.
+        let positions: Vec<PlanetPosition> = planets
+            .iter()
+            .map(|&(name, lon)| pos(name, lon, 0.0, 1))
+            .collect();
+        for &(name, lon) in &planets {
+            let module = compute_drik_bala(name, lon, &positions, planets[0].1, planets[1].1);
+            let helper = drik_bala_with_mercury(name, &planets, true, true);
+            assert!(exact(module, helper), "{name}: {module} vs {helper}");
+        }
     }
 
     #[test]
@@ -1946,8 +2028,8 @@ mod tests {
         // aspects Mars across 180 degrees for 60, added while the Moon is
         // waxing and subtracted while it is waning (judged from `moon_lon`).
         let planets = vec![pos("Sun", 0.0, 0.0, 1), pos("Moon", 270.0, 0.0, 10)];
-        let waxing = compute_drik_bala("Mars", 90.0, &planets, 90.0);
-        let waning = compute_drik_bala("Mars", 90.0, &planets, 270.0);
+        let waxing = compute_drik_bala("Mars", 90.0, &planets, 0.0, 90.0);
+        let waning = compute_drik_bala("Mars", 90.0, &planets, 0.0, 270.0);
         assert!(exact(waxing, (-45.0 + 60.0) / 4.0), "got {waxing}");
         assert!(exact(waning, (-45.0 - 60.0) / 4.0), "got {waning}");
     }
