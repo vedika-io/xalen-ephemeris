@@ -126,6 +126,9 @@ lon = xalen.planet_longitude_by_name("Sun", jd)
 
 > **Note:** SE uses Pluto=9, MeanNode=10; XALEN uses MeanNode=9, Pluto=11.
 > The compat layer in `xalen_ephem::compat` handles this mapping automatically.
+>
+> Every binding ID, with its Swiss number, is in
+> [BINDING_IDS.md](BINDING_IDS.md#bodies).
 
 ---
 
@@ -240,6 +243,9 @@ result = xalen.houses(jd, lat, lon, system=2)  # 2=Placidus
 | `'S'` | Sripati | `Sripati` | 10 |
 | `'G'` | Gauquelin | `Gauquelin` | -- |
 
+The full house-system table, including the letters that have no binding ID, is in
+[BINDING_IDS.md](BINDING_IDS.md#house-systems).
+
 ---
 
 ## 4. Ayanamsa (sidereal mode)
@@ -319,7 +325,10 @@ to convert.
 | 27 | `SE_SIDM_TRUE_CITRA` | `TrueChitra` |
 | 28 | `SE_SIDM_TRUE_REVATI` | `TrueRevati` |
 
-Full table: all 47 SE IDs are mapped. Use `Ayanamsa::from_swiss_ephem_id(n)`.
+Full table: all 47 SE IDs are mapped; see
+[BINDING_IDS.md](BINDING_IDS.md#ayanamsas) for every SE ID and every binding
+ayanamsa ID. Note that binding ayanamsa ID 0 is Lahiri, while SE ID 0 is
+Fagan-Bradley.
 
 ---
 

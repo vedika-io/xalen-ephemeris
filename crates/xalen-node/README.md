@@ -95,6 +95,8 @@ const ketu = xalen.planetPositionById(13, J2000);  // longitude === (rahu.longit
 
 When a valid `ayanamsaId` is supplied, the longitude is sidereal (tropical − ayanamsa) **and** the ayanamsa's own precession rate is removed from `lonSpeed`, matching Swiss `SEFLG_SIDEREAL | SEFLG_SPEED`.
 
+Every body, ayanamsa and house-system ID, with the Swiss Ephemeris number next to each, is listed in [docs/BINDING_IDS.md](https://github.com/vedika-io/xalen-ephemeris/blob/main/docs/BINDING_IDS.md).
+
 ---
 
 ## fullChart

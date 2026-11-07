@@ -80,6 +80,8 @@ The `XalenWasm` handle is constructed once (`new XalenWasm()`) and serves the in
 
 Body IDs: `0`=Sun `1`=Moon `2`=Mercury `3`=Venus `4`=Mars `5`=Jupiter `6`=Saturn `7`=Uranus `8`=Neptune `9`=MeanNode(Rahu) `10`=TrueNode `11`=Pluto `12`=Chiron `13`=Ketu.
 
+The full ID tables (ayanamsas, house systems, divisional charts, and the Swiss Ephemeris number next to each) are in [docs/BINDING_IDS.md](https://github.com/vedika-io/xalen-ephemeris/blob/main/docs/BINDING_IDS.md).
+
 ### Charts & Vedic
 
 - **`fullChartJson(jdUt1, lat, lon, ayanamsaId)`** — the nine grahas (each `{ longitude, nakshatra, pada, rashi }`) plus Whole-Sign `ascendant_deg`, `mc_deg`, and `ayanamsa_deg`.
