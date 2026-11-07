@@ -621,7 +621,11 @@ fn check_geometry(set: &ParanSet, map: &AstroMap, h0: f64) {
             let ha = geo_hour_angle(map, body, lon);
             match kind {
                 LineKind::Mc | LineKind::Ic => {
-                    let off = if kind == LineKind::Mc { ha } else { sdiff(ha, 180.0) };
+                    let off = if kind == LineKind::Mc {
+                        ha
+                    } else {
+                        sdiff(ha, 180.0)
+                    };
                     assert!(off.abs() < 1e-9, "{p:?}: {body:?} hour angle {ha}");
                 }
                 LineKind::Asc | LineKind::Dsc => {
@@ -670,9 +674,7 @@ fn a_raised_horizon_gives_two_crossings_on_one_meridian() {
         let sun_mars: Vec<f64> = set
             .parans
             .iter()
-            .filter(|p| {
-                p.body_a == Body::Sun && p.body_b == Body::Mars && p.kind_b == LineKind::Mc
-            })
+            .filter(|p| p.body_a == Body::Sun && p.body_b == Body::Mars && p.kind_b == LineKind::Mc)
             .map(|p| p.latitude_deg)
             .collect();
         assert_eq!(sun_mars.len(), 2, "h0 {h0}: {sun_mars:?}");
@@ -710,10 +712,7 @@ fn a_tangent_meridian_gives_one_crossing() {
 #[test]
 fn nearly_opposite_bodies_give_finite_crossings() {
     let eps_deg = 2e-9_f64.to_degrees();
-    let map = sky_map(
-        0.0,
-        &[(Body::Sun, 0.0, 0.0), (Body::Mars, 180.0, eps_deg)],
-    );
+    let map = sky_map(0.0, &[(Body::Sun, 0.0, 0.0), (Body::Mars, 180.0, eps_deg)]);
     for h0 in [0.0, 10.0] {
         let o = ParanOptions {
             horizon_altitude_deg: h0,
@@ -803,7 +802,10 @@ fn parans_lie_on_the_drawn_lines() {
                 assert!(sdiff(p.longitude_deg, line[0][0].1).abs() < 1e-9, "{p:?}");
             } else {
                 let d = distance_to_line(line, p.latitude_deg, p.longitude_deg);
-                assert!(d < 0.5, "{p:?}: {d} degrees from the {body:?} {kind:?} line");
+                assert!(
+                    d < 0.5,
+                    "{p:?}: {d} degrees from the {body:?} {kind:?} line"
+                );
             }
         }
     }
