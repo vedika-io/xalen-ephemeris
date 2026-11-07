@@ -360,11 +360,41 @@ glibc_floor() {
   readelf -W --dyn-syms "$1" | grep -o 'GLIBC_[0-9][0-9.]*' | sed 's/^GLIBC_//' | sort -uV | tail -n 1
 }
 
+# Prints the minimum macOS version recorded in each Mach-O file.
+macho_minos() {
+  python3 - "$@" <<'PY'
+import struct, sys
+for path in sys.argv[1:]:
+    blob = open(path, "rb").read()
+    ncmds = struct.unpack_from("<I", blob, 16)[0]
+    off, minos = 32, None
+    for _ in range(ncmds):
+        cmd, size = struct.unpack_from("<II", blob, off)
+        if cmd == 0x32:  # LC_BUILD_VERSION
+            minos = struct.unpack_from("<I", blob, off + 12)[0]
+        elif cmd == 0x24 and minos is None:  # LC_VERSION_MIN_MACOSX
+            minos = struct.unpack_from("<I", blob, off + 8)[0]
+        off += size
+    if minos is None:
+        print(f"   minos: {path.rsplit('/', 1)[-1]}: none recorded")
+    else:
+        print(f"   minos: {path.rsplit('/', 1)[-1]}: macOS {minos >> 16}.{(minos >> 8) & 255}")
+PY
+}
+
 build_node() {
   local target_dir="${CARGO_TARGET_DIR:-$REPO_ROOT/target}"
   local art="$TOOLS/node-addons" # the four xalen.<platform>.node files
   local native="$TOOLS/node-native"
-  local tgt plat upper floor deps d tgz proj f
+  local tgt plat upper floor deps d tgz proj f pkgdir napi_bin target_os_min
+
+  # build_node never edits the source tree (the npm work runs in a scratch copy),
+  # but if it ever did, a killed run must not leave package.json changed.
+  cp "$NODE_DIR/package.json" "$TOOLS/package.json.orig"
+  restore_node_package_json() { cp "$TOOLS/package.json.orig" "$NODE_DIR/package.json" 2>/dev/null; }
+  trap restore_node_package_json EXIT
+  trap 'restore_node_package_json; exit 130' INT
+  trap 'restore_node_package_json; exit 143' TERM
 
   log "Node tools (ziglang, cargo-zigbuild) -> $TOOLS"
   python3 -m pip install --quiet --disable-pip-version-check --target "$TOOLS/py" \
@@ -416,7 +446,11 @@ build_node() {
   for tgt in "${MACOS_TARGETS[@]}"; do
     plat="$(node_platform "$tgt")"
     upper="$(echo "$tgt" | tr 'a-z-' 'A-Z_')"
-    if env SDKROOT="$TOOLS/macsdk" \
+    case "$tgt" in
+      aarch64-apple-darwin) target_os_min=11.0 ;;
+      *)                    target_os_min=10.13 ;;
+    esac
+    if env SDKROOT="$TOOLS/macsdk" MACOSX_DEPLOYMENT_TARGET="$target_os_min" \
          "CARGO_TARGET_${upper}_LINKER=$TOOLS/bin/macos-lld" \
          "CARGO_TARGET_${upper}_RUSTFLAGS=-C linker-flavor=ld64.lld" \
          cargo build --release -p xalen-node --target "$tgt" \
@@ -444,6 +478,7 @@ build_node() {
       fail "$plat needs glibc $floor, above the 2.17 floor"
     fi
   done
+  macho_minos "$art"/xalen.darwin-*.node
   if check_macho_alignment "$art"/xalen.darwin-*.node; then
     ok "macOS addons are aligned for dyld"
   else
@@ -451,17 +486,22 @@ build_node() {
   fi
 
   log "Node npm packages"
-  rm -rf "$NODE_DIR/npm"
-  # `napi prepublish` writes optionalDependencies into package.json; keep the
-  # committed file and restore it once the root package is packed.
-  cp package.json "$TOOLS/package.json.orig"
-  if npx napi create-npm-dirs \
-     && npx napi artifacts --output-dir "$art" --npm-dir npm \
-     && npx napi prepublish -t npm --skip-optional-publish --no-gh-release; then
+  # create-npm-dirs, artifacts and prepublish write npm/, copies of the addons and
+  # the optionalDependencies edit into the directory they run in. Run them in a
+  # scratch copy of the files the root package ships, so nothing in the source
+  # tree is created, edited or removed.
+  pkgdir="$TOOLS/node-pkg"
+  napi_bin="$NODE_DIR/node_modules/.bin/napi"
+  rm -rf "$pkgdir" && mkdir -p "$pkgdir"
+  cp package.json index.js index.d.ts README.md LICENSE "$pkgdir/" \
+    || { fail "copy package files"; cd "$REPO_ROOT" || true; return; }
+  cd "$pkgdir" || { fail "cd $pkgdir"; return; }
+  if "$napi_bin" create-npm-dirs \
+     && "$napi_bin" artifacts --output-dir "$art" --npm-dir npm \
+     && "$napi_bin" prepublish -t npm --skip-optional-publish --no-gh-release; then
     ok "npm package directories prepared (nothing published)"
   else
     fail "napi create-npm-dirs / artifacts / prepublish"
-    cp "$TOOLS/package.json.orig" package.json
     cd "$REPO_ROOT" || true
     return
   fi
@@ -473,11 +513,7 @@ build_node() {
     npm pack --pack-destination "$DIST_DIR" "./$d" >/dev/null || fail "npm pack $d"
   done
   npm pack --pack-destination "$DIST_DIR" >/dev/null || fail "npm pack root"
-  cp "$TOOLS/package.json.orig" package.json
-  # `napi artifacts` also drops a copy of every addon next to index.js (ignored by
-  # git, never packed because package.json `files` omits *.node); remove them, and
-  # check the loader was not rewritten on the way.
-  rm -f "$NODE_DIR"/xalen.*.node
+  # The loader must not have been rewritten on the way.
   cmp -s index.js "$native/index.js" || fail "index.js changed while packing"
   cd "$REPO_ROOT" || return
 
