@@ -6,7 +6,7 @@
 [![CI](https://github.com/vedika-io/xalen-ephemeris/actions/workflows/ci.yml/badge.svg)](https://github.com/vedika-io/xalen-ephemeris/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](https://github.com/vedika-io/xalen-ephemeris/blob/main/LICENSE)
 
-> Part of the [XALEN Ephemeris](https://github.com/vedika-io/xalen-ephemeris) suite — pure-Rust core, zero `unsafe` in the math, thread-safe, Apache-2.0. This package is the **WebAssembly** build (runs in the browser and in Node). For a faster, synchronous **native** Node addon, use the [`xalen`](https://github.com/vedika-io/xalen-ephemeris/tree/main/crates/xalen-node) package instead.
+> Part of the [XALEN Ephemeris](https://github.com/vedika-io/xalen-ephemeris) suite — pure-Rust core, zero `unsafe` in the math, thread-safe, Apache-2.0. This package is the **WebAssembly** build (runs in the browser and in Node). For a faster, synchronous **native** Node addon, use the [`@xalen/ephemeris`](https://github.com/vedika-io/xalen-ephemeris/tree/main/crates/xalen-node) package instead.
 
 This crate wraps the XALEN core crates behind a single `XalenWasm` handle exported to JavaScript via `wasm-bindgen`. The same handle also compiles to native Rust, so it can be exercised in ordinary `cargo test`.
 

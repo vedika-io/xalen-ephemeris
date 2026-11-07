@@ -258,7 +258,7 @@ separate third-party wrapper per language, and pyswisseph is Python-only:
 | Rust | `xalen-ephemeris` (umbrella) | native | On crates.io |
 | C / C++ | `xalen-ffi` | `extern "C"` + `repr(C)` | Source-stable; on crates.io |
 | Python | `xalen-python` | PyO3 | Alpha; on PyPI as `xalen` (`pip install xalen`) |
-| Node.js | `xalen-node` | napi-rs native addon — `napi build` | Alpha; **not yet on npm**, build from source |
+| Node.js | `xalen-node` | napi-rs native addon, prebuilt for Linux and macOS | Alpha; on npm as `@xalen/ephemeris` with each release from 0.8, build from source until then |
 | Browser / WASM | `xalen-wasm` | wasm-bindgen | Alpha; on npm as `@xalen/wasm` |
 
 **Migration path.** XALEN provides a Swiss-Ephemeris-compatible shim so existing
@@ -267,9 +267,10 @@ code can move with minimal edits:
 - Rust: `xalen_ephem::compat` exposes `swe_calc_ut(jd, SE_SUN, SEFLG_SWIEPH)`
   with the familiar `xx[0..6]` array semantics
   (`docs/MIGRATING_FROM_SWISS_EPH.md`).
-- Node: `npm install xalen` as a drop-in for the `sweph` package — no `node-gyp`,
-  no C compiler, no `.se1` files (`docs/SWEPH_NPM_REPLACEMENT.md`). **Forthcoming:**
-  the npm package is not published yet; build the napi-rs addon from source for now.
+- Node: `npm install @xalen/ephemeris` as a drop-in for the `sweph` package — no
+  `node-gyp`, no C compiler, no `.se1` files (`docs/SWEPH_NPM_REPLACEMENT.md`).
+  The package is published with each release from 0.8; until then build the
+  napi-rs addon from source.
 
 **Honest scope of the C-FFI surface:** the stable `extern "C"` layer
 (`crates/xalen-ffi`) intentionally exposes a *subset* of the full Rust API — **17
