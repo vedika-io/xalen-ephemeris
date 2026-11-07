@@ -29,7 +29,8 @@
 # 2.17 floor for the two Linux targets, rust-lld against the stub SDK for the two
 # macOS targets, and cargo-xwin for Windows x64 (x86_64-pc-windows-msvc): it
 # downloads the Microsoft CRT and Windows SDK import libraries into
-# $TOOLS/xwin and links with rust-lld in its lld-link form. The Windows addon is
+# $TOOLS/xwin and links with lld-link (the host's, or rust-lld under that name
+# when the host has none). The Windows addon is
 # built with a static C runtime (+crt-static), as the napi-rs package template
 # does for this target, so it needs no Visual C++ Redistributable
 # (vcruntime140.dll) on the user's machine. Each library is copied to its napi-rs
@@ -480,11 +481,12 @@ build_node() {
     || { fail "rustup target add"; return; }
   setup_macos_linker || { fail "macOS linker setup"; return; }
 
-  # cargo-xwin links with rust-lld (as lld-link) and, should a dependency ever
-  # build an archive, llvm-ar (as llvm-lib) from the llvm-tools component, which
-  # also carries the llvm-readobj the Windows checks use. No C source is
-  # compiled for the addon, so clang (clang-cl) is not needed; if a dependency
-  # ever adds one, the build fails naming clang-cl.
+  # cargo-xwin links with the host's lld-link, or with rust-lld under that name
+  # when there is none, and uses llvm-lib for archives (llvm-ar from the
+  # llvm-tools component when the host has no llvm-lib). llvm-tools also carries
+  # the llvm-readobj the Windows checks use. No C source is compiled for the
+  # addon, so clang (as clang-cl) is not needed; if a dependency ever adds one,
+  # the build fails naming clang-cl.
   log "Windows tools (cargo-xwin $CARGO_XWIN_VERSION, llvm-tools) -> $TOOLS"
   if ! "$TOOLS/cargo/bin/cargo-xwin" --version 2>/dev/null | grep -q " $CARGO_XWIN_VERSION\$"; then
     cargo install cargo-xwin --version "$CARGO_XWIN_VERSION" --locked --root "$TOOLS/cargo" \
@@ -497,7 +499,16 @@ build_node() {
   readobj="$(rustc --print sysroot)/lib/rustlib/$host/bin/llvm-readobj"
   [ -x "$readobj" ] || { fail "llvm-readobj not found at $readobj"; return; }
   "$readobj" --version | sed -n 's/^ *\(LLVM version .*\)/   llvm-readobj: \1/p'
-  command -v clang >/dev/null 2>&1 && clang --version | head -n 1 || echo "   clang: not installed (not needed: no C sources)"
+  if command -v lld-link >/dev/null 2>&1; then
+    echo "   lld-link: $(command -v lld-link): $(lld-link --version)"
+  else
+    echo "   lld-link: none on the host; cargo-xwin links with rust-lld"
+  fi
+  if command -v clang >/dev/null 2>&1; then
+    echo "   clang: $(clang --version | head -n 1)"
+  else
+    echo "   clang: not installed (not needed: no C sources)"
+  fi
 
   log "Node package tooling (@napi-rs/cli from package-lock.json)"
   cd "$NODE_DIR" || { fail "cd $NODE_DIR"; return; }
