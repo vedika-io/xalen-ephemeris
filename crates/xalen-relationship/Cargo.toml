@@ -1,0 +1,22 @@
+[package]
+name = "xalen-relationship"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Relationship astrology for XALEN Ephemeris — synastry, composite and Davison charts, relocated charts"
+keywords = ["synastry", "composite", "davison", "astrology", "relationship"]
+categories = ["science", "mathematics"]
+
+[dependencies]
+xalen-time = { version = "0.7.0", path = "../xalen-time" }
+xalen-coords = { version = "0.7.0", path = "../xalen-coords" }
+xalen-houses = { version = "0.7.0", path = "../xalen-houses" }
+xalen-ephem = { version = "0.7.0", path = "../xalen-ephem" }
+xalen-western = { version = "0.7.0", path = "../xalen-western" }
+xalen-chart = { version = "0.7.0", path = "../xalen-chart" }
+thiserror.workspace = true
+serde.workspace = true
+
+[lints]
+workspace = true
