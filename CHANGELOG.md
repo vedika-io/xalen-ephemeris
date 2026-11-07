@@ -151,6 +151,7 @@ exception that `except swe.Error` can catch
 
 ### Changed
 
+- SECURITY.md: disclosure timeline, scope and supply-chain sections; SUPPORT.md added; CODEOWNERS and issue forms refreshed.
 - The accuracy harness in `validation/` now runs in the gate. `scripts/gate.sh`
   runs format, clippy, tests, docs, the release-configuration tests and the
   harness (2000 charts by default, `--harness-n` or `GATE_HARNESS_N` for more,
