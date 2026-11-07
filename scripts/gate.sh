@@ -251,7 +251,13 @@ stage_wasm() {
 }
 
 stage_python_binding() {
-  pip_tools maturin || return 1
+  # maturin gets its own directory: pip --target does not add files to a bin/
+  # that an earlier install (pytest) already created there.
+  if ! command -v maturin >/dev/null 2>&1; then
+    python3 -m pip install --quiet --disable-pip-version-check --target "$TOOLS/maturin" maturin \
+      || return 1
+    export PATH="$TOOLS/maturin/bin:$PATH"
+  fi
   maturin --version || return 1
   # Run from the crate directory so maturin reads its pyproject.toml, which
   # enables the extension-module feature for the wheel build.
