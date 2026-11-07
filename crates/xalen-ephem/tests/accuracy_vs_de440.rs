@@ -29,7 +29,8 @@
 //   cargo test -p xalen-ephem --test accuracy_vs_de440 -- --nocapture
 //
 // Without /tmp/de440s.bsp present every test SKIPs cleanly (prints SKIP, passes),
-// so CI stays green without fetching a 32 MB kernel.
+// so a plain `cargo test` stays green without the 32 MB kernel. The `de440`
+// stage of scripts/gate.sh downloads the kernel and runs these tests with it.
 //
 // DETERMINISTIC SAMPLING
 // ----------------------
@@ -46,7 +47,7 @@ use std::sync::Arc;
 use xalen_ephem::{Almanac, Body, De440Provider, De440Reader};
 use xalen_time::JdUT1;
 
-/// Path to the DE440s.bsp kernel (CI does NOT fetch this — tests SKIP if absent).
+/// Path to the DE440s.bsp kernel (tests SKIP if absent; the gate's `de440` stage provides it).
 const DE440S_PATH: &str = "/tmp/de440s.bsp";
 
 /// Number of charts sampled per run. Kept modest so the harness stays a fast

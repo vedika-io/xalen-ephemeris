@@ -3306,7 +3306,7 @@ mod tests {
     // Pluto coverage: De440Provider maps NAIF 9 and serves Pluto across the
     // kernel's full span, including epochs the analytical Pluto series does
     // not (pre-1885 / post-2099). Kernel-gated: skips if /tmp/de440s.bsp is
-    // absent so CI without a kernel still passes.
+    // absent so a test run without the kernel still passes.
     // -----------------------------------------------------------------------
 
     #[test]

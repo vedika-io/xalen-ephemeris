@@ -19,8 +19,9 @@
 //     Vector-Table state vector (genuine external cross-validation), and
 //   * the remaining rows are a SELF-CONSISTENCY / regression check whose reference
 //     vectors are this parser's OWN output — NOT an external validation.
-// All Part-2 tests are gated on a local /tmp/de440s.bsp that CI does not fetch (so
-// they SKIP in CI). Committing independent JPL Horizons vectors for the remaining
+// All Part-2 tests are gated on a local /tmp/de440s.bsp: they SKIP without it (as
+// in a plain `cargo test`), and the `de440` stage of scripts/gate.sh downloads the
+// kernel and runs them. Committing independent JPL Horizons vectors for the remaining
 // bodies is the next external step.
 // =============================================================================
 
