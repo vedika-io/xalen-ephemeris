@@ -247,6 +247,48 @@ pub fn compute_houses_from_ramc(
     }
 }
 
+/// Compute house cusps and angles on the **true equinox of date** — the frame
+/// Swiss Ephemeris `swe_houses` uses and the frame of the apparent positions
+/// that the `Almanac` of `xalen-ephem` returns.
+///
+/// [`compute_houses`] derives its RAMC from Greenwich *Mean* Sidereal Time and
+/// takes the obliquity from the caller. That is a consistent but mean-equinox
+/// frame, about 0.0036 degrees away from apparent planetary longitudes. This
+/// function instead:
+///
+/// 1. converts `jd_ut1` to Terrestrial Time with the
+///    Stephenson-Morrison-Hohenkerk (2016) ΔT model, the same one the default
+///    `Almanac` uses;
+/// 2. takes the true obliquity `ε = mean_obliquity(T) + Δε` (IAU 2006 mean
+///    obliquity, IAU 2000B nutation in obliquity);
+/// 3. takes the RAMC from Greenwich *Apparent* Sidereal Time plus the east
+///    longitude of `location` (Meeus, *Astronomical Algorithms*, 2nd ed.,
+///    ch. 12), and
+/// 4. hands both to [`compute_houses_from_ramc`].
+///
+/// `jd_ut1` is a UT1 Julian Day. The result is in radians like every
+/// [`HouseCusps`]. [`compute_houses`] is unchanged.
+///
+/// ```
+/// use xalen_houses::{compute_houses_true, GeoLocation, HouseSystem};
+///
+/// let pune = GeoLocation::new(18.52, 73.85);
+/// let h = compute_houses_true(2_451_545.0, &pune, HouseSystem::Placidus);
+/// assert!((0.0..std::f64::consts::TAU).contains(&h.ascendant));
+/// assert!((h.mc - h.ic).abs() > 3.0); // IC is opposite the MC
+/// ```
+pub fn compute_houses_true(jd_ut1: f64, location: &GeoLocation, system: HouseSystem) -> HouseCusps {
+    use xalen_time::JulianDay;
+    let jd_tt = xalen_time::JdUT1(jd_ut1)
+        .to_tt(&xalen_time::DeltaTModel::StephensonMorrisonHohenkerk2016)
+        .as_f64();
+    let t_tt = (jd_tt - 2_451_545.0) / 36525.0;
+    let epsilon =
+        xalen_coords::mean_obliquity(t_tt) + xalen_coords::nutation_2000b(t_tt).delta_epsilon;
+    let ramc_deg = (xalen_coords::gast_deg(jd_ut1, t_tt) + location.lon_deg()).rem_euclid(360.0);
+    compute_houses_from_ramc(ramc_deg.to_radians(), location, epsilon, system)
+}
+
 /// The four auxiliary ascendant points Swiss Ephemeris exposes in
 /// `ascmc[4..8]`, all as ecliptic longitudes in radians `[0, 2π)`.
 ///
@@ -1853,6 +1895,29 @@ mod tests {
     fn test_location() -> GeoLocation {
         GeoLocation::new(18.52, 73.85)
     } // Pune
+
+    /// `compute_houses_true` differs from the mean-equinox `compute_houses` only
+    /// by the equation of the equinoxes (about 0.0036 degrees at J2000) and the
+    /// nutation in obliquity. The exact match against Swiss `swe_houses` is the
+    /// integration test `houses_true_matches_swe_houses` in `xalen-ephem`.
+    #[test]
+    fn compute_houses_true_is_a_small_nutation_offset_from_mean() {
+        let jd = 2_451_545.0;
+        let loc = test_location();
+        let eps_mean = xalen_coords::mean_obliquity(0.0);
+        let mean = compute_houses(jd, &loc, eps_mean, HouseSystem::Placidus);
+        let apparent = compute_houses_true(jd, &loc, HouseSystem::Placidus);
+        let d_mc = ((apparent.mc - mean.mc).to_degrees() + 180.0).rem_euclid(360.0) - 180.0;
+        assert!(
+            d_mc.abs() > 1e-4 && d_mc.abs() < 0.02,
+            "MC offset {d_mc} deg should be the ~0.0036 deg equation of the equinoxes"
+        );
+        let d_asc =
+            ((apparent.ascendant - mean.ascendant).to_degrees() + 180.0).rem_euclid(360.0) - 180.0;
+        assert!(d_asc.abs() < 0.02, "ASC offset {d_asc} deg");
+        assert!(((apparent.ic - apparent.mc).rem_euclid(TAU) - PI).abs() < 1e-12);
+        assert!(!apparent.fallback_used);
+    }
 
     /// Morinus cusps are equatorial points (declination 0) projected onto the
     /// ecliptic. For a point at right ascension A on the equator the longitude

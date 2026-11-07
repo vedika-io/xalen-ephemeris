@@ -10,7 +10,8 @@ pub use angles::{
 /// Re-export house cusp types and computation.
 pub use cusps::{
     AuxiliaryAscendants, HouseCusps, compute_auxiliary_ascmc, compute_houses,
-    compute_houses_from_ramc, compute_houses_sidereal, gauquelin_position, gauquelin_sectors,
+    compute_houses_from_ramc, compute_houses_sidereal, compute_houses_true, gauquelin_position,
+    gauquelin_sectors,
 };
 /// Re-export the house system enum.
 pub use systems::HouseSystem;
