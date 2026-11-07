@@ -54,6 +54,16 @@ pub enum Command {
     Aspects(AspectsArgs),
     /// Julian Days, delta T, sidereal time and every ayanamsa for a date
     Convert(ConvertArgs),
+    /// Astrocartography: MC, IC, ascendant and descendant lines and zenith points
+    Map(MapArgs),
+    /// Aspects and house overlays between two births
+    Synastry(SynastryArgs),
+    /// Composite (midpoint) chart of two births
+    Composite(CompositeArgs),
+    /// Davison chart: the chart for the midpoint in time and place of two births
+    Davison(DavisonArgs),
+    /// A birth chart with the houses recomputed for another place
+    Relocate(RelocateArgs),
 }
 
 /// Output options shared by every command.
@@ -352,6 +362,424 @@ pub struct ConvertArgs {
     pub out: OutArgs,
 }
 
+/// A resolved birth: an instant and a place.
+#[derive(Debug, Clone)]
+pub struct Birth {
+    /// The moment of birth.
+    pub inst: Instant,
+    /// The birthplace.
+    pub place: Place,
+}
+
+/// Rewrite the option names in a usage message so it names `--a-date` and not
+/// `--date`.
+fn relabel(error: CliError, prefix: &str) -> CliError {
+    match error {
+        CliError::Usage(message) => {
+            let mut text = message;
+            for name in ["date", "jd", "lat", "lon", "alt", "place"] {
+                text = text.replace(&format!("--{name}"), &format!("--{prefix}-{name}"));
+            }
+            CliError::Usage(text)
+        }
+        other => other,
+    }
+}
+
+fn resolve_birth(
+    prefix: &str,
+    date: &Option<String>,
+    jd: Option<f64>,
+    lat: Option<f64>,
+    lon: Option<f64>,
+    alt: f64,
+    place: &Option<String>,
+    out: &OutArgs,
+) -> Result<Birth> {
+    let time = TimeArgs {
+        date: date.clone(),
+        jd,
+    };
+    let inst = time.instant(out).map_err(|e| relabel(e, prefix))?;
+    let loc = LocArgs {
+        lat,
+        lon,
+        alt,
+        place: place.clone(),
+    };
+    let place = loc
+        .resolve(true)
+        .map_err(|e| relabel(e, prefix))?
+        .ok_or_else(|| {
+            CliError::usage(format!(
+                "missing --{prefix}-lat and --{prefix}-lon (or use --{prefix}-place \"<city>\")"
+            ))
+        })?;
+    Ok(Birth { inst, place })
+}
+
+/// One birth of a two-birth command, person A.
+#[derive(Args, Debug, Clone)]
+pub struct BirthA {
+    /// ISO-8601 birth instant of person A (a date alone means midnight; no zone means UTC)
+    #[arg(
+        id = "a_date",
+        long = "a-date",
+        value_name = "ISO-8601",
+        conflicts_with = "a_jd",
+        allow_hyphen_values = true
+    )]
+    pub date: Option<String>,
+
+    /// Julian Day (UT) of the birth of person A, instead of --a-date
+    #[arg(
+        id = "a_jd",
+        long = "a-jd",
+        value_name = "JD",
+        allow_negative_numbers = true
+    )]
+    pub jd: Option<f64>,
+
+    /// Birth latitude of person A in degrees, north positive
+    #[arg(
+        id = "a_lat",
+        long = "a-lat",
+        value_name = "DEG",
+        allow_negative_numbers = true
+    )]
+    pub lat: Option<f64>,
+
+    /// Birth longitude of person A in degrees, east positive
+    #[arg(
+        id = "a_lon",
+        long = "a-lon",
+        value_name = "DEG",
+        allow_negative_numbers = true
+    )]
+    pub lon: Option<f64>,
+
+    /// Birth height of person A in metres (recorded, not used by the houses)
+    #[arg(
+        id = "a_alt",
+        long = "a-alt",
+        value_name = "M",
+        default_value_t = 0.0,
+        allow_negative_numbers = true
+    )]
+    pub alt: f64,
+
+    /// Birth city of person A from the built-in table (instead of --a-lat and --a-lon)
+    #[arg(
+        id = "a_place",
+        long = "a-place",
+        value_name = "CITY",
+        conflicts_with_all = ["a_lat", "a_lon"]
+    )]
+    pub place: Option<String>,
+}
+
+impl BirthA {
+    /// Resolve the birth into an instant and a place.
+    pub fn resolve(&self, out: &OutArgs) -> Result<Birth> {
+        resolve_birth(
+            "a",
+            &self.date,
+            self.jd,
+            self.lat,
+            self.lon,
+            self.alt,
+            &self.place,
+            out,
+        )
+    }
+}
+
+/// One birth of a two-birth command, person B.
+#[derive(Args, Debug, Clone)]
+pub struct BirthB {
+    /// ISO-8601 birth instant of person B (a date alone means midnight; no zone means UTC)
+    #[arg(
+        id = "b_date",
+        long = "b-date",
+        value_name = "ISO-8601",
+        conflicts_with = "b_jd",
+        allow_hyphen_values = true
+    )]
+    pub date: Option<String>,
+
+    /// Julian Day (UT) of the birth of person B, instead of --b-date
+    #[arg(
+        id = "b_jd",
+        long = "b-jd",
+        value_name = "JD",
+        allow_negative_numbers = true
+    )]
+    pub jd: Option<f64>,
+
+    /// Birth latitude of person B in degrees, north positive
+    #[arg(
+        id = "b_lat",
+        long = "b-lat",
+        value_name = "DEG",
+        allow_negative_numbers = true
+    )]
+    pub lat: Option<f64>,
+
+    /// Birth longitude of person B in degrees, east positive
+    #[arg(
+        id = "b_lon",
+        long = "b-lon",
+        value_name = "DEG",
+        allow_negative_numbers = true
+    )]
+    pub lon: Option<f64>,
+
+    /// Birth height of person B in metres (recorded, not used by the houses)
+    #[arg(
+        id = "b_alt",
+        long = "b-alt",
+        value_name = "M",
+        default_value_t = 0.0,
+        allow_negative_numbers = true
+    )]
+    pub alt: f64,
+
+    /// Birth city of person B from the built-in table (instead of --b-lat and --b-lon)
+    #[arg(
+        id = "b_place",
+        long = "b-place",
+        value_name = "CITY",
+        conflicts_with_all = ["b_lat", "b_lon"]
+    )]
+    pub place: Option<String>,
+}
+
+impl BirthB {
+    /// Resolve the birth into an instant and a place.
+    pub fn resolve(&self, out: &OutArgs) -> Result<Birth> {
+        resolve_birth(
+            "b",
+            &self.date,
+            self.jd,
+            self.lat,
+            self.lon,
+            self.alt,
+            &self.place,
+            out,
+        )
+    }
+}
+
+/// Arguments of `map`.
+#[derive(Args, Debug)]
+pub struct MapArgs {
+    #[command(flatten)]
+    pub time: TimeArgs,
+    /// Comma-separated bodies to map (default: Sun to Pluto)
+    #[arg(long, value_delimiter = ',', value_name = "LIST")]
+    pub bodies: Vec<String>,
+    /// Southern limit of the lines in degrees
+    #[arg(long, value_name = "DEG", default_value_t = -66.0, allow_negative_numbers = true)]
+    pub lat_min: f64,
+    /// Northern limit of the lines in degrees
+    #[arg(
+        long,
+        value_name = "DEG",
+        default_value_t = 66.0,
+        allow_negative_numbers = true
+    )]
+    pub lat_max: f64,
+    /// Latitude step of the rising and setting lines in degrees
+    #[arg(
+        long,
+        value_name = "DEG",
+        default_value_t = 1.0,
+        allow_negative_numbers = true
+    )]
+    pub lat_step: f64,
+    /// Horizon altitude in degrees (0 is the geometric horizon, -0.5667 the
+    /// Sun's centre at the standard horizon)
+    #[arg(
+        long,
+        value_name = "DEG",
+        default_value_t = 0.0,
+        allow_negative_numbers = true
+    )]
+    pub altitude: f64,
+    /// Also show where each body rises and sets on this latitude
+    #[arg(long, value_name = "DEG", allow_negative_numbers = true)]
+    pub lat: Option<f64>,
+    /// Print a GeoJSON FeatureCollection (one LineString per line segment and a
+    /// Point per zenith) instead of a table
+    #[arg(long, conflicts_with = "json")]
+    pub geojson: bool,
+    #[command(flatten)]
+    pub out: OutArgs,
+}
+
+/// Arguments of `synastry`.
+#[derive(Args, Debug)]
+pub struct SynastryArgs {
+    #[command(flatten)]
+    pub a: BirthA,
+    #[command(flatten)]
+    pub b: BirthB,
+    /// House system for both charts (default Placidus)
+    #[arg(long, value_name = "SYSTEM")]
+    pub house_system: Option<String>,
+    /// Comma-separated bodies (default: Sun to Pluto and the mean node)
+    #[arg(long, value_delimiter = ',', value_name = "LIST")]
+    pub bodies: Vec<String>,
+    /// Aspects to look for: major, all, or names such as trine,square (default major)
+    #[arg(long, value_delimiter = ',', value_name = "LIST")]
+    pub aspects: Vec<String>,
+    /// Multiply every default orb by this factor
+    #[arg(long, value_name = "FACTOR", default_value_t = 1.0)]
+    pub orb_mult: f64,
+    /// Also compare the Ascendant, Midheaven, Descendant and Imum Coeli
+    #[arg(long)]
+    pub angles: bool,
+    #[command(flatten)]
+    pub out: OutArgs,
+}
+
+/// How the composite Ascendant is found.
+#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AscendantMethod {
+    /// From the midpoint Midheaven at the mean latitude (default)
+    Derived,
+    /// The midpoint of the two Ascendants (Equal and Whole Sign only)
+    Midpoint,
+}
+
+/// Arguments of `composite`.
+#[derive(Args, Debug)]
+pub struct CompositeArgs {
+    #[command(flatten)]
+    pub a: BirthA,
+    #[command(flatten)]
+    pub b: BirthB,
+    #[command(flatten)]
+    pub zodiac: ZodiacArgs,
+    /// House system (default Placidus; WholeSign with --sidereal; Equal with
+    /// --ascendant midpoint)
+    #[arg(long, value_name = "SYSTEM")]
+    pub house_system: Option<String>,
+    /// How the Ascendant is found
+    #[arg(long, value_enum, default_value_t = AscendantMethod::Derived)]
+    pub ascendant: AscendantMethod,
+    /// Comma-separated bodies (default: Sun to Pluto and the mean node)
+    #[arg(long, value_delimiter = ',', value_name = "LIST")]
+    pub bodies: Vec<String>,
+    #[command(flatten)]
+    pub out: OutArgs,
+}
+
+/// How the midpoint in space is taken.
+#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SpaceKind {
+    /// Mean latitude and mean longitude (default)
+    Arithmetic,
+    /// The midpoint on the great circle between the two places
+    GreatCircle,
+}
+
+/// Arguments of `davison`.
+#[derive(Args, Debug)]
+pub struct DavisonArgs {
+    #[command(flatten)]
+    pub a: BirthA,
+    #[command(flatten)]
+    pub b: BirthB,
+    #[command(flatten)]
+    pub zodiac: ZodiacArgs,
+    /// House system (default Placidus; WholeSign with --sidereal)
+    #[arg(long, value_name = "SYSTEM")]
+    pub house_system: Option<String>,
+    /// How the midpoint between the two places is taken
+    #[arg(long, value_enum, default_value_t = SpaceKind::Arithmetic)]
+    pub space: SpaceKind,
+    /// Comma-separated bodies (default: Sun to Pluto and the mean node)
+    #[arg(long, value_delimiter = ',', value_name = "LIST")]
+    pub bodies: Vec<String>,
+    #[command(flatten)]
+    pub out: OutArgs,
+}
+
+/// Arguments of `relocate`.
+#[derive(Args, Debug)]
+pub struct RelocateArgs {
+    #[command(flatten)]
+    pub time: TimeArgs,
+    /// Birth latitude in degrees, north positive
+    #[arg(long, value_name = "DEG", allow_negative_numbers = true)]
+    pub lat: Option<f64>,
+    /// Birth longitude in degrees, east positive
+    #[arg(long, value_name = "DEG", allow_negative_numbers = true)]
+    pub lon: Option<f64>,
+    /// Birth city from the built-in table (instead of --lat and --lon)
+    #[arg(long, value_name = "CITY", conflicts_with_all = ["lat", "lon"])]
+    pub place: Option<String>,
+    /// Latitude to move the chart to, north positive
+    #[arg(long, value_name = "DEG", allow_negative_numbers = true)]
+    pub to_lat: Option<f64>,
+    /// Longitude to move the chart to, east positive
+    #[arg(long, value_name = "DEG", allow_negative_numbers = true)]
+    pub to_lon: Option<f64>,
+    /// City to move the chart to (instead of --to-lat and --to-lon)
+    #[arg(long, value_name = "CITY", conflicts_with_all = ["to_lat", "to_lon"])]
+    pub to_place: Option<String>,
+    #[command(flatten)]
+    pub zodiac: ZodiacArgs,
+    /// House system (default Placidus; WholeSign with --sidereal)
+    #[arg(long, value_name = "SYSTEM")]
+    pub house_system: Option<String>,
+    /// Comma-separated bodies (default: Sun to Pluto and the mean node)
+    #[arg(long, value_delimiter = ',', value_name = "LIST")]
+    pub bodies: Vec<String>,
+    #[command(flatten)]
+    pub out: OutArgs,
+}
+
+impl RelocateArgs {
+    /// The birth place.
+    pub fn birth_place(&self) -> Result<Place> {
+        let loc = LocArgs {
+            lat: self.lat,
+            lon: self.lon,
+            alt: 0.0,
+            place: self.place.clone(),
+        };
+        loc.resolve(true)?
+            .ok_or_else(|| CliError::usage("missing --lat and --lon (or use --place \"<city>\")"))
+    }
+
+    /// The place the chart is moved to.
+    pub fn target_place(&self) -> Result<Place> {
+        let loc = LocArgs {
+            lat: self.to_lat,
+            lon: self.to_lon,
+            alt: 0.0,
+            place: self.to_place.clone(),
+        };
+        loc.resolve(true).map_err(relabel_to)?.ok_or_else(|| {
+            CliError::usage("missing --to-lat and --to-lon (or use --to-place \"<city>\")")
+        })
+    }
+}
+
+fn relabel_to(error: CliError) -> CliError {
+    match error {
+        CliError::Usage(message) => CliError::Usage(
+            message
+                .replace("--lat", "--to-lat")
+                .replace("--lon", "--to-lon")
+                .replace("--place", "--to-place"),
+        ),
+        other => other,
+    }
+}
+
 fn example(command: &str) -> String {
     format!("Example:\n  xalen {command}")
 }
@@ -417,6 +845,54 @@ pub fn build_command() -> clap::Command {
             c.after_help(format!(
                 "{}\n\n{ayanamsas}",
                 example("convert --date 2000-01-01T12:00:00Z")
+            ))
+        })
+        .mut_subcommand("map", |c| {
+            c.after_help(format!(
+                "{}\n\n{bodies}\n\nWith --geojson the output loads in any GIS tool or geojson.io. \
+                 Positions are geocentric (the Moon's lines can be off by up to one degree of \
+                 parallax). The map has no zodiac.",
+                example("map --date 2024-06-21T00:00:00Z --bodies sun,moon --lat 40 --geojson")
+            ))
+        })
+        .mut_subcommand("synastry", |c| {
+            c.after_help(format!(
+                "{}\n\n{houses}\n\nThe zodiac is tropical. Aspects use the library's default orbs \
+                 times --orb-mult.",
+                example(
+                    "synastry --a-date 1990-03-15T06:30:00Z --a-place delhi \
+                     --b-date 1992-08-02T14:10:00Z --b-place mumbai --angles"
+                )
+            ))
+        })
+        .mut_subcommand("composite", |c| {
+            c.after_help(format!(
+                "{}\n\n{houses}\n\n{ayanamsas}\n\n--sidereal only converts the printed longitudes, \
+                 signs and houses of the tropical composite to the chosen ayanamsa at the mean \
+                 date; nothing is recomputed.",
+                example(
+                    "composite --a-date 1990-03-15T06:30:00Z --a-place delhi \
+                     --b-date 1992-08-02T14:10:00Z --b-place mumbai --ascendant derived"
+                )
+            ))
+        })
+        .mut_subcommand("davison", |c| {
+            c.after_help(format!(
+                "{}\n\n{houses}\n\n{ayanamsas}\n\n--sidereal only converts the printed longitudes, \
+                 signs and houses of the tropical chart to the chosen ayanamsa at the mean date; \
+                 nothing is recomputed.",
+                example(
+                    "davison --a-date 1990-03-15T06:30:00Z --a-place delhi \
+                     --b-date 1992-08-02T14:10:00Z --b-place mumbai --space great-circle"
+                )
+            ))
+        })
+        .mut_subcommand("relocate", |c| {
+            c.after_help(format!(
+                "{}\n\n{houses}\n\n{ayanamsas}\n\n--sidereal only converts the printed longitudes, \
+                 signs and houses of the tropical chart to the chosen ayanamsa at the birth date; \
+                 nothing is recomputed.",
+                example("relocate --date 1990-03-15T06:30:00Z --place delhi --to-place london")
             ))
         })
 }

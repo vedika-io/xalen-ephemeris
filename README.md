@@ -152,7 +152,8 @@ cargo run --example chinese_bazi     # BaZi Four Pillars with Wu Xing
 ## Command line
 
 The `xalen` tool puts the library in the terminal: positions, charts, panchang,
-dasha, fixed stars, eclipses, rise and set times, aspects and time conversions,
+dasha, fixed stars, eclipses, rise and set times, aspects, time conversions,
+astrocartography maps, synastry, composite, Davison and relocated charts,
 as a table or with `--json`. It works offline and has no data files.
 
 ```bash
@@ -168,6 +169,19 @@ xalen chart --date 1990-03-15T06:30:00Z --place delhi --sidereal
 
 # Solar eclipses of 2024 as JSON (the 8 April total eclipse is the first)
 xalen eclipses --from 2024-01-01 --to 2024-12-31 --type solar --json
+
+# Astrocartography lines for a moment, as GeoJSON for any GIS tool or geojson.io
+xalen map --date 2024-06-21T00:00:00Z --bodies sun,moon --geojson
+
+# Aspects and house overlays between two births
+xalen synastry --a-date 1990-03-15T06:30:00Z --a-place delhi --b-date 1992-08-02T14:10:00Z --b-place mumbai
+
+# Composite and Davison charts of the same two births
+xalen composite --a-date 1990-03-15T06:30:00Z --a-place delhi --b-date 1992-08-02T14:10:00Z --b-place mumbai
+xalen davison --a-date 1990-03-15T06:30:00Z --a-place delhi --b-date 1992-08-02T14:10:00Z --b-place mumbai
+
+# The same birth with the houses moved to another place
+xalen relocate --date 1990-03-15T06:30:00Z --place delhi --to-place london
 ```
 
 See [`crates/xalen-cli`](crates/xalen-cli/README.md) for every command.

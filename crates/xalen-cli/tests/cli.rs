@@ -82,6 +82,11 @@ fn help_exits_zero_and_every_subcommand_has_an_example() {
         "rise-set",
         "aspects",
         "convert",
+        "map",
+        "synastry",
+        "composite",
+        "davison",
+        "relocate",
     ] {
         assert!(
             out.stdout.contains(command),
@@ -728,4 +733,677 @@ fn absurd_dates_and_julian_days_exit_two() {
         assert_eq!(out.stderr.trim().lines().count(), 1, "{args:?}");
     }
     assert_eq!(xalen(&["convert", "--date", "-4712-01-01"]).code, 0);
+}
+
+// ---------------------------------------------------------------------------
+// map, synastry, composite, davison, relocate
+// ---------------------------------------------------------------------------
+
+use xalen_ephemeris::maps::{MapOptions, astro_map};
+
+fn with_flags(base: &[&str], more: &[&str]) -> Vec<String> {
+    base.iter().chain(more).map(|s| (*s).to_string()).collect()
+}
+
+fn json_of_owned(args: &[String]) -> Value {
+    let refs: Vec<&str> = args.iter().map(String::as_str).collect();
+    json_of(&refs)
+}
+
+/// The angle (ascendant, mc, ...) of a chart-style JSON as a longitude.
+fn angle_of(json: &Value, key: &str) -> f64 {
+    num(&json[key]["longitude"])
+}
+
+#[test]
+fn map_json_matches_the_library() {
+    let jd = calendar_to_jd(2024, 6, 21, 0.0, CalendarSystem::ProlepticGregorian);
+    let almanac = Almanac::default_vedic();
+    let expected = astro_map(
+        &almanac,
+        jd,
+        &[Body::Sun, Body::Moon, Body::Jupiter],
+        &MapOptions::default(),
+    )
+    .expect("the library maps the bodies");
+    let json = json_of(&[
+        "map",
+        "--date",
+        "2024-06-21T00:00:00Z",
+        "--bodies",
+        "sun,moon,jupiter",
+        "--json",
+    ]);
+    assert_eq!(json["command"], "map");
+    assert!((num(&json["gast_deg"]) - expected.gast_deg).abs() < 1e-9);
+    let bodies = json["bodies"].as_array().expect("an array");
+    assert_eq!(bodies.len(), expected.bodies.len());
+    for (item, want) in bodies.iter().zip(&expected.bodies) {
+        assert_eq!(item["body"], format!("{:?}", want.body));
+        assert!((num(&item["ra_deg"]) - want.ra_deg).abs() < 1e-9);
+        assert!((num(&item["dec_deg"]) - want.dec_deg).abs() < 1e-9);
+        let lines = item["lines"].as_array().expect("lines");
+        assert_eq!(lines[0]["kind"], "Mc");
+        let mc = num(&lines[0]["segments"][0][0][1]);
+        assert!(
+            (mc - want.zenith.1).abs() < 1e-9,
+            "MC {mc} vs {}",
+            want.zenith.1
+        );
+        assert!((num(&item["zenith"][0]) - want.zenith.0).abs() < 1e-9);
+    }
+}
+
+#[test]
+fn map_table_lists_the_meridians_and_the_horizon_at_a_latitude() {
+    let out = xalen(&[
+        "map",
+        "--date",
+        "2024-06-21T00:00:00Z",
+        "--bodies",
+        "sun,moon",
+        "--lat",
+        "40",
+    ]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    for word in [
+        "Sun",
+        "Moon",
+        "MC lon",
+        "IC lon",
+        "ASC lon",
+        "DSC lon",
+        "Zenith lat",
+    ] {
+        assert!(out.stdout.contains(word), "{word} missing:\n{}", out.stdout);
+    }
+    // The Sun is circumpolar at 80 north around the June solstice.
+    let polar = xalen(&[
+        "map",
+        "--date",
+        "2024-06-21T00:00:00Z",
+        "--bodies",
+        "sun",
+        "--lat",
+        "80",
+    ]);
+    assert_eq!(polar.code, 0, "{}", polar.stderr);
+    assert!(polar.stdout.contains("always above the horizon"));
+}
+
+#[test]
+fn map_horizon_at_a_latitude_agrees_with_the_json_lines() {
+    let json = json_of(&[
+        "map",
+        "--date",
+        "2024-06-21T00:00:00Z",
+        "--bodies",
+        "sun",
+        "--lat",
+        "40",
+        "--lat-step",
+        "0.5",
+        "--json",
+    ]);
+    let asc = &json["bodies"][0]["lines"][2];
+    assert_eq!(asc["kind"], "Asc");
+    let want = num(&json["at_latitude"]["bodies"][0]["asc_longitude"]);
+    let found = asc["segments"]
+        .as_array()
+        .expect("segments")
+        .iter()
+        .flat_map(|s| s.as_array().expect("points").iter())
+        .find(|p| (num(&p[0]) - 40.0).abs() < 1e-9)
+        .expect("a vertex at latitude 40");
+    assert!((num(&found[1]) - want).abs() < 1e-6, "{found} vs {want}");
+}
+
+#[test]
+fn map_geojson_is_a_valid_feature_collection() {
+    let out = xalen(&[
+        "map",
+        "--date",
+        "2024-06-21T00:00:00Z",
+        "--bodies",
+        "sun,moon",
+        "--geojson",
+    ]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    let json: Value = serde_json::from_str(&out.stdout).expect("stdout is valid JSON");
+    assert_eq!(json["type"], "FeatureCollection");
+    let features = json["features"].as_array().expect("features");
+    assert!(!features.is_empty());
+    let (mut points, mut lines) = (0, 0);
+    for feature in features {
+        assert_eq!(feature["type"], "Feature");
+        for key in ["body", "kind"] {
+            assert!(feature["properties"][key].is_string(), "{key} in {feature}");
+        }
+        let kind = feature["geometry"]["type"].as_str().expect("a type");
+        let coordinates = &feature["geometry"]["coordinates"];
+        let positions: Vec<&Value> = match kind {
+            "Point" => {
+                points += 1;
+                vec![coordinates]
+            }
+            "LineString" => {
+                lines += 1;
+                let all: Vec<&Value> = coordinates.as_array().expect("positions").iter().collect();
+                assert!(all.len() >= 2, "a LineString needs two positions");
+                all
+            }
+            other => panic!("unexpected geometry {other}"),
+        };
+        for position in positions {
+            let lon = num(&position[0]);
+            let lat = num(&position[1]);
+            assert!((-180.0..=180.0).contains(&lon), "lon {lon}");
+            assert!((-90.0..=90.0).contains(&lat), "lat {lat}");
+        }
+    }
+    assert_eq!(points, 2, "one zenith per body");
+    assert!(
+        lines >= 8,
+        "at least the MC and IC line of each body: {lines}"
+    );
+}
+
+#[test]
+fn synastry_of_a_chart_with_itself_is_a_conjunction_on_the_diagonal() {
+    let same = [
+        "synastry",
+        "--a-date",
+        "1990-03-15T06:30:00Z",
+        "--a-place",
+        "delhi",
+        "--b-date",
+        "1990-03-15T06:30:00Z",
+        "--b-place",
+        "delhi",
+        "--angles",
+    ];
+    let json = json_of_owned(&with_flags(&same, &["--json"]));
+    assert_eq!(json["command"], "synastry");
+    let n = json["rows"].as_array().expect("rows").len();
+    assert_eq!(n, json["cols"].as_array().expect("cols").len());
+    assert_eq!(n, 15, "eleven bodies and four angles");
+    let cells = json["cells"].as_array().expect("cells");
+    assert_eq!(cells.len(), n * n);
+    for i in 0..n {
+        let cell = &cells[i * n + i];
+        assert_eq!(cell["aspect_type"], "Conjunction", "diagonal {i}");
+        assert!(num(&cell["orb_deg"]) < 1e-12, "diagonal {i}");
+    }
+    assert_eq!(json["b_in_a"].as_array().expect("overlay").len(), n);
+    assert_eq!(json["a_in_b"].as_array().expect("overlay").len(), n);
+    for (a, b) in json["a_in_b"]
+        .as_array()
+        .expect("overlay")
+        .iter()
+        .zip(json["b_in_a"].as_array().expect("overlay"))
+    {
+        assert_eq!(a["house"], b["house"], "identical charts share houses");
+    }
+
+    let table = xalen(&same);
+    assert_eq!(table.code, 0, "{}", table.stderr);
+    for word in [
+        "Su", "Mo", "Me", "Ve", "Ma", "Ju", "Sa", "Ur", "Ne", "Pl", "Ra", "Asc", "MC",
+    ] {
+        assert!(
+            table.stdout.contains(word),
+            "{word} missing:\n{}",
+            table.stdout
+        );
+    }
+    assert!(table.stdout.contains("Cnj 0.00"));
+    assert!(table.stdout.contains("B's points in A's houses"));
+    assert!(table.stdout.contains("A's points in B's houses"));
+}
+
+#[test]
+fn synastry_options_change_the_grid() {
+    let narrow = json_of_owned(&with_flags(
+        &["synastry"],
+        &[
+            "--a-date",
+            "1990-03-15T06:30:00Z",
+            "--a-place",
+            "delhi",
+            "--b-date",
+            "1992-08-02T14:10:00Z",
+            "--b-place",
+            "mumbai",
+            "--aspects",
+            "conjunction",
+            "--bodies",
+            "sun,moon",
+            "--json",
+        ],
+    ));
+    assert_eq!(narrow["rows"].as_array().expect("rows").len(), 2);
+    assert_eq!(narrow["aspect_types"], serde_json::json!(["Conjunction"]));
+    for cell in narrow["cells"].as_array().expect("cells") {
+        assert!(cell.is_null() || cell["aspect_type"] == "Conjunction");
+    }
+}
+
+#[test]
+fn composite_of_identical_births_equals_the_chart() {
+    let chart = json_of(&[
+        "chart",
+        "--date",
+        "1990-03-15T06:30:00Z",
+        "--place",
+        "delhi",
+        "--json",
+    ]);
+    let composite = json_of(&[
+        "composite",
+        "--a-date",
+        "1990-03-15T06:30:00Z",
+        "--a-place",
+        "delhi",
+        "--b-date",
+        "1990-03-15T06:30:00Z",
+        "--b-place",
+        "delhi",
+        "--json",
+    ]);
+    assert_eq!(composite["command"], "composite");
+    let bodies = composite["bodies"].as_array().expect("bodies");
+    assert_eq!(bodies.len(), 11);
+    for body in bodies {
+        let id = body["id"].as_str().expect("an id");
+        let want = find(&chart["bodies"], "id", id);
+        let gap = angle_gap(num(&body["longitude"]), num(&want["longitude"]));
+        assert!(gap < 1e-6, "{id} differs by {gap}");
+    }
+    for key in ["ascendant", "mc"] {
+        let gap = angle_gap(angle_of(&composite, key), angle_of(&chart, key));
+        assert!(gap < 1e-6, "{key} differs by {gap}");
+    }
+}
+
+#[test]
+fn composite_midpoint_ascendant_needs_equal_or_whole_sign() {
+    let two_births = [
+        "composite",
+        "--a-date",
+        "1990-03-15T06:30:00Z",
+        "--a-place",
+        "delhi",
+        "--b-date",
+        "1992-08-02T14:10:00Z",
+        "--b-place",
+        "mumbai",
+        "--ascendant",
+        "midpoint",
+    ];
+    let ok = json_of_owned(&with_flags(&two_births, &["--json"]));
+    assert_eq!(ok["ascendant_method"], "midpoint");
+    assert_eq!(ok["house_system"], "Equal");
+    let out = xalen(
+        &two_births
+            .iter()
+            .copied()
+            .chain(["--house-system", "placidus"])
+            .collect::<Vec<_>>(),
+    );
+    assert_eq!(out.code, 2);
+    assert_eq!(out.stderr.trim().lines().count(), 1);
+}
+
+#[test]
+fn davison_of_identical_births_equals_the_chart() {
+    let chart = json_of(&[
+        "chart",
+        "--date",
+        "1990-03-15T06:30:00Z",
+        "--place",
+        "delhi",
+        "--json",
+    ]);
+    for space in ["arithmetic", "great-circle"] {
+        let davison = json_of(&[
+            "davison",
+            "--a-date",
+            "1990-03-15T06:30:00Z",
+            "--a-place",
+            "delhi",
+            "--b-date",
+            "1990-03-15T06:30:00Z",
+            "--b-place",
+            "delhi",
+            "--space",
+            space,
+            "--json",
+        ]);
+        assert_eq!(davison["command"], "davison");
+        assert_eq!(davison["space"], space);
+        for body in davison["bodies"].as_array().expect("bodies") {
+            let id = body["id"].as_str().expect("an id");
+            let want = find(&chart["bodies"], "id", id);
+            let gap = angle_gap(num(&body["longitude"]), num(&want["longitude"]));
+            assert!(gap < 1e-6, "{space} {id} differs by {gap}");
+        }
+        for key in ["ascendant", "mc"] {
+            let gap = angle_gap(angle_of(&davison, key), angle_of(&chart, key));
+            assert!(gap < 1e-6, "{space} {key} differs by {gap}");
+        }
+    }
+}
+
+#[test]
+fn davison_reports_the_mean_date_and_place() {
+    let davison = json_of(&[
+        "davison",
+        "--a-date",
+        "1990-03-15T06:30:00Z",
+        "--a-place",
+        "delhi",
+        "--b-date",
+        "1992-08-02T14:10:00Z",
+        "--b-place",
+        "mumbai",
+        "--json",
+    ]);
+    let a = num(&davison["a"]["jd_ut"]);
+    let b = num(&davison["b"]["jd_ut"]);
+    assert!((num(&davison["jd_ut"]) - (a + b) / 2.0).abs() < 1e-9);
+    let lat = num(&davison["place"]["latitude"]);
+    let want =
+        (num(&davison["a"]["place"]["latitude"]) + num(&davison["b"]["place"]["latitude"])) / 2.0;
+    assert!((lat - want).abs() < 1e-9);
+}
+
+#[test]
+fn relocate_keeps_the_bodies_and_changes_the_houses() {
+    let natal = json_of(&[
+        "chart",
+        "--date",
+        "1990-03-15T06:30:00Z",
+        "--place",
+        "delhi",
+        "--json",
+    ]);
+    let london = json_of(&[
+        "chart",
+        "--date",
+        "1990-03-15T06:30:00Z",
+        "--place",
+        "london",
+        "--json",
+    ]);
+    let moved = json_of(&[
+        "relocate",
+        "--date",
+        "1990-03-15T06:30:00Z",
+        "--place",
+        "delhi",
+        "--to-place",
+        "london",
+        "--json",
+    ]);
+    assert_eq!(moved["command"], "relocate");
+    for body in moved["bodies"].as_array().expect("bodies") {
+        let id = body["id"].as_str().expect("an id");
+        let want = find(&natal["bodies"], "id", id);
+        assert!(
+            (num(&body["longitude"]) - num(&want["longitude"])).abs() < 1e-9,
+            "{id} moved"
+        );
+    }
+    let natal_asc = angle_of(&natal, "ascendant");
+    let moved_asc = angle_of(&moved, "ascendant");
+    assert!(
+        angle_gap(natal_asc, moved_asc) > 1.0,
+        "the ascendant must change"
+    );
+    assert!(angle_gap(moved_asc, angle_of(&london, "ascendant")) < 1e-6);
+    assert!(angle_gap(num(&moved["natal_ascendant"]["longitude"]), natal_asc) < 1e-6);
+
+    // The same place changes nothing.
+    let same = json_of(&[
+        "relocate",
+        "--date",
+        "1990-03-15T06:30:00Z",
+        "--place",
+        "delhi",
+        "--to-place",
+        "delhi",
+        "--json",
+    ]);
+    assert!(angle_gap(angle_of(&same, "ascendant"), natal_asc) < 1e-9);
+}
+
+#[test]
+fn sidereal_only_converts_the_printed_longitudes() {
+    let args = [
+        "relocate",
+        "--date",
+        "1990-03-15T06:30:00Z",
+        "--place",
+        "delhi",
+        "--to-place",
+        "london",
+        "--house-system",
+        "equal",
+    ];
+    let tropical = json_of_owned(&with_flags(&args, &["--json"]));
+    let sidereal = json_of_owned(&with_flags(&args, &["--sidereal", "--json"]));
+    assert_eq!(sidereal["zodiac"], "sidereal");
+    let shift = num(&sidereal["ayanamsa"]["value_deg"]);
+    assert!((20.0..26.0).contains(&shift), "ayanamsa {shift}");
+    for body in sidereal["bodies"].as_array().expect("bodies") {
+        let id = body["id"].as_str().expect("an id");
+        let want = find(&tropical["bodies"], "id", id);
+        let gap = angle_gap(num(&body["longitude"]) + shift, num(&want["longitude"]));
+        assert!(gap < 1e-6, "{id} differs by {gap}");
+        assert_eq!(body["house"], want["house"], "{id} house");
+    }
+    let gap = angle_gap(
+        angle_of(&sidereal, "ascendant") + shift,
+        angle_of(&tropical, "ascendant"),
+    );
+    assert!(gap < 1e-6, "ascendant differs by {gap}");
+    // Synastry has no zodiac option.
+    let out = xalen(&["synastry", "--sidereal"]);
+    assert_eq!(out.code, 2);
+}
+
+#[test]
+fn the_relationship_and_map_commands_exit_two_on_bad_input() {
+    let cases: Vec<Vec<&str>> = vec![
+        // Missing --b-date.
+        vec![
+            "synastry",
+            "--a-date",
+            "1990-03-15",
+            "--a-place",
+            "delhi",
+            "--b-place",
+            "mumbai",
+        ],
+        // Missing the second birthplace.
+        vec![
+            "composite",
+            "--a-date",
+            "1990-03-15",
+            "--a-place",
+            "delhi",
+            "--b-date",
+            "1992-08-02",
+        ],
+        // Bad --ascendant and --space values.
+        vec![
+            "composite",
+            "--a-date",
+            "1990-03-15",
+            "--a-place",
+            "delhi",
+            "--b-date",
+            "1992-08-02",
+            "--b-place",
+            "mumbai",
+            "--ascendant",
+            "sideways",
+        ],
+        vec![
+            "davison",
+            "--a-date",
+            "1990-03-15",
+            "--a-place",
+            "delhi",
+            "--b-date",
+            "1992-08-02",
+            "--b-place",
+            "mumbai",
+            "--space",
+            "flat",
+        ],
+        // Both --a-date and --a-jd.
+        vec![
+            "synastry",
+            "--a-date",
+            "1990-03-15",
+            "--a-jd",
+            "2451545",
+            "--a-place",
+            "delhi",
+            "--b-date",
+            "1992-08-02",
+            "--b-place",
+            "mumbai",
+        ],
+        // A place and coordinates together.
+        vec![
+            "synastry",
+            "--a-date",
+            "1990-03-15",
+            "--a-place",
+            "delhi",
+            "--a-lat",
+            "10",
+            "--b-date",
+            "1992-08-02",
+            "--b-place",
+            "mumbai",
+        ],
+        // Unknown aspect, bad orb multiplier, unknown house system, ketu.
+        vec![
+            "synastry",
+            "--a-date",
+            "1990-03-15",
+            "--a-place",
+            "delhi",
+            "--b-date",
+            "1992-08-02",
+            "--b-place",
+            "mumbai",
+            "--aspects",
+            "blue",
+        ],
+        vec![
+            "synastry",
+            "--a-date",
+            "1990-03-15",
+            "--a-place",
+            "delhi",
+            "--b-date",
+            "1992-08-02",
+            "--b-place",
+            "mumbai",
+            "--orb-mult",
+            "0",
+        ],
+        vec![
+            "synastry",
+            "--a-date",
+            "1990-03-15",
+            "--a-place",
+            "delhi",
+            "--b-date",
+            "1992-08-02",
+            "--b-place",
+            "mumbai",
+            "--house-system",
+            "round",
+        ],
+        vec![
+            "composite",
+            "--a-date",
+            "1990-03-15",
+            "--a-place",
+            "delhi",
+            "--b-date",
+            "1992-08-02",
+            "--b-place",
+            "mumbai",
+            "--bodies",
+            "ketu",
+        ],
+        // Bad birth date and unknown city for B.
+        vec![
+            "synastry",
+            "--a-date",
+            "nope",
+            "--a-place",
+            "delhi",
+            "--b-date",
+            "1992-08-02",
+            "--b-place",
+            "mumbai",
+        ],
+        vec![
+            "synastry",
+            "--a-date",
+            "1990-03-15",
+            "--a-place",
+            "delhi",
+            "--b-date",
+            "1992-08-02",
+            "--b-place",
+            "atlantis",
+        ],
+        // relocate without a destination.
+        vec!["relocate", "--date", "1990-03-15", "--place", "delhi"],
+        // map: a zero step, an empty range, bad altitude, bad latitude, json with geojson.
+        vec!["map", "--date", "2024-06-21", "--lat-step", "0"],
+        vec![
+            "map",
+            "--date",
+            "2024-06-21",
+            "--lat-min",
+            "10",
+            "--lat-max",
+            "-10",
+        ],
+        vec!["map", "--date", "2024-06-21", "--altitude", "95"],
+        vec!["map", "--date", "2024-06-21", "--lat", "90"],
+        vec!["map", "--date", "2024-06-21", "--json", "--geojson"],
+        vec!["map", "--date", "2024-06-21", "--bodies", "earth"],
+        vec!["map"],
+    ];
+    for args in cases {
+        let out = xalen(&args);
+        assert_eq!(out.code, 2, "{args:?}: {}", out.stderr);
+        assert!(out.stdout.is_empty(), "{args:?} printed {}", out.stdout);
+        assert_eq!(
+            out.stderr.trim().lines().count(),
+            1,
+            "{args:?}: {}",
+            out.stderr
+        );
+    }
+    let missing = xalen(&[
+        "synastry",
+        "--a-date",
+        "1990-03-15",
+        "--a-place",
+        "delhi",
+        "--b-place",
+        "mumbai",
+    ]);
+    assert!(missing.stderr.contains("--b-date"), "{}", missing.stderr);
 }

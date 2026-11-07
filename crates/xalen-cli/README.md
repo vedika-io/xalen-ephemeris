@@ -2,7 +2,8 @@
 
 The `xalen` command line for [XALEN Ephemeris](https://github.com/vedika-io/xalen-ephemeris):
 planet positions, charts, panchang, dasha, fixed stars, eclipses, rise and set
-times, aspects and time conversions from the terminal. Pure Rust, offline, no
+times, aspects, time conversions, astrocartography maps and relationship charts
+(synastry, composite, Davison, relocation) from the terminal. Pure Rust, offline, no
 data files. It is a thin layer over the library crates and contains no
 astronomy of its own.
 
@@ -197,6 +198,134 @@ GMST (mean sidereal):   280.460618 deg = 18h 41m 50.548s
 GAST (apparent):        280.457067 deg = 18h 41m 49.696s
 ...
 ```
+
+### map
+
+Astrocartography lines (after Lewis, 1976): where each body is on the MC, IC,
+rising (ASC) or setting (DSC) at the moment. The table gives each body's right
+ascension, declination, zenith point (where it stands overhead) and the MC and
+IC longitudes; with `--lat` it adds the longitudes where the body rises and sets
+on that latitude. `--bodies` defaults to Sun to Pluto; `--lat-min`, `--lat-max`
+and `--lat-step` (default -66, 66, 1) set how the lines are sampled, and
+`--altitude` sets the horizon altitude (default 0). Longitudes are east-positive,
+-180 to 180. `--json` prints the library's full `AstroMap`; the map has no
+zodiac.
+
+```console
+$ xalen map --date 2024-06-21T00:00:00Z --bodies sun,moon,mars --lat 40
+Astrocartography for 2024-06-21 00:00:00 UTC
+JD UT 2460482.500000   JD TT 2460482.500790   GAST 269.6831 deg
+Latitudes -66.00 to 66.00, step 1.00, horizon altitude 0.0000 deg
+
+Body  RA        Dec       Zenith lat  Zenith lon  MC lon     IC lon    ASC lon   DSC lon
+----  --------  --------  ----------  ----------  ---------  --------  --------  ---------
+Sun   90.1364   23.4382   23.4382     -179.5467   -179.5467  0.4533    69.1211   -68.2145
+...
+```
+
+`--geojson` prints a GeoJSON FeatureCollection instead: one `LineString` feature
+per line segment (properties `body` and `kind`, which is `MC`, `IC`, `ASC` or
+`DSC`) and one `Point` feature per zenith (`kind` is `ZENITH`), with coordinates
+as `[longitude, latitude]`. Segments never cross the antimeridian. Load the file
+in any GIS tool or on geojson.io.
+
+```console
+$ xalen map --date 2024-06-21T00:00:00Z --bodies sun --geojson > sun.geojson
+```
+
+### synastry
+
+The aspects between two births and the house overlays. Person A is given with
+`--a-date` (or `--a-jd`) and `--a-place` (or `--a-lat` and `--a-lon`, optionally
+`--a-alt`); person B the same with `--b-`. `--house-system` applies to both
+charts (default Placidus), `--aspects` takes `major` (default), `all` or names
+such as `trine,square`, `--orb-mult` scales the default orbs, and `--angles` adds
+the Ascendant, Midheaven, Descendant and Imum Coeli. The zodiac is tropical.
+
+```console
+$ xalen synastry --a-date 1990-03-15T06:30:00Z --a-place delhi --b-date 1992-08-02T14:10:00Z --b-place mumbai --bodies sun,moon,venus,mars --angles
+Synastry (tropical zodiac)
+A: 1990-03-15 06:30:00 UTC  delhi (lat 28.6139, lon 77.2090)
+B: 1992-08-02 14:10:00 UTC  mumbai (lat 19.0760, lon 72.8777)
+House system: Placidus   orb multiplier: 1.00   14 aspects found
+
+Aspects (rows are A, columns are B; each cell is the aspect and its orb in degrees)
+A \ B  Su        Mo        Ve        Ma        Asc  MC        Dsc  IC
+-----  --------  --------  --------  --------  ---  --------  ---  --------
+Su     -         -         -         -         -    Tri 4.61  -    Sxt 4.61
+Mo     Sqr 3.50  -         -         -         -    -         -    -
+...
+```
+
+The output goes on with "B's points in A's houses" and "A's points in B's
+houses". `--json` prints the library's `Synastry` (`rows`, `cols`, row-major
+`cells`, `b_in_a`, `a_in_b`) with the two births and the options added.
+
+### composite
+
+The midpoint chart of two births (Hand, 1975), printed like `chart`. The
+Ascendant is `--ascendant derived` (default, from the midpoint Midheaven at the
+mean latitude) or `midpoint` (the midpoint of the two Ascendants, Equal and Whole
+Sign houses only; Equal is the default then).
+
+```console
+$ xalen composite --a-date 1990-03-15T06:30:00Z --a-place delhi --b-date 1992-08-02T14:10:00Z --b-place mumbai --bodies sun,moon
+Composite chart for 1991-05-24 22:20:00 UTC
+...
+Reference place (mean birthplace): lat 23.8450, lon 75.0433
+Ascendant: derived from the midpoint Midheaven at the reference latitude
+House system: Placidus
+
+Angle       Longitude  Sign       Deg
+----------  ---------  ---------  -----
+Ascendant   32.0831    Taurus     2.08
+Midheaven   292.6174   Capricorn  22.62
+...
+```
+
+### davison
+
+The chart for the midpoint in time and place of two births (Davison, 1977),
+printed like `chart` with the mean date and place. `--space arithmetic`
+(default) averages latitude and longitude; `--space great-circle` takes the
+midpoint on the great circle between the places.
+
+```console
+$ xalen davison --a-date 1990-03-15T06:30:00Z --a-place delhi --b-date 1992-08-02T14:10:00Z --b-place mumbai --bodies sun,moon
+Davison chart for 1991-05-24 22:20:00 UTC
+...
+Mean place (arithmetic): lat 23.8450, lon 75.0433
+House system: Placidus
+...
+```
+
+### relocate
+
+One birth with the houses recomputed for another place; the bodies do not move.
+The destination is `--to-place` or `--to-lat` and `--to-lon`. The JSON adds the
+birth Ascendant as `natal_ascendant`.
+
+```console
+$ xalen relocate --date 1990-03-15T06:30:00Z --place delhi --to-place london --bodies sun,moon
+Relocated chart for 1990-03-15 06:30:00 UTC
+...
+Born at: delhi (lat 28.6139, lon 77.2090)
+Relocated to: london (lat 51.5074, lon -0.1278); the bodies are unchanged, the houses are recomputed
+
+Angle       Longitude  Sign         Deg
+----------  ---------  -----------  -----
+Ascendant   359.9476   Pisces       29.95
+...
+```
+
+Zodiac of the four relationship commands: `synastry` is always tropical (its
+aspects and overlays are differences of tropical longitudes). `composite`,
+`davison` and `relocate` take `--sidereal [AYANAMSA]`, which only converts the
+printed longitudes, signs and houses of the tropical chart by the ayanamsa at
+the chart's date (the mean date for composite and Davison); nothing is
+recomputed. Cusps go through the library's `HouseCusps::to_sidereal`, so Whole
+Sign cusps are rebuilt from the sidereal Ascendant (the default house system
+with `--sidereal`, as in `chart`). Without `--sidereal` the output is tropical.
 
 ## Errors
 
