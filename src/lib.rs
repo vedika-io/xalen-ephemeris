@@ -32,8 +32,12 @@ pub use xalen_houses as houses;
 pub use xalen_iching as iching;
 /// Lal Kitab astrology: effects, debts, remedies.
 pub use xalen_lalkitab as lalkitab;
+/// Astrocartography: MC, IC, ascendant and descendant lines and zenith points.
+pub use xalen_maps as maps;
 /// Pythagorean and Chaldean numerology.
 pub use xalen_numerology as numerology;
+/// Relationship astrology: synastry, composite and Davison charts.
+pub use xalen_relationship as relationship;
 /// Fixed star catalog with proper motion and nakshatra yogataras.
 pub use xalen_stars as stars;
 /// Julian Day newtypes, calendar conversion, Delta T models.

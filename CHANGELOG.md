@@ -16,6 +16,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   from the built-in table (`--place`). Bad input exits 2 with a one-line
   message, computation errors exit 1. The tool contains no astronomy of its
   own and works offline.
+- **`xalen-relationship`** crate: `NatalChart` (tropical geocentric bodies plus
+  houses on the true equinox of date, with `relocated`, `points` and
+  `to_chart_data`), `synastry` with `inter_aspects` and `house_overlay`
+  (aspect grid between two charts and house overlays), `composite_chart` with
+  the Ascendant either derived from the midpoint Midheaven (default) or taken as
+  the midpoint of the Ascendants, and `davison_chart` with arithmetic or
+  great-circle midpoint in space. Methods after Hand (1975, 1981) and Davison
+  (1977).
+- **`xalen-maps`** crate: astrocartography after Lewis (1976). `astro_map`
+  returns MC, IC, Ascendant and Descendant lines and the zenith point of each
+  body, with circumpolar breaks, exact limit-latitude vertices and antimeridian
+  splitting; `mc_longitude_deg`, `ic_longitude_deg`, `horizon_half_arc` and
+  `horizon_lines` are public. Geocentric only; parans are not included yet.
+- **`xalen_houses::compute_houses_true`** computes houses on the true equinox of
+  date (apparent sidereal time and true obliquity), the frame of the apparent
+  planet positions and of `compat::swe_houses`. `compute_houses` is unchanged.
+- The umbrella crate re-exports the new crates as `relationship` and `maps`.
 
 ### Fixed
 - **Sidereal Whole Sign houses** (`HouseCusps::to_sidereal`,

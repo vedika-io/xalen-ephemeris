@@ -36,6 +36,16 @@ sources the library is built on.
 | Tajaka (annual) methods | *Tajaka Neelakanthi* (Neelakantha). |
 | Lal Kitab | *Lal Kitab* (Arun Sanhita tradition). |
 
+## Relationship and map methods
+
+| Component | Source |
+|-----------|--------|
+| Synastry aspect grid, house overlays (`xalen-relationship`) | Hand, R. (1981), *Horoscope Symbols*. |
+| Composite charts (`xalen-relationship`) | Hand, R. (1975), *Planets in Composite*. |
+| Davison relationship chart (`xalen-relationship`) | Davison, R. C. (1977), *Synastry*. |
+| Astrocartography lines (`xalen-maps`) | Lewis, J. (1976), *Astro\*Carto\*Graphy*. |
+| Sidereal time, coordinate transformation, rising and setting used by both | Meeus, J., *Astronomical Algorithms*, 2nd ed., ch. 12, 13 and 15. |
+
 ## Other systems
 
 Chinese (BaZi / Zi Wei Dou Shu), Korean Saju, Tibetan and Mesoamerican
