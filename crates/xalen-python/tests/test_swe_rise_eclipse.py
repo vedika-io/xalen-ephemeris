@@ -13,11 +13,16 @@ Reference values and where they come from:
   greatest eclipse about 18:17 UT; 2024-10-02 annular, about 18:45 UT;
   2022-11-08 total lunar, greatest about 10:59 UT, umbral magnitude 1.359;
   2024-03-25 penumbral, about 07:13 UT; Dallas totality on 2024-04-08 from
-  about 18:40:43 to 18:44:35 UT).
+  about 18:40:43 to 18:44:35 UT; New York partial on 2024-04-08; 2025-03-29
+  partial, greatest about 10:47 UT).
+* ``SWISS_ORACLE``: pyswisseph 2.10.03 rise/transit/set rows already in the
+  repository (crates/xalen-ephem/tests/data/swiss_rise_set_oracle.json, the
+  file the Rust engine tests use); ``rise_trans`` must agree to 15 s.
 
 Tuple lengths, return codes and bit values follow the pyswisseph 2.10 API.
 """
 
+import json
 import math
 import re
 from pathlib import Path
@@ -29,6 +34,15 @@ import xalen.swe as swe  # noqa: E402
 
 DELHI = (77.2090, 28.6139, 0.0)  # geopos order: lon, lat, alt (m)
 DALLAS = (-96.80, 32.78, 0.0)
+TOKYO = (139.69, 35.69, 0.0)
+NEW_YORK = (-74.01, 40.71, 0.0)
+SWISS_ORACLE = (
+    Path(__file__).resolve().parents[2]
+    / "xalen-ephem"
+    / "tests"
+    / "data"
+    / "swiss_rise_set_oracle.json"
+)
 SECOND = 1.0 / 86400.0
 MINUTE = 1.0 / 1440.0
 
@@ -92,6 +106,25 @@ def test_bad_argument_types_raise_type_error():
         swe.rise_trans(2460482.5, swe.SUN, swe.CALC_RISE, (77.2, 28.6))
     with pytest.raises(TypeError):
         swe.sol_eclipse_when_loc(2460400.5, None)
+
+
+def test_bad_house_arguments_raise_value_error():
+    jd = 2451545.0
+    cusps, ascmc = swe.houses(jd, 28.6139, 77.2090, b"P")
+    assert len(cusps) == 12 and len(ascmc) == 8
+    for lat, lon, hsys in (
+        (91.0, 77.2, b"P"),
+        (-90.5, 77.2, b"P"),
+        (28.6, 400.0, b"P"),
+        (28.6, -181.0, b"P"),
+        (28.6, 77.2, b"Z"),
+    ):
+        with pytest.raises(ValueError):
+            swe.houses(jd, lat, lon, hsys)
+        with pytest.raises(ValueError):
+            swe.houses_ex(jd, lat, lon, hsys, 0)
+    with pytest.raises(ValueError):
+        swe.houses(float("nan"), 28.6, 77.2, b"P")
 
 
 # ---------------------------------------------------------------------------
@@ -249,6 +282,84 @@ def test_civil_twilight_bit_gives_dawn():
     assert abs(dawn - jd_ist(2024, 6, 22, 4, 57)) < 2 * MINUTE
 
 
+def test_twilight_bits_apply_to_the_sun_only():
+    # Swiss defines twilight for the Sun; for the Moon the bits change nothing.
+    start = jd_ist(2024, 6, 21, 0, 0)
+    for event in (swe.CALC_RISE, swe.CALC_SET):
+        plain = rise(start, swe.MOON, event)
+        for bit in (swe.BIT_CIVIL_TWILIGHT, swe.BIT_NAUTIC_TWILIGHT, swe.BIT_ASTRO_TWILIGHT):
+            assert rise(start, swe.MOON, event | bit) == plain
+    # The Sun does move: civil dawn comes well before sunrise.
+    sunrise = rise(start, swe.SUN, swe.CALC_RISE)
+    dawn = rise(start, swe.SUN, swe.CALC_RISE | swe.BIT_CIVIL_TWILIGHT)
+    assert 15 * MINUTE < sunrise - dawn < 40 * MINUTE
+
+
+def test_moon_rise_transit_set_match_the_swiss_oracle():
+    # pyswisseph 2.10.03 rows, forward search from 00:00 UT with 1013.25 hPa
+    # and 15 deg C. The Moon rows the Rust engine test (rise_set.rs ORACLE)
+    # pins: Delhi in June, December and March; London and Quito in June and
+    # December.
+    pinned = {
+        ("Delhi", 6),
+        ("Delhi", 12),
+        ("Delhi", 3),
+        ("London", 6),
+        ("London", 12),
+        ("Quito", 6),
+        ("Quito", 12),
+    }
+    data = json.loads(SWISS_ORACLE.read_text())
+    assert (data["atpress"], data["attemp"]) == (1013.25, 15.0)
+    rows = [r for r in data["rows"] if r["body"] == "Moon" and (r["loc"], r["m"]) in pinned]
+    assert len(rows) == len(pinned)
+    for r in rows:
+        geopos = (r["lon"], r["lat"], r["elev"])
+        for event, key in (
+            (swe.CALC_RISE, "rise"),
+            (swe.CALC_SET, "set"),
+            (swe.CALC_MTRANSIT, "transit"),
+        ):
+            got = rise(r["jd_start"], swe.MOON, event, geopos, atpress=1013.25, attemp=15.0)
+            off = abs(got - r[key]) * 86400.0
+            assert off < 15.0, f"{r['loc']} {r['m']}: Moon {key} off by {off:.1f} s"
+
+
+def test_moon_hindu_rising_differs_from_topocentric_centre_by_minutes():
+    # BIT_HINDU_RISING puts the Moon's geocentric position on the ecliptic:
+    # no parallax (about 1 deg for the Moon) and no ecliptic latitude (up to
+    # 5 deg), so its rise moves by minutes against the topocentric disc centre.
+    centre = swe.BIT_DISC_CENTER | swe.BIT_NO_REFRACTION
+    gaps = []
+    for start in (2460482.5, 2460665.5, 2460389.5):
+        hindu = rise(start, swe.MOON, swe.CALC_RISE | swe.BIT_HINDU_RISING)
+        topo = rise(start, swe.MOON, swe.CALC_RISE | centre)
+        gap = abs(hindu - topo)
+        assert gap < 60 * MINUTE, gap * 1440
+        gaps.append(gap)
+    assert max(gaps) > 2 * MINUTE, [g * 1440 for g in gaps]
+
+
+def test_rise_trans_true_hor_dip_of_the_horizon():
+    start = jd_ist(2024, 6, 21, 0, 0)
+    # At sea level the dip is zero: -100 gives the true-horizon answer.
+    _, flat = swe.rise_trans_true_hor(start, swe.SUN, swe.CALC_RISE, DELHI, 0.0, 15.0, 0.0)
+    res, dip = swe.rise_trans_true_hor(start, swe.SUN, swe.CALC_RISE, DELHI, 0.0, 15.0, -100.0)
+    assert res == 0
+    assert abs(dip[0] - flat[0]) < 0.01 * SECOND
+    # From 1000 m the sea horizon is about 0.93 deg down: the Sun is seen
+    # rising several minutes earlier.
+    high = (77.2090, 28.6139, 1000.0)
+    _, flat = swe.rise_trans_true_hor(start, swe.SUN, swe.CALC_RISE, high, 0.0, 15.0, 0.0)
+    res, dip = swe.rise_trans_true_hor(start, swe.SUN, swe.CALC_RISE, high, 0.0, 15.0, -100.0)
+    assert res == 0
+    assert 3 * MINUTE < flat[0] - dip[0] < 10 * MINUTE, (flat[0] - dip[0]) * 1440
+    # Any other value below the horizon limit is a bad argument, not a -2.
+    for bad in (-95.0, -90.5, 91.0):
+        with pytest.raises(ValueError):
+            swe.rise_trans_true_hor(start, swe.SUN, swe.CALC_RISE, DELHI, 0.0, 15.0, bad)
+
+
 def test_rise_trans_true_hor_with_raised_horizon():
     start = jd_ist(2024, 6, 21, 0, 0)
     base = rise(start, swe.SUN, swe.CALC_RISE, atpress=1013.25, attemp=15.0)
@@ -306,6 +417,23 @@ def test_sol_eclipse_when_glob_type_filter_and_backward():
     assert swe.revjul(tret[0])[:3] == (2024, 4, 8)
 
 
+def test_sol_eclipse_when_glob_partial_passes_the_centrality_filter():
+    # ECL_CENTRAL | ECL_PARTIAL: a partial eclipse has no central path, so the
+    # centrality bit must not reject it. From 2024 the first partial is
+    # 2025-03-29 (NASA greatest eclipse about 10:47 UT).
+    retflag, tret = swe.sol_eclipse_when_glob(
+        swe.julday(2024, 1, 1, 0.0), swe.FLG_SWIEPH, swe.ECL_CENTRAL | swe.ECL_PARTIAL
+    )
+    assert retflag == swe.ECL_PARTIAL
+    assert swe.revjul(tret[0])[:3] == (2025, 3, 29)
+    assert abs(tret[0] - swe.julday(2025, 3, 29, 10 + 47 / 60)) < 15 * MINUTE
+    retflag, tret = swe.sol_eclipse_when_glob(
+        swe.julday(2024, 1, 1, 0.0), swe.FLG_SWIEPH, swe.ECL_NONCENTRAL | swe.ECL_PARTIAL
+    )
+    assert retflag == swe.ECL_PARTIAL
+    assert swe.revjul(tret[0])[:3] == (2025, 3, 29)
+
+
 def test_sol_eclipse_when_loc_dallas_totality():
     retflag, tret, attr = swe.sol_eclipse_when_loc(swe.julday(2024, 4, 1, 0.0), DALLAS)
     assert len(tret) == 10 and len(attr) == 20
@@ -323,8 +451,20 @@ def test_sol_eclipse_when_loc_dallas_totality():
     assert abs(c4 - swe.julday(2024, 4, 8, 20 + 2 / 60)) < 5 * MINUTE
     assert 3.0 * MINUTE < c3 - c2 < 4.5 * MINUTE
     assert attr[0] >= 1.0  # magnitude
+    assert 1.0 < attr[1] < 1.1  # Moon/Sun diameter ratio (NASA 1.0566 at greatest)
+    assert attr[8] == attr[1]  # NASA magnitude of a total eclipse is the ratio
     assert attr[2] > 0.999  # obscuration
     assert attr[5] > 50.0  # Sun high over Dallas at maximum
+
+
+def test_sol_eclipse_when_loc_new_york_partial_magnitude():
+    # New York saw 2024-04-08 as a deep partial eclipse (about 0.9).
+    retflag, tret, attr = swe.sol_eclipse_when_loc(swe.julday(2024, 4, 1, 0.0), NEW_YORK)
+    assert retflag & swe.ECL_PARTIAL and retflag & swe.ECL_VISIBLE
+    assert swe.revjul(tret[0])[:3] == (2024, 4, 8)
+    assert 0.8 < attr[0] < 1.0
+    assert 1.0 < attr[1] < 1.1  # the same large Moon as at Dallas
+    assert attr[8] == attr[0]  # NASA magnitude of a partial eclipse
 
 
 # ---------------------------------------------------------------------------
@@ -359,14 +499,27 @@ def test_lun_eclipse_when_backward_and_type_filter():
     assert swe.revjul(tret[0])[:3] == (2025, 3, 14)
 
 
-def test_lun_eclipse_how_2022_november_at_delhi():
+def test_lun_eclipse_how_2022_november_at_tokyo_and_delhi():
     _, tret = swe.lun_eclipse_when(swe.julday(2022, 10, 1, 0.0))
-    retflag, attr = swe.lun_eclipse_how(tret[0], DELHI)
+    # Tokyo, about 20:00 local time: the Moon is up in the east.
+    retflag, attr = swe.lun_eclipse_how(tret[0], TOKYO)
     assert len(attr) == 20
     assert retflag == swe.ECL_TOTAL
     assert abs(attr[0] - 1.36) < 0.02  # umbral magnitude (NASA 1.359)
     assert 2.3 < attr[1] < 2.5  # penumbral magnitude (NASA 2.416)
     assert attr[8] == attr[0]
+    assert attr[5] > 10.0  # true altitude
+    assert attr[5] < attr[6] < attr[5] + 0.2  # refraction lifts it a little
+    # Azimuth from the south point through west: east of the meridian is
+    # between 180 and 360.
+    assert 180.0 < attr[4] < 360.0
+    # Delhi, 16:29 IST: the Moon has not risen, so Swiss returns 0, with the
+    # shadow values still filled in.
+    retflag, attr = swe.lun_eclipse_how(tret[0], DELHI)
+    assert retflag == 0
+    assert attr[6] <= 0.0
+    assert attr[5] < attr[6]
+    assert abs(attr[0] - 1.36) < 0.02
     # A week earlier there is no eclipse: retflag 0.
     retflag, attr = swe.lun_eclipse_how(swe.julday(2022, 11, 1, 0.0), DELHI)
     assert retflag == 0
@@ -382,7 +535,13 @@ def test_lun_eclipse_when_loc_2022_november_rises_eclipsed_at_delhi():
     assert retflag & swe.ECL_PARTEND_VISIBLE
     assert not retflag & swe.ECL_MAX_VISIBLE
     assert swe.revjul(tret[0])[:3] == (2022, 11, 8)
-    assert tret[6] < tret[8] < tret[7]  # moonrise during the eclipse
+    moonrise = tret[8]
+    assert moonrise > 0.0 and tret[9] == 0.0
+    # As in Swiss, the contacts before moonrise are 0.0: penumbral and umbral
+    # begin and totality begin all came before the maximum, which was not seen.
+    assert tret[6] == tret[2] == tret[4] == 0.0
+    assert moonrise < tret[3] < tret[7]  # partial and penumbral end were seen
+    assert tret[0] > 0.0  # the maximum is kept
     assert abs(attr[0] - 1.36) < 0.02
 
 

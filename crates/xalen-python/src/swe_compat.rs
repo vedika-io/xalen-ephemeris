@@ -171,6 +171,11 @@ fn parse_hsys(hsys: &Bound<'_, PyAny>) -> PyResult<char> {
 ///
 /// `sidereal` selects the tropical (`false`) vs sidereal (`true`,
 /// `SEFLG_SIDEREAL`) frame, the latter subtracting the active-mode ayanamsa.
+///
+/// Bad arguments (a non-finite date, a latitude outside ±90°, a longitude
+/// outside the -180°..360° the house engine accepts, an unknown house letter)
+/// raise `ValueError` here; whatever fails inside the house calculation
+/// raises `swe.Error`.
 fn houses_impl(
     jd_ut: f64,
     lat: f64,
@@ -178,6 +183,18 @@ fn houses_impl(
     hchar: char,
     sidereal: bool,
 ) -> PyResult<([f64; 12], [f64; 8])> {
+    finite_jd("jd_ut", jd_ut)?;
+    if !(-90.0..=90.0).contains(&lat) {
+        return Err(PyValueError::new_err(format!(
+            "latitude must be between -90 and 90 degrees, got {lat}"
+        )));
+    }
+    if !(-180.0..=360.0).contains(&lon) {
+        return Err(PyValueError::new_err(format!(
+            "longitude must be between -180 and 360 degrees, got {lon}"
+        )));
+    }
+    compat::se_hsys_to_system(hchar).map_err(PyValueError::new_err)?;
     let h = compat::swe_houses_ex(jd_ut, lat, lon, hchar, sidereal).map_err(calc_err)?;
     let mut cusps = [0.0_f64; 12];
     for (i, c) in h.cusps.iter().enumerate().take(12) {
@@ -417,6 +434,15 @@ const FLG_MOSEPH: i32 = 4;
 /// pyswisseph's value for an unknown Saros series or member number.
 const SAROS_UNKNOWN: f64 = -99_999_999.0;
 
+/// `horhgt` value that asks `rise_trans_true_hor` for the dip of the horizon
+/// seen from the observer's altitude.
+const HORHGT_DIP: f64 = -100.0;
+
+/// Temperature (°C) for the apparent altitudes in eclipse `attr` tuples, which
+/// take no weather arguments; the pressure is the standard atmosphere at the
+/// observer's altitude.
+const ECLIPSE_REFRACTION_TEMPERATURE_C: f64 = 15.0;
+
 /// An eclipse search gives up after this many years without a match.
 const ECLIPSE_SEARCH_YEARS: f64 = 100.0;
 /// Each search step covers this many days; consecutive steps overlap a little
@@ -526,17 +552,26 @@ fn rise_trans_impl<'py>(
              (got {atpress}, {attemp})"
         )));
     }
-    if !horhgt.is_finite() {
+    // Swiss: a horizon height of -100 means "the dip of the sea horizon seen
+    // from the observer's altitude". Any other value must be a real altitude.
+    let horizon_height_deg = if horhgt == HORHGT_DIP {
+        rise_set::horizon_dip_deg(alt)
+    } else if (-90.0..=90.0).contains(&horhgt) {
+        horhgt
+    } else {
         return Err(PyValueError::new_err(format!(
-            "{fname}: horhgt must be a finite number of degrees, got {horhgt}"
+            "{fname}: horhgt must be between -90 and 90 degrees, or -100 for the \
+             dip of the horizon, got {horhgt}"
         )));
-    }
+    };
     let almanac = Almanac::default_vedic();
     let jd = JdUT1(tjdut);
     let found = if rsmi & (CALC_MTRANSIT | CALC_ITRANSIT) != 0 {
         let upper = rsmi & CALC_MTRANSIT != 0;
         rise_set::next_transit(&almanac, body, jd, lat, lon, alt, upper)
     } else {
+        // Twilight bits apply to the Sun only; the engine ignores them for
+        // other bodies.
         let twilight = if rsmi & BIT_CIVIL_TWILIGHT != 0 {
             Some(Twilight::Civil)
         } else if rsmi & BIT_NAUTIC_TWILIGHT != 0 {
@@ -563,7 +598,7 @@ fn rise_trans_impl<'py>(
                 atpress
             },
             temperature_c: attemp,
-            horizon_height_deg: horhgt,
+            horizon_height_deg,
             fixed_disc_size: rsmi & BIT_FIXED_DISC_SIZE != 0,
             twilight,
             geocentric_no_latitude: rsmi & BIT_GEOCTR_NO_ECL_LAT != 0,
@@ -594,7 +629,8 @@ fn rise_trans_impl<'py>(
 /// ``BIT_DISC_CENTER``, ``BIT_DISC_BOTTOM``, ``BIT_NO_REFRACTION``,
 /// ``BIT_FIXED_DISC_SIZE``, ``BIT_HINDU_RISING`` or a twilight bit
 /// (``BIT_CIVIL_TWILIGHT`` -6 deg, ``BIT_NAUTIC_TWILIGHT`` -12 deg,
-/// ``BIT_ASTRO_TWILIGHT`` -18 deg, Sun centre). The default is the upper limb
+/// ``BIT_ASTRO_TWILIGHT`` -18 deg, Sun centre; like Swiss, the twilight bits
+/// apply to the Sun only and are ignored for other bodies). The default is the upper limb
 /// with refraction. ``atpress`` (hPa; 0 = standard atmosphere at the altitude)
 /// and ``attemp`` (deg C) scale the refraction. ``flags`` selects the
 /// ephemeris in pyswisseph and is accepted and ignored here.
@@ -636,7 +672,10 @@ fn rise_trans<'py>(
 /// Like ``rise_trans`` with the local horizon at an apparent altitude of
 /// ``horhgt`` degrees (a mountain ridge, a raised skyline). The refraction is
 /// taken at that altitude. ``horhgt=0`` gives the same result as
-/// ``rise_trans``.
+/// ``rise_trans``. ``horhgt=-100`` asks, as in Swiss, for the dip of the sea
+/// horizon seen from the altitude in ``geopos`` (1.76 arcmin times the square
+/// root of the height in metres, standard terrestrial refraction included).
+/// Any other value outside -90..90 raises ``ValueError``.
 #[pyfunction]
 #[pyo3(signature = (tjdut, body, rsmi, geopos, atpress = 0.0, attemp = 0.0, horhgt = 0.0, flags = compat::SEFLG_SWIEPH))]
 fn rise_trans_true_hor<'py>(
@@ -735,9 +774,10 @@ fn solar_matches(retflag: i32, ecltype: i32) -> bool {
     let types = ecltype & (ECL_TOTAL | ECL_ANNULAR | ECL_PARTIAL | ECL_ANNULAR_TOTAL);
     let centrality = ecltype & (ECL_CENTRAL | ECL_NONCENTRAL);
     let type_ok = types == 0 || retflag & types != 0;
-    // A partial eclipse has no central path, so it counts as non-central.
-    let partial_noncentral = retflag & ECL_PARTIAL != 0 && centrality & ECL_NONCENTRAL != 0;
-    let central_ok = centrality == 0 || retflag & centrality != 0 || partial_noncentral;
+    // A partial eclipse has no central path, so the centrality bits do not
+    // filter it: `ECL_CENTRAL | ECL_PARTIAL` asks for central eclipses or
+    // partial ones.
+    let central_ok = retflag & ECL_PARTIAL != 0 || centrality == 0 || retflag & centrality != 0;
     type_ok && central_ok
 }
 
@@ -769,7 +809,9 @@ fn lunar_tret(e: &LunarEclipse) -> [f64; 10] {
     ]
 }
 
-/// `(retflag, attr)` of `lun_eclipse_how` at `jd` for an observer.
+/// `(retflag, attr)` of `lun_eclipse_how` at `jd` for an observer. As in
+/// Swiss, `retflag` is 0 when the Moon's apparent altitude is at or below 0
+/// (the eclipse cannot be seen from there); `attr` is filled either way.
 fn lunar_how(
     almanac: &Almanac,
     fname: &str,
@@ -780,18 +822,31 @@ fn lunar_how(
 ) -> PyResult<(i32, [f64; 20])> {
     let err = |e: xalen_ephem::EphemerisError| calc_err(format!("{fname}: {e}"));
     let s = eclipse::lunar_shadow_state(almanac, jd).map_err(err)?;
-    let moon_alt = almanac
-        .topocentric_altitude_deg(Body::Moon, JdUT1(jd), lat, lon, alt)
+    let (azimuth_north, moon_alt) = almanac
+        .topocentric_azimuth_altitude_deg(Body::Moon, JdUT1(jd), lat, lon, alt)
         .map_err(err)?;
+    let apparent = rise_set::apparent_altitude_deg(
+        moon_alt,
+        rise_set::standard_pressure_hpa(alt),
+        ECLIPSE_REFRACTION_TEMPERATURE_C,
+    );
     let mut attr = [0.0_f64; 20];
     attr[0] = s.umbral_magnitude;
     attr[1] = s.penumbral_magnitude;
+    // Swiss measures azimuth from the south point through west.
+    attr[4] = (azimuth_north - 180.0).rem_euclid(360.0);
     attr[5] = moon_alt;
+    attr[6] = apparent;
     attr[7] = s.separation_deg;
     attr[8] = s.umbral_magnitude;
     attr[9] = SAROS_UNKNOWN;
     attr[10] = SAROS_UNKNOWN;
-    Ok((s.eclipse_type().map_or(0, lunar_flag), attr))
+    let retflag = if apparent <= 0.0 {
+        0
+    } else {
+        s.eclipse_type().map_or(0, lunar_flag)
+    };
+    Ok((retflag, attr))
 }
 
 /// The next sunrise/moonrise (`rising`) or set of `body` after `from`, if it
@@ -871,9 +926,11 @@ fn sol_eclipse_when_glob<'py>(
 /// the horizon. ``tret`` (10): maximum, first to fourth contact (0.0 when
 /// absent), sunrise and sunset between first and fourth contact (0.0 when
 /// none), then 0.0. ``attr`` (20): ``[0]`` magnitude (fraction of the solar
-/// diameter covered), ``[2]`` obscuration, ``[5]`` true altitude of the Sun at
-/// maximum, ``[8]`` magnitude, ``[9]``/``[10]`` Saros series/member (-99999999,
-/// unknown); the other slots are not computed and are 0.0.
+/// diameter covered), ``[1]`` ratio of the Moon's to the Sun's apparent
+/// diameter, ``[2]`` obscuration, ``[5]`` true altitude of the Sun at maximum,
+/// ``[8]`` NASA's magnitude (``attr[0]`` for a partial eclipse, ``attr[1]``
+/// for a total or annular one), ``[9]``/``[10]`` Saros series/member
+/// (-99999999, unknown); the other slots are not computed and are 0.0.
 #[pyfunction]
 #[pyo3(signature = (tjdut, geopos, flags = compat::SEFLG_SWIEPH, backwards = None))]
 fn sol_eclipse_when_loc<'py>(
@@ -964,9 +1021,16 @@ fn sol_eclipse_when_loc<'py>(
             ];
             let mut attr = [0.0_f64; 20];
             attr[0] = lc.magnitude;
+            attr[1] = lc.diameter_ratio;
             attr[2] = lc.obscuration;
             attr[5] = lc.altitude_at_max_deg;
-            attr[8] = lc.magnitude;
+            // NASA's magnitude: the covered fraction of the diameter for a
+            // partial eclipse, the diameter ratio for a total or annular one.
+            attr[8] = if kind == ECL_PARTIAL {
+                lc.magnitude
+            } else {
+                lc.diameter_ratio
+            };
             attr[9] = SAROS_UNKNOWN;
             attr[10] = SAROS_UNKNOWN;
             Ok(Some((retflag, tret, attr)))
@@ -1020,9 +1084,10 @@ fn lun_eclipse_when<'py>(
 /// ``ECL_PENUMBBEG_VISIBLE``, ``ECL_PARTBEG_VISIBLE``, ``ECL_TOTBEG_VISIBLE``,
 /// ``ECL_TOTEND_VISIBLE``, ``ECL_PARTEND_VISIBLE``, ``ECL_PENUMBEND_VISIBLE``
 /// bits for the contacts with the Moon above the horizon. ``tret`` is laid out
-/// as in ``lun_eclipse_when`` (all contacts are given, seen or not), with
-/// ``[8]`` moonrise and ``[9]`` moonset when they fall inside the eclipse
-/// (0.0 otherwise). ``attr`` is ``lun_eclipse_how`` at greatest eclipse.
+/// as in ``lun_eclipse_when``, with ``[8]`` moonrise and ``[9]`` moonset when
+/// they fall inside the eclipse (0.0 otherwise); as in Swiss, contact times
+/// before that moonrise or after that moonset are 0.0. ``attr`` is the
+/// ``attr`` of ``lun_eclipse_how`` at greatest eclipse.
 #[pyfunction]
 #[pyo3(signature = (tjdut, geopos, flags = compat::SEFLG_SWIEPH, backwards = None))]
 fn lun_eclipse_when_loc<'py>(
@@ -1080,6 +1145,16 @@ fn lun_eclipse_when_loc<'py>(
             let mut tret = lunar_tret(e);
             tret[8] = moonrise.unwrap_or(0.0);
             tret[9] = moonset.unwrap_or(0.0);
+            // As in Swiss, contacts before moonrise or after moonset cannot be
+            // seen and are 0.0. The maximum stays; ECL_MAX_VISIBLE says
+            // whether it was seen.
+            for slot in &mut tret[2..8] {
+                let before_rise = moonrise.is_some_and(|rise| *slot < rise);
+                let after_set = moonset.is_some_and(|set| *slot > set);
+                if before_rise || after_set {
+                    *slot = 0.0;
+                }
+            }
             let (_, attr) = lunar_how(&almanac, FNAME, e.jd_maximum, lat, lon, alt)?;
             Ok(Some((retflag, tret, attr)))
         },
@@ -1092,12 +1167,16 @@ fn lun_eclipse_when_loc<'py>(
 ///
 /// Lunar eclipse circumstances at the instant ``tjdut`` (UT). ``retflag`` is
 /// ``ECL_TOTAL``, ``ECL_PARTIAL`` or ``ECL_PENUMBRAL``, or 0 when the Moon is
-/// outside Earth's penumbra. ``attr`` (20): ``[0]`` umbral magnitude, ``[1]``
-/// penumbral magnitude, ``[5]`` true (topocentric) altitude of the Moon at
-/// ``geopos``, ``[7]`` distance of the Moon from the shadow axis in degrees,
-/// ``[8]`` umbral magnitude again, ``[9]``/``[10]`` Saros series/member
-/// (-99999999, unknown); the azimuth ``[4]``, apparent altitude ``[6]`` and the
-/// remaining slots are not computed and are 0.0.
+/// outside Earth's penumbra or, as in Swiss, when its apparent altitude at
+/// ``geopos`` is at or below 0 (``attr`` is filled either way). ``attr`` (20):
+/// ``[0]`` umbral magnitude, ``[1]`` penumbral magnitude, ``[4]`` azimuth of
+/// the Moon (degrees from the south point through west, as in Swiss),
+/// ``[5]`` true (topocentric, airless) altitude, ``[6]`` apparent altitude
+/// (Saemundsson refraction for the standard atmosphere at the altitude in
+/// ``geopos`` and 15 deg C), ``[7]`` distance of the Moon from the shadow axis
+/// in degrees, ``[8]`` umbral magnitude again, ``[9]``/``[10]`` Saros
+/// series/member (-99999999, unknown); the remaining slots are not computed
+/// and are 0.0.
 #[pyfunction]
 #[pyo3(signature = (tjdut, geopos, flags = compat::SEFLG_SWIEPH))]
 fn lun_eclipse_how<'py>(

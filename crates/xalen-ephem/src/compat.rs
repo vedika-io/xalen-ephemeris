@@ -250,7 +250,8 @@ pub fn se_planet_to_body(planet: i32) -> Result<Body, String> {
 }
 
 /// Convert an SE house system character to our [`HouseSystem`](xalen_houses::HouseSystem).
-fn se_hsys_to_system(hsys: char) -> Result<xalen_houses::HouseSystem, String> {
+/// Errors for a letter that is not a supported Swiss `hsys` code.
+pub fn se_hsys_to_system(hsys: char) -> Result<xalen_houses::HouseSystem, String> {
     use xalen_houses::HouseSystem;
     match hsys {
         'P' => Ok(HouseSystem::Placidus),

@@ -28,16 +28,21 @@ exception that `except swe.Error` can catch
   (`ECL_NUT` included, usable as `calc_ut(jd, ECL_NUT)`), and `FLG_MOSEPH` /
   `FLG_JPLEPH`. `xalen.swe.Error` (a `RuntimeError`) is raised for every
   calculation failure; `TypeError`/`ValueError` only for bad arguments. The
-  slots the engines do not compute (global solar contact times, azimuths,
-  apparent altitudes, Saros numbers) are listed in the binding README. In
-  `xalen-ephem`: `rise_set::next_horizon_crossing` with `HorizonCrossing`
-  (disc point, refraction from pressure and temperature, horizon height,
-  fixed disc size, twilight, geocentric no-latitude rising),
-  `rise_set::next_transit` (upper and lower), `rise_set::is_above_horizon`,
-  `rise_set::standard_pressure_hpa`,
-  `Almanac::geocentric_ecliptic_altitude_deg`, `eclipse::lunar_shadow_state`,
+  slots the engines do not compute (global solar contact times, the Sun's
+  azimuth and apparent altitude, Saros numbers) are listed in the binding
+  README. In `xalen-ephem`: `rise_set::next_horizon_crossing` with
+  `HorizonCrossing` (disc point, refraction from pressure and temperature,
+  horizon height, fixed disc size, solar twilight, geocentric no-latitude
+  rising), `rise_set::next_transit` (upper and lower),
+  `rise_set::is_above_horizon`, `rise_set::standard_pressure_hpa`,
+  `rise_set::horizon_dip_deg`, `rise_set::refraction_from_true_deg`,
+  `rise_set::apparent_altitude_deg`,
+  `Almanac::geocentric_ecliptic_altitude_deg`,
+  `Almanac::topocentric_azimuth_altitude_deg`,
+  `LocalCircumstances::diameter_ratio`, `eclipse::lunar_shadow_state`,
   `SolarEclipse::is_central`, `compat::SE_ECL_NUT` and a public
-  `compat::se_planet_to_body` and `compat::SEFLG_UNSUPPORTED_MASK`.
+  `compat::se_planet_to_body`, `compat::se_hsys_to_system` and
+  `compat::SEFLG_UNSUPPORTED_MASK`.
 - **Ayana Bala and Yuddha Bala in `Shadbala::compute_full`**, which now returns
   all nine Kala Bala parts (`KalaBala::ayana_bala`, `KalaBala::yuddha_bala`,
   both included in `KalaBala::total` and so in the Shadbala total). Ayana Bala
@@ -95,10 +100,15 @@ exception that `except swe.Error` can catch
 
 ### Changed (breaking)
 - Python `xalen.swe`: calculation failures that raised `ValueError` (an unknown
-  body number or star name, an ephemeris error) now raise `xalen.swe.Error`, a
-  `RuntimeError`. Code that caught `ValueError` for them should catch
-  `swe.Error`; unsupported `calc_ut` flags still raise `ValueError`, and a
-  `hsys` of the wrong type raises `TypeError`.
+  body number or star name, a failed `houses`/`houses_ex` calculation, a
+  failed `get_ayanamsa_ut`/`get_ayanamsa_ex_ut` calculation, an ephemeris
+  error) now raise `xalen.swe.Error`, a `RuntimeError`. Code that caught
+  `ValueError` for them should catch `swe.Error`; unsupported `calc_ut` flags
+  and bad house arguments (latitude outside ±90°, longitude outside
+  -180°..360°, an unknown house letter) still raise `ValueError`, and a `hsys`
+  of the wrong type raises `TypeError`.
+- `xalen_ephem::local_eclipse::LocalCircumstances` has a new field,
+  `diameter_ratio`, so code that builds it by hand needs it.
 - `xalen_vedic::shadbala::PlanetPosition` has two new fields, `declination`
   (degrees, north positive) and `house` (1 to 12), and `KalaBala` has two new
   fields, so code that builds either struct by hand needs them. To migrate, set

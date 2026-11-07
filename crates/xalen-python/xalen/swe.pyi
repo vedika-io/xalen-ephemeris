@@ -106,7 +106,8 @@ def rise_trans(
     flags: int = ...,
 ) -> Tuple[int, _Tret]:
     """(res, tret): res 0 = found (tret[0] = JD UT), -2 = circumpolar.
-    geopos = (lon, lat, alt_m). rsmi = CALC_* | BIT_*. Star names raise Error."""
+    geopos = (lon, lat, alt_m). rsmi = CALC_* | BIT_*; twilight bits apply to
+    the Sun only. Star names raise Error."""
     ...
 
 def rise_trans_true_hor(
@@ -119,7 +120,8 @@ def rise_trans_true_hor(
     horhgt: float = ...,
     flags: int = ...,
 ) -> Tuple[int, _Tret]:
-    """rise_trans with the local horizon at horhgt degrees."""
+    """rise_trans with the local horizon at horhgt degrees (-90..90);
+    horhgt=-100 = dip of the sea horizon from the altitude in geopos."""
     ...
 
 # --- eclipses --------------------------------------------------------------
@@ -134,7 +136,8 @@ def sol_eclipse_when_loc(
     tjdut: float, geopos: Sequence[float], flags: int = ..., backwards: Any = ...
 ) -> Tuple[int, _Tret, _Attr]:
     """(retflag, tret, attr): tret = max, C1..C4, sunrise, sunset;
-    attr[0] magnitude, [2] obscuration, [5] Sun altitude, [8] magnitude."""
+    attr[0] magnitude, [1] Moon/Sun diameter ratio, [2] obscuration,
+    [5] Sun altitude, [8] NASA magnitude ([0] if partial, else [1])."""
     ...
 
 def lun_eclipse_when(
@@ -146,14 +149,17 @@ def lun_eclipse_when(
 def lun_eclipse_when_loc(
     tjdut: float, geopos: Sequence[float], flags: int = ..., backwards: Any = ...
 ) -> Tuple[int, _Tret, _Attr]:
-    """(retflag, tret, attr); tret[8]/[9] = moonrise/moonset during the eclipse."""
+    """(retflag, tret, attr); tret[8]/[9] = moonrise/moonset during the eclipse;
+    contacts before moonrise or after moonset are 0.0."""
     ...
 
 def lun_eclipse_how(
     tjdut: float, geopos: Sequence[float], flags: int = ...
 ) -> Tuple[int, _Attr]:
-    """(retflag, attr): attr[0] umbral mag, [1] penumbral mag, [5] Moon
-    altitude, [7] distance from the shadow axis, [8] umbral mag."""
+    """(retflag, attr): attr[0] umbral mag, [1] penumbral mag, [4] Moon azimuth
+    (from south through west), [5] true and [6] apparent Moon altitude,
+    [7] distance from the shadow axis, [8] umbral mag. retflag 0 when the
+    Moon is not in the penumbra or its apparent altitude is <= 0."""
     ...
 
 # --- planet constants (both spellings) -------------------------------------

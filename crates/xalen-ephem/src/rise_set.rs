@@ -85,26 +85,6 @@ pub struct TwilightTimes {
     pub dusk: Option<JdUT1>,
 }
 
-/// Standard **topocentric** rise/set altitude of the body's centre, in degrees, for
-/// use with [`Almanac::topocentric_altitude_deg`] (which already applies parallax).
-pub(crate) fn rise_set_altitude_deg(body: Body, dist_au: f64) -> f64 {
-    match body {
-        // −34′ refraction − 16′ solar semidiameter (upper limb). Solar parallax
-        // (~8.8″) is below the timing floor, so the topocentric value equals the
-        // classic geocentric −0.8333°.
-        Body::Sun => -0.8333,
-        // −34′ refraction − geometric semidiameter SD = 0.2725·π. The parallax lift
-        // (+π) of the geocentric Meeus form is intentionally absent here: our
-        // altitude is topocentric, so it is already folded in (see module docs).
-        Body::Moon => {
-            let pi_deg = (EARTH_RADIUS_AU / dist_au).asin().to_degrees();
-            -0.5667 - 0.2725 * pi_deg
-        }
-        // Point sources: 34′ refraction only.
-        _ => -0.5667,
-    }
-}
-
 /// Refine a horizon crossing in `[lo, hi]` (where the residual `altitude − h0`
 /// changes sign) to ~sub-second precision via bisection. `resid(t)` returns
 /// `altitude(t) − h0(t)`; passing `h0` as a function of time lets the Moon's
@@ -207,6 +187,7 @@ where
 /// Moon, `h0` tracks the (distance-dependent) semidiameter at each instant, so a
 /// crossing of this residual is exact even when the event is ~1 day forward and the
 /// lunar distance has changed. For the Sun and point sources `h0` is constant.
+/// This is [`crossing_residual_fn`] with the default [`HorizonCrossing`].
 fn residual_fn<'a>(
     almanac: &'a Almanac,
     body: Body,
@@ -214,15 +195,32 @@ fn residual_fn<'a>(
     lon: f64,
     elev: f64,
 ) -> impl Fn(f64) -> Result<f64, EphemerisError> + 'a {
+    crossing_residual_fn(almanac, body, lat, lon, elev, HorizonCrossing::default())
+}
+
+/// The residual `altitude(t) − target(t)` for a body under a
+/// [`HorizonCrossing`]: positive when the body is above the crossing altitude.
+fn crossing_residual_fn<'a>(
+    almanac: &'a Almanac,
+    body: Body,
+    lat: f64,
+    lon: f64,
+    elev: f64,
+    crossing: HorizonCrossing,
+) -> impl Fn(f64) -> Result<f64, EphemerisError> + 'a {
     move |t: f64| {
-        let alt = almanac.topocentric_altitude_deg(body, JdUT1(t), lat, lon, elev)?;
-        let h0 = if body == Body::Moon {
-            let dist = almanac.geocentric_ecliptic(body, JdUT1(t))?.distance;
-            rise_set_altitude_deg(body, dist)
+        let jd = JdUT1(t);
+        let alt = if crossing.geocentric_no_latitude {
+            almanac.geocentric_ecliptic_altitude_deg(body, jd, lat, lon)?
         } else {
-            rise_set_altitude_deg(body, 1.0) // distance unused for Sun/point sources
+            almanac.topocentric_altitude_deg(body, jd, lat, lon, elev)?
         };
-        Ok(alt - h0)
+        let dist = if crossing.needs_distance(body) {
+            almanac.geocentric_ecliptic(body, jd)?.distance
+        } else {
+            1.0 // unused for the Sun, point sources and a fixed lunar disc
+        };
+        Ok(alt - crossing.target_altitude_deg(body, dist))
     }
 }
 
@@ -325,8 +323,6 @@ where
     Ok(None)
 }
 
-/// Search forward from `jd_start` for the next upper culmination (altitude maximum).
-/// Walks the coarse altitude curve until it sees a local peak (a sample lower than
 /// Swiss-style forward search: independently find the **next** rise, transit, and
 /// set after `jd_start` (UT1). Each is refined to sub-second precision. This mirrors
 /// `swe_rise_trans` (default flags = upper limb + standard refraction; MTRANSIT =
@@ -396,10 +392,10 @@ pub fn twilight(
     Ok(TwilightTimes { dawn, dusk })
 }
 
-/// Standard horizontal refraction (degrees) behind [`rise_set_altitude_deg`]:
+/// Standard horizontal refraction (degrees) of the default rise/set altitude:
 /// 34′, valid for 1013.25 hPa and 15 °C.
 const STANDARD_REFRACTION_DEG: f64 = 0.5667;
-/// Solar semidiameter (degrees) behind [`rise_set_altitude_deg`]
+/// Solar semidiameter (degrees) of the default rise/set altitude
 /// (`−0.8333° = −0.5667° − 0.2666°`).
 const SUN_SEMIDIAMETER_DEG: f64 = 0.2666;
 /// Ratio of the Moon's radius to Earth's equatorial radius (Moon semidiameter
@@ -429,7 +425,12 @@ pub enum DiscPoint {
 /// The [`Default`] is the convention [`next_events`] uses: upper limb, 34′
 /// refraction (1013.25 hPa, 15 °C), a true horizon at 0°, the Moon's disc size
 /// from its actual distance, and no twilight depression. With the default the
-/// two searches return the same instants.
+/// two searches return the same instants (both use it). Its target altitude
+/// for the body's topocentric centre is −0.8333° for the Sun (−34′ refraction
+/// − 16′ semidiameter; solar parallax is below the timing floor),
+/// `−0.5667° − 0.2725·π` for the Moon (no `+π` parallax lift, because the
+/// altitude is already topocentric; see the module docs) and −0.5667° for
+/// point sources.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct HorizonCrossing {
     /// Which point of the disc is put on the horizon.
@@ -445,9 +446,11 @@ pub struct HorizonCrossing {
     pub horizon_height_deg: f64,
     /// Use the Moon's disc at its mean distance instead of its actual one.
     pub fixed_disc_size: bool,
-    /// When set, the crossing is the Sun's centre at this twilight depression
-    /// (no refraction or disc term) and the disc, refraction and horizon fields
-    /// are ignored.
+    /// When set and the body is the Sun, the crossing is the Sun's centre at
+    /// this twilight depression (no refraction or disc term) and the disc,
+    /// refraction and horizon fields are ignored. Twilight is defined for the
+    /// Sun only (as in `swe_rise_trans`), so for every other body this field is
+    /// ignored.
     pub twilight: Option<Twilight>,
     /// Use the body's geocentric position with its ecliptic latitude set to
     /// zero instead of its topocentric position (the "Hindu rising"
@@ -517,7 +520,7 @@ impl HorizonCrossing {
 
     /// Topocentric altitude (degrees) of the body's **centre** at the crossing.
     pub fn target_altitude_deg(&self, body: Body, dist_au: f64) -> f64 {
-        if let Some(t) = self.twilight {
+        if let Some(t) = self.solar_twilight(body) {
             return t.altitude_deg();
         }
         let limb = match self.disc {
@@ -528,13 +531,45 @@ impl HorizonCrossing {
         self.horizon_height_deg - self.refraction_deg() + limb
     }
 
+    /// The twilight depression that applies to `body`: [`Self::twilight`] for
+    /// the Sun, `None` for every other body.
+    fn solar_twilight(&self, body: Body) -> Option<Twilight> {
+        if body == Body::Sun {
+            self.twilight
+        } else {
+            None
+        }
+    }
+
     /// Whether the target depends on the Moon's distance at each instant.
     fn needs_distance(&self, body: Body) -> bool {
-        body == Body::Moon
-            && self.twilight.is_none()
-            && self.disc != DiscPoint::Center
-            && !self.fixed_disc_size
+        body == Body::Moon && self.disc != DiscPoint::Center && !self.fixed_disc_size
     }
+}
+
+/// Dip of the sea horizon (degrees, negative) seen from `elevation_m` metres:
+/// `−0.0293°·√h`, i.e. 1.76′·√h, which includes standard terrestrial
+/// refraction. Zero at or below sea level. This is the horizon
+/// `swe_rise_trans_true_hor` uses when it is given a horizon height of −100.
+pub fn horizon_dip_deg(elevation_m: f64) -> f64 {
+    -0.0293 * elevation_m.max(0.0).sqrt()
+}
+
+/// Atmospheric refraction (degrees) for a body at **true** (airless)
+/// altitude `true_alt_deg`, from Saemundsson's formula scaled by pressure and
+/// absolute temperature. Below −1° the value is held at its −1° level, so the
+/// apparent altitude stays continuous and increasing.
+pub fn refraction_from_true_deg(true_alt_deg: f64, pressure_hpa: f64, temperature_c: f64) -> f64 {
+    let h = true_alt_deg.max(-1.0);
+    let arcmin = 1.02 / (h + 10.3 / (h + 5.11)).to_radians().tan();
+    let air = (pressure_hpa / 1010.0) * (283.0 / (273.0 + temperature_c));
+    (arcmin * air / 60.0).max(0.0)
+}
+
+/// Apparent (refracted) altitude in degrees of a body at true altitude
+/// `true_alt_deg`; see [`refraction_from_true_deg`].
+pub fn apparent_altitude_deg(true_alt_deg: f64, pressure_hpa: f64, temperature_c: f64) -> f64 {
+    true_alt_deg + refraction_from_true_deg(true_alt_deg, pressure_hpa, temperature_c)
 }
 
 /// Search forward from `jd_start` (UT1) for the **next** rise (`rising = true`)
@@ -552,20 +587,7 @@ pub fn next_horizon_crossing(
     rising: bool,
     crossing: &HorizonCrossing,
 ) -> Result<Option<JdUT1>, EphemerisError> {
-    let resid = |t: f64| -> Result<f64, EphemerisError> {
-        let jd = JdUT1(t);
-        let alt = if crossing.geocentric_no_latitude {
-            almanac.geocentric_ecliptic_altitude_deg(body, jd, lat_deg, lon_deg)?
-        } else {
-            almanac.topocentric_altitude_deg(body, jd, lat_deg, lon_deg, elevation_m)?
-        };
-        let dist = if crossing.needs_distance(body) {
-            almanac.geocentric_ecliptic(body, jd)?.distance
-        } else {
-            1.0 // unused
-        };
-        Ok(alt - crossing.target_altitude_deg(body, dist))
-    };
+    let resid = crossing_residual_fn(almanac, body, lat_deg, lon_deg, elevation_m, *crossing);
     Ok(next_crossing(&resid, jd_start.as_f64(), rising, 5.0, 1.2)?.map(JdUT1))
 }
 
@@ -907,12 +929,70 @@ mod tests {
 
     #[test]
     fn default_horizon_crossing_is_the_standard_altitude() {
+        // The classic rise/set altitudes: Sun −0.8333°, point sources −0.5667°,
+        // Moon −0.5667° − 0.2725·π (topocentric, so no +π lift).
         let c = HorizonCrossing::default();
-        for (body, dist) in [(Body::Sun, 1.0), (Body::Mars, 1.5), (Body::Moon, 0.00257)] {
+        let moon_dist = 0.00257;
+        let moon_want = -0.5667 - 0.2725 * (EARTH_RADIUS_AU / moon_dist).asin().to_degrees();
+        for (body, dist, want) in [
+            (Body::Sun, 1.0, -0.8333),
+            (Body::Mars, 1.5, -0.5667),
+            (Body::Moon, moon_dist, moon_want),
+        ] {
             let got = c.target_altitude_deg(body, dist);
-            let want = rise_set_altitude_deg(body, dist);
             assert!((got - want).abs() < 1e-12, "{body:?}: {got} vs {want}");
         }
+    }
+
+    #[test]
+    fn twilight_applies_to_the_sun_only() {
+        let civil = HorizonCrossing {
+            twilight: Some(Twilight::Civil),
+            ..HorizonCrossing::default()
+        };
+        let plain = HorizonCrossing::default();
+        assert_eq!(civil.target_altitude_deg(Body::Sun, 1.0), -6.0);
+        for body in [Body::Moon, Body::Mars] {
+            assert_eq!(
+                civil.target_altitude_deg(body, 0.00257),
+                plain.target_altitude_deg(body, 0.00257),
+                "{body:?}"
+            );
+        }
+        assert!(civil.needs_distance(Body::Moon));
+    }
+
+    #[test]
+    fn horizon_dip_grows_with_the_square_root_of_height() {
+        assert_eq!(horizon_dip_deg(0.0), 0.0);
+        assert_eq!(horizon_dip_deg(-10.0), 0.0);
+        // 1.76′·√100 = 17.6′ = 0.293°.
+        assert!((horizon_dip_deg(100.0) + 0.293).abs() < 1e-9);
+        assert!((horizon_dip_deg(400.0) - 2.0 * horizon_dip_deg(100.0)).abs() < 1e-12);
+    }
+
+    #[test]
+    fn apparent_altitude_adds_saemundsson_refraction() {
+        // About 29′ at the true horizon for 1013.25 hPa and 15 °C, a few
+        // arcseconds at 60°, none at the zenith, and continuous below −1°.
+        let r0 = refraction_from_true_deg(0.0, 1013.25, 15.0) * 60.0;
+        assert!(
+            (27.5..30.0).contains(&r0),
+            "refraction at 0 deg = {r0} arcmin"
+        );
+        let r60 = refraction_from_true_deg(60.0, 1013.25, 15.0) * 3600.0;
+        assert!(
+            (25.0..40.0).contains(&r60),
+            "refraction at 60 deg = {r60} arcsec"
+        );
+        assert!(refraction_from_true_deg(90.0, 1013.25, 15.0) * 3600.0 < 1.0);
+        let below = apparent_altitude_deg(-1.0 - 1e-9, 1013.25, 15.0);
+        let at = apparent_altitude_deg(-1.0, 1013.25, 15.0);
+        assert!((at - below).abs() < 1e-6);
+        assert!(apparent_altitude_deg(-0.5, 1013.25, 15.0) > at);
+        // Thinner, warmer air refracts less.
+        let thin = refraction_from_true_deg(0.0, 900.0, 30.0);
+        assert!(thin < refraction_from_true_deg(0.0, 1013.25, 15.0));
     }
 
     #[test]
