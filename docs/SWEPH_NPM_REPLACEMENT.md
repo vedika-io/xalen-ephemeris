@@ -14,10 +14,11 @@ most-used `sweph` functions and shows the exact XALEN replacement.
 ## Installation
 
 > **Status:** the `@xalen/ephemeris` npm package is published with each release
-> from 0.8, with prebuilt binaries for Linux x64/arm64 and macOS x64/arm64.
+> from 0.8, with prebuilt binaries for Linux x64/arm64, macOS x64/arm64 and
+> Windows x64.
 > Until that release, build the napi-rs addon from this repository
 > (`cd crates/xalen-node && napi build --release`) and `require()` the local
-> build. Windows has no prebuilt binary yet; build from source there.
+> build.
 
 ```bash
 # Remove sweph
@@ -28,8 +29,7 @@ npm install @xalen/ephemeris
 ```
 
 No `node-gyp`, no Python, no C compiler needed once published: the npm package
-ships prebuilt binaries for Linux x64/arm64 and macOS x64/arm64. On Windows,
-build from source for now.
+ships prebuilt binaries for Linux x64/arm64, macOS x64/arm64 and Windows x64.
 
 ---
 

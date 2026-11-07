@@ -16,14 +16,14 @@ const REPO_ROOT = join(NODE_DIR, '..', '..');
 
 const pkg = JSON.parse(readFileSync(join(NODE_DIR, 'package.json'), 'utf8'));
 
-// The four platform triples published from 0.8 (built by
-// scripts/build-release-artifacts.sh node). Windows is left out of this release:
-// release.yml still lists the MSVC target, but no Windows addon is published yet.
+// The five platform triples published from 0.8, all built on one Linux host by
+// scripts/build-release-artifacts.sh node (Windows x64 through cargo-xwin).
 const EXPECTED = [
   'aarch64-apple-darwin',
   'x86_64-apple-darwin',
   'aarch64-unknown-linux-gnu',
   'x86_64-unknown-linux-gnu',
+  'x86_64-pc-windows-msvc',
 ];
 
 test('package.json declares the full napi target matrix', () => {
@@ -32,6 +32,15 @@ test('package.json declares the full napi target matrix', () => {
   for (const t of EXPECTED) {
     assert.ok(targets.includes(t), `napi.targets missing ${t}`);
   }
+  assert.equal(targets.length, EXPECTED.length, 'napi.targets has targets beyond the published five');
+});
+
+test('committed loader names the Windows x64 package', () => {
+  const loader = readFileSync(join(NODE_DIR, 'index.js'), 'utf8');
+  assert.ok(
+    loader.includes('@xalen/ephemeris-win32-x64-msvc'),
+    'index.js does not load @xalen/ephemeris-win32-x64-msvc',
+  );
 });
 
 test('release workflow builds every package.json napi target', () => {

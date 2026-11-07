@@ -10,8 +10,8 @@
 #   xalen-<version>.tar.gz        Python source distribution (any other platform)
 #   xalen-wasm-<version>.tgz      npm tarball of @xalen/wasm
 #   xalen-ephemeris-<version>.tgz npm tarball of @xalen/ephemeris (Node, loader only)
-#   xalen-ephemeris-{linux-x64-gnu,linux-arm64-gnu,darwin-arm64,darwin-x64}-<version>.tgz
-#                                 npm tarballs of the four prebuilt Node addons
+#   xalen-ephemeris-{linux-x64-gnu,linux-arm64-gnu,darwin-arm64,darwin-x64,win32-x64-msvc}-<version>.tgz
+#                                 npm tarballs of the five prebuilt Node addons
 #   SHA256SUMS
 #
 # How the cross builds work: every wheel is an abi3 extension module, so it
@@ -27,17 +27,39 @@
 # The Node addon (crates/xalen-node, npm package @xalen/ephemeris) is built the
 # same way, with cargo directly instead of maturin: cargo-zigbuild with a glibc
 # 2.17 floor for the two Linux targets, rust-lld against the stub SDK for the two
-# macOS targets. Each library is copied to its napi-rs name (xalen.<platform>.node)
-# and the @napi-rs/cli turns the four files into one npm package per platform plus
-# the root package that names them as optionalDependencies. Windows is not built.
+# macOS targets, and cargo-xwin for Windows x64 (x86_64-pc-windows-msvc): it
+# downloads the Microsoft CRT and Windows SDK import libraries into
+# $TOOLS/xwin and links with lld-link (the host's, or rust-lld under that name
+# when the host has none). The Windows addon is
+# built with a static C runtime (+crt-static), as the napi-rs package template
+# does for this target, so it needs no Visual C++ Redistributable
+# (vcruntime140.dll) on the user's machine. Each library is copied to its napi-rs
+# name (xalen.<platform>.node) and the @napi-rs/cli turns the five files into one
+# npm package per platform plus the root package that names them as
+# optionalDependencies.
+#
+# Microsoft licence: the CRT and SDK files come under Microsoft's licence
+# (https://go.microsoft.com/fwlink/?LinkId=2086102). cargo-xwin takes running it
+# as acceptance of those terms; the project accepted them for these builds on
+# 7 November 2026. The downloaded files stay in $TOOLS/xwin; no Microsoft file
+# is committed or packed. The addon does contain statically linked Microsoft
+# C-runtime code, as every Rust binary for this target does, redistributed under
+# the distributable-code terms of the Visual Studio licence (the licence accepted
+# on 7 November 2026). At run time it links only to Windows system DLLs.
+#
+# The CRT and SDK come from the Visual Studio 17 manifest (--xwin-version 17,
+# pinned below); inside it, cargo-xwin picks the newest CRT and SDK, so those
+# float with Microsoft's manifest. The build prints the payloads cargo-xwin
+# downloaded, with their versions, so each rebuild can be traced.
 #
 # Tools are installed into a private directory (XALEN_RELEASE_TOOLS, default: a
 # fresh temp dir) and the host Python is left untouched:
-#   maturin, ziglang, pytest   pip install --target
-#   wasm-pack, cargo-zigbuild  cargo install --root
-#   @napi-rs/cli               npm ci inside crates/xalen-node (its own node_modules)
+#   maturin, ziglang, pytest               pip install --target
+#   wasm-pack, cargo-zigbuild, cargo-xwin  cargo install --root
+#   @napi-rs/cli                           npm ci inside crates/xalen-node (its own node_modules)
+#   llvm-readobj (Windows addon checks)    rustup component llvm-tools
 # Needs on the host: bash, rustup + cargo (with rust-lld), python3 with pip,
-# node + npm.
+# node + npm, file.
 #
 # Checks run before the script reports success:
 #   - the wheel for this host's architecture is installed into a scratch
@@ -49,7 +71,9 @@
 #   - the WebAssembly package is loaded in Node and smoke-tested.
 #   - the Node addons: the committed index.js / index.d.ts equal what napi generates,
 #     both Linux addons need glibc 2.17 or older, both macOS addons pass the
-#     __LINKEDIT alignment check, the packed root and platform tarballs for this
+#     __LINKEDIT alignment check, the Windows addon is a PE32+ x86-64 DLL under
+#     20 MB that exports napi_register_module_v1 and imports only Windows system
+#     DLLs (no vcruntime140.dll, no dynamic UCRT), the packed root and platform tarballs for this
 #     host are installed into a scratch project and the Node smoke test runs there.
 # Wheels for other architectures and operating systems cannot run here; import
 # each one on its own platform before uploading it.
@@ -58,7 +82,7 @@
 #   scripts/build-release-artifacts.sh            # everything
 #   scripts/build-release-artifacts.sh python     # wheels + sdist only
 #   scripts/build-release-artifacts.sh wasm       # WebAssembly package only
-#   scripts/build-release-artifacts.sh node       # Node addons (4 platforms) only
+#   scripts/build-release-artifacts.sh node       # Node addons (5 platforms) only
 
 set -uo pipefail
 
@@ -75,6 +99,8 @@ HOST_ARCH="$(uname -m)" # x86_64 | aarch64
 
 LINUX_TARGETS=(x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu)
 MACOS_TARGETS=(aarch64-apple-darwin x86_64-apple-darwin)
+WINDOWS_TARGETS=(x86_64-pc-windows-msvc) # Node addon only; no Windows wheel here
+CARGO_XWIN_VERSION=0.23.1
 
 FAILED=()
 log()  { printf '\n== %s ==\n' "$*"; }
@@ -342,7 +368,7 @@ JS
   cd "$REPO_ROOT" || return
 }
 
-# --- Node: four prebuilt N-API addons as npm packages -------------------------
+# --- Node: five prebuilt N-API addons as npm packages -------------------------
 # rust target -> the platform suffix napi-rs puts in the file and package name
 node_platform() {
   case "$1" in
@@ -350,8 +376,62 @@ node_platform() {
     aarch64-unknown-linux-gnu) echo linux-arm64-gnu ;;
     aarch64-apple-darwin)      echo darwin-arm64 ;;
     x86_64-apple-darwin)       echo darwin-x64 ;;
+    x86_64-pc-windows-msvc)    echo win32-x64-msvc ;;
     *) return 1 ;;
   esac
+}
+
+# Structural checks of a Windows addon; there is no Windows machine to load it
+# on. $1 is the .node file, $2 the llvm-readobj to read it with. It must be a
+# PE32+ x86-64 DLL under 20 MB that exports the N-API entry point
+# (napi_register_module_v1) and imports nothing but Windows system DLLs. The
+# addon is linked with +crt-static, so neither the Visual C++ runtime
+# (vcruntime140.dll) nor the dynamic UCRT (api-ms-win-crt-*.dll) may appear: an
+# import of either means the static C runtime was lost.
+check_windows_addon() {
+  local f="$1" readobj="$2" name desc size dll imports
+  name="$(basename "$f")"
+  desc="$(file -b "$f")"
+  echo "   file: $name: $desc"
+  case "$desc" in
+    *PE32+*DLL*x86-64* | *PE32+*x86-64*DLL*) ok "$name is a PE32+ x86-64 DLL" ;;
+    *) fail "$name is not a PE32+ x86-64 DLL" ;;
+  esac
+
+  echo "   exports: $("$readobj" --coff-exports "$f" | sed -n 's/^ *Name: //p' | tr '\n' ' ')"
+  if "$readobj" --coff-exports "$f" | grep -Eq '^ *Name: napi_register_module_v1$'; then
+    ok "$name exports napi_register_module_v1"
+  else
+    fail "$name does not export napi_register_module_v1"
+  fi
+
+  # Both the normal and the delay-load import tables list their DLLs as `Name:`.
+  imports="$("$readobj" --coff-imports "$f" | sed -n 's/^ *Name: //p' | sort -uf)"
+  echo "   imports: $(echo "$imports" | tr '\n' ' ')"
+  if [ -z "$imports" ]; then
+    fail "$name imports no DLL at all (not a linked Windows DLL?)"
+  else
+    local foreign=()
+    while IFS= read -r dll; do
+      case "$(echo "$dll" | tr 'A-Z' 'a-z')" in
+        kernel32.dll | ntdll.dll | advapi32.dll | bcrypt.dll | bcryptprimitives.dll \
+          | ws2_32.dll | userenv.dll | api-ms-win-core-*.dll) ;;
+        *) foreign+=("$dll") ;;
+      esac
+    done <<< "$imports"
+    if [ "${#foreign[@]}" -eq 0 ]; then
+      ok "$name imports only Windows system DLLs"
+    else
+      fail "$name imports DLLs outside the allowed Windows system set: ${foreign[*]}"
+    fi
+  fi
+
+  size="$(stat -c %s "$f")"
+  if [ "$size" -lt $((20 * 1024 * 1024)) ]; then
+    ok "$name is $size bytes (limit 20 MB)"
+  else
+    fail "$name is $size bytes, over the 20 MB limit"
+  fi
 }
 
 # Highest glibc version a Linux ELF file needs (empty when it needs none).
@@ -384,9 +464,9 @@ PY
 
 build_node() {
   local target_dir="${CARGO_TARGET_DIR:-$REPO_ROOT/target}"
-  local art="$TOOLS/node-addons" # the four xalen.<platform>.node files
+  local art="$TOOLS/node-addons" # the five xalen.<platform>.node files
   local native="$TOOLS/node-native"
-  local tgt plat upper floor deps d tgz proj f pkgdir napi_bin target_os_min
+  local tgt plat upper floor deps d tgz proj f pkgdir napi_bin target_os_min host readobj
 
   # build_node never edits the source tree (the npm work runs in a scratch copy),
   # but if it ever did, a killed run must not leave package.json changed.
@@ -405,9 +485,38 @@ build_node() {
       || { fail "cargo install cargo-zigbuild"; return; }
   fi
   command -v cargo-zigbuild
-  rustup target add "${LINUX_TARGETS[@]}" "${MACOS_TARGETS[@]}" >/dev/null \
+  rustup target add "${LINUX_TARGETS[@]}" "${MACOS_TARGETS[@]}" "${WINDOWS_TARGETS[@]}" >/dev/null \
     || { fail "rustup target add"; return; }
   setup_macos_linker || { fail "macOS linker setup"; return; }
+
+  # cargo-xwin links with the host's lld-link, or with rust-lld under that name
+  # when there is none, and uses llvm-lib for archives (llvm-ar from the
+  # llvm-tools component when the host has no llvm-lib). llvm-tools also carries
+  # the llvm-readobj the Windows checks use. No C source is compiled for the
+  # addon, so clang (as clang-cl) is not needed; if a dependency ever adds one,
+  # the build fails naming clang-cl.
+  log "Windows tools (cargo-xwin $CARGO_XWIN_VERSION, llvm-tools) -> $TOOLS"
+  if ! "$TOOLS/cargo/bin/cargo-xwin" --version 2>/dev/null | grep -q " $CARGO_XWIN_VERSION\$"; then
+    cargo install cargo-xwin --version "$CARGO_XWIN_VERSION" --locked --root "$TOOLS/cargo" \
+      >"$TOOLS/cargo-xwin-install.log" 2>&1 \
+      || { tail -n 20 "$TOOLS/cargo-xwin-install.log" >&2; fail "cargo install cargo-xwin $CARGO_XWIN_VERSION"; return; }
+  fi
+  "$TOOLS/cargo/bin/cargo-xwin" --version
+  rustup component add llvm-tools >/dev/null || { fail "rustup component add llvm-tools"; return; }
+  host="$(rustc -vV | sed -n 's/^host: //p')"
+  readobj="$(rustc --print sysroot)/lib/rustlib/$host/bin/llvm-readobj"
+  [ -x "$readobj" ] || { fail "llvm-readobj not found at $readobj"; return; }
+  "$readobj" --version | sed -n 's/^ *\(LLVM version .*\)/   llvm-readobj: \1/p'
+  if command -v lld-link >/dev/null 2>&1; then
+    echo "   lld-link: $(command -v lld-link): $(lld-link --version)"
+  else
+    echo "   lld-link: none on the host; cargo-xwin links with rust-lld"
+  fi
+  if command -v clang >/dev/null 2>&1; then
+    echo "   clang: $(clang --version | head -n 1)"
+  else
+    echo "   clang: not installed (not needed: no C sources)"
+  fi
 
   log "Node package tooling (@napi-rs/cli from package-lock.json)"
   cd "$NODE_DIR" || { fail "cd $NODE_DIR"; return; }
@@ -460,7 +569,33 @@ build_node() {
       fail "addon $plat"
     fi
   done
-  for tgt in "${LINUX_TARGETS[@]}" "${MACOS_TARGETS[@]}"; do
+  # The Microsoft CRT and SDK files go to $TOOLS/xwin (x64 only). RUSTFLAGS
+  # holds only +crt-static: with --target, cargo applies it to the addon and not
+  # to build scripts, and cargo-xwin adds its own linker flags to it (static
+  # UCRT included).
+  for tgt in "${WINDOWS_TARGETS[@]}"; do
+    plat="$(node_platform "$tgt")"
+    if env XWIN_CACHE_DIR="$TOOLS/xwin" XWIN_ARCH=x86_64 \
+         RUSTFLAGS="-C target-feature=+crt-static" \
+         cargo xwin build --xwin-version 17 --release -p xalen-node --target "$tgt" \
+       && cp "$target_dir/$tgt/release/xalen_node.dll" "$art/xalen.$plat.node"; then
+      ok "addon $plat"
+    else
+      fail "addon $plat"
+    fi
+  done
+  # cargo-xwin prints no versions itself; its record of the payloads it
+  # downloaded ($TOOLS/xwin/DONE: the arches, then one file name per line) names
+  # the CRT and SDK versions. Information only, never a failure.
+  if [ -f "$TOOLS/xwin/DONE" ]; then
+    echo "   xwin payloads (Visual Studio 17 manifest):"
+    tail -n +2 "$TOOLS/xwin/DONE" | sort | sed 's/^/     /'
+    echo "   Windows SDK: $(grep -oE '10\.0\.[0-9]+(\.[0-9]+)?' "$TOOLS/xwin/DONE" | sort -uV | tr '\n' ' ')"
+    echo "   MSVC CRT: $(grep -oE 'VC\.[0-9]+\.[0-9]+(\.[0-9]+)*\.CRT' "$TOOLS/xwin/DONE" | sed 's/^VC\.//; s/\.CRT$//' | sort -uV | tr '\n' ' ')"
+  else
+    echo "   xwin payload record $TOOLS/xwin/DONE not found"
+  fi
+  for tgt in "${LINUX_TARGETS[@]}" "${MACOS_TARGETS[@]}" "${WINDOWS_TARGETS[@]}"; do
     plat="$(node_platform "$tgt")"
     [ -f "$art/xalen.$plat.node" ] || { fail "addon $plat is missing, stopping"; cd "$REPO_ROOT" || true; return; }
   done
@@ -484,6 +619,9 @@ build_node() {
   else
     fail "macOS addon alignment"
   fi
+  for tgt in "${WINDOWS_TARGETS[@]}"; do
+    check_windows_addon "$art/xalen.$(node_platform "$tgt").node" "$readobj"
+  done
 
   log "Node npm packages"
   # create-npm-dirs, artifacts and prepublish write npm/, copies of the addons and
@@ -505,9 +643,9 @@ build_node() {
     cd "$REPO_ROOT" || true
     return
   fi
-  deps="$(node -e 'const p=require("./package.json");const o=p.optionalDependencies||{};const n=Object.keys(o);if(n.length!==4||n.some(k=>o[k]!==p.version))process.exit(1);console.log(n.join(" "))')" \
-    && ok "root optionalDependencies pin all four addons to $VERSION: $deps" \
-    || fail "root optionalDependencies are not the four addons at $VERSION"
+  deps="$(node -e 'const p=require("./package.json");const o=p.optionalDependencies||{};const n=Object.keys(o);if(n.length!==5||n.some(k=>o[k]!==p.version))process.exit(1);console.log(n.join(" "))')" \
+    && ok "root optionalDependencies pin all five addons to $VERSION: $deps" \
+    || fail "root optionalDependencies are not the five addons at $VERSION"
 
   for d in npm/*/; do
     npm pack --pack-destination "$DIST_DIR" "./$d" >/dev/null || fail "npm pack $d"
@@ -523,7 +661,7 @@ build_node() {
   else
     fail "root package is missing or contains a .node file"
   fi
-  for tgt in "${LINUX_TARGETS[@]}" "${MACOS_TARGETS[@]}"; do
+  for tgt in "${LINUX_TARGETS[@]}" "${MACOS_TARGETS[@]}" "${WINDOWS_TARGETS[@]}"; do
     plat="$(node_platform "$tgt")"
     tgz="$DIST_DIR/xalen-ephemeris-$plat-$VERSION.tgz"
     if [ -f "$tgz" ] && [ "$(tar -tzf "$tgz" | grep -c '\.node$')" = 1 ]; then
