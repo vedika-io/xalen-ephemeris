@@ -84,7 +84,12 @@ impl OutArgs {
 pub struct TimeArgs {
     /// ISO-8601 instant, e.g. 2026-11-07T00:00:00Z or 2026-11-07T05:30:00+05:30
     /// (a date alone means midnight; no zone means UTC)
-    #[arg(long, value_name = "ISO-8601", conflicts_with = "jd")]
+    #[arg(
+        long,
+        value_name = "ISO-8601",
+        conflicts_with = "jd",
+        allow_hyphen_values = true
+    )]
     pub date: Option<String>,
 
     /// Julian Day in UT, e.g. 2451545.0
@@ -294,10 +299,10 @@ pub enum EclipseKind {
 #[derive(Args, Debug)]
 pub struct EclipsesArgs {
     /// Start of the range (ISO-8601)
-    #[arg(long, value_name = "ISO-8601")]
+    #[arg(long, value_name = "ISO-8601", allow_hyphen_values = true)]
     pub from: String,
     /// End of the range (ISO-8601)
-    #[arg(long, value_name = "ISO-8601")]
+    #[arg(long, value_name = "ISO-8601", allow_hyphen_values = true)]
     pub to: String,
     /// Which eclipses to list
     #[arg(long = "type", value_enum, default_value_t = EclipseKind::All)]

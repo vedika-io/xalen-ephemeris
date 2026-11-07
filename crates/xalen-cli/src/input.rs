@@ -125,6 +125,9 @@ pub fn parse_iso(input: &str) -> Result<f64> {
     let day: u32 = day_text
         .parse()
         .map_err(|_| bad("the day is not a number"))?;
+    if !(-13_000..=17_000).contains(&year) {
+        return Err(bad("the year must be between -13000 and 17000"));
+    }
     if !(1..=12).contains(&month) {
         return Err(bad("the month must be 01 to 12"));
     }
@@ -302,6 +305,11 @@ impl Tz {
     }
 }
 
+/// Smallest Julian Day accepted (about the year -13000).
+const MIN_JD: f64 = -3_000_000.0;
+/// Largest Julian Day accepted (about the year 17000).
+const MAX_JD: f64 = 10_000_000.0;
+
 /// One moment in time in the scales the library needs.
 #[derive(Debug, Clone)]
 pub struct Instant {
@@ -316,8 +324,11 @@ pub struct Instant {
 impl Instant {
     /// Build an instant from a UT Julian Day.
     pub fn new(jd_ut: f64, tz: Tz) -> Result<Self> {
-        if !jd_ut.is_finite() {
-            return Err(CliError::usage("the Julian Day must be a finite number"));
+        if !jd_ut.is_finite() || !(MIN_JD..=MAX_JD).contains(&jd_ut) {
+            return Err(CliError::usage(format!(
+                "the Julian Day must be a number between {MIN_JD} and {MAX_JD} \
+                 (about the years -13000 to 17000)"
+            )));
         }
         let jd_tt = JdUT1(jd_ut).to_tt(&delta_t_model()).0;
         Ok(Instant { jd_ut, jd_tt, tz })

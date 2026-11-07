@@ -6,9 +6,11 @@ use std::process::Command;
 use serde_json::Value;
 use xalen_ephemeris::ayanamsa::Ayanamsa;
 use xalen_ephemeris::coords::RAD_TO_DEG;
+use xalen_ephemeris::ephem::compat::{SE_SIDM_LAHIRI, swe_houses_ex, swe_set_sid_mode};
 use xalen_ephemeris::ephem::{Almanac, Body};
-use xalen_ephemeris::time::{CalendarSystem, calendar_to_jd};
+use xalen_ephemeris::time::{CalendarSystem, DeltaTModel, JdUT1, calendar_to_jd};
 use xalen_ephemeris::vedic::nakshatra::Nakshatra;
+use xalen_ephemeris::vedic::panchang::compute_panchang;
 use xalen_ephemeris::vedic::rashi::Rashi;
 
 struct Output {
@@ -55,10 +57,14 @@ fn angle_gap(a: f64, b: f64) -> f64 {
 }
 
 #[test]
-fn version_prints_0_7_0() {
+fn version_prints_the_crate_version() {
     let out = xalen(&["--version"]);
     assert_eq!(out.code, 0);
-    assert!(out.stdout.contains("0.7.0"), "got {:?}", out.stdout);
+    assert!(
+        out.stdout.contains(env!("CARGO_PKG_VERSION")),
+        "got {:?}",
+        out.stdout
+    );
 }
 
 #[test]
@@ -556,4 +562,170 @@ fn missing_inputs_exit_two() {
     assert_eq!(bad_house.code, 2);
     let bad_tz = xalen(&["positions", "--date", "2026-11-07", "--tz", "Mars/Olympus"]);
     assert_eq!(bad_tz.code, 2);
+}
+
+/// The house (1-12) that a longitude falls in, given 12 cusp longitudes.
+fn house_in(cusps: &[f64], longitude: f64) -> u64 {
+    for i in 0..12 {
+        let start = cusps[i];
+        let width = (cusps[(i + 1) % 12] - start).rem_euclid(360.0);
+        if (longitude - start).rem_euclid(360.0) < width {
+            return i as u64 + 1;
+        }
+    }
+    panic!("longitude {longitude} is in no house");
+}
+
+#[test]
+fn chart_matches_the_library_houses_for_new_delhi() {
+    let jd = calendar_to_jd(2026, 11, 7, 0.0, CalendarSystem::ProlepticGregorian).0;
+    swe_set_sid_mode(SE_SIDM_LAHIRI, 0.0, 0.0);
+    for (sidereal, system_arg, letter) in [
+        (true, "WholeSign", 'W'),
+        (true, "Equal", 'A'),
+        (false, "Placidus", 'P'),
+    ] {
+        let library = swe_houses_ex(jd, 28.6139, 77.2090, letter, sidereal).expect("computes");
+        let mut args = vec![
+            "chart",
+            "--date",
+            "2026-11-07T00:00:00Z",
+            "--lat",
+            "28.6139",
+            "--lon",
+            "77.2090",
+            "--house-system",
+            system_arg,
+            "--json",
+        ];
+        if sidereal {
+            args.push("--sidereal");
+        }
+        let json = json_of(&args);
+        let cusps: Vec<f64> = json["cusps"]
+            .as_array()
+            .expect("an array")
+            .iter()
+            .map(|c| num(&c["longitude"]))
+            .collect();
+        for i in 0..12 {
+            assert!(
+                angle_gap(cusps[i], library.cusps[i]) < 1e-6,
+                "{system_arg} sidereal={sidereal} cusp {}: cli {} vs library {}",
+                i + 1,
+                cusps[i],
+                library.cusps[i]
+            );
+        }
+        assert!(angle_gap(num(&json["ascendant"]["longitude"]), library.ascendant) < 1e-6);
+        assert!(angle_gap(num(&json["mc"]["longitude"]), library.mc) < 1e-6);
+        for body in json["bodies"].as_array().expect("an array") {
+            let expected = house_in(&library.cusps, num(&body["longitude"]));
+            assert_eq!(
+                body["house"].as_u64(),
+                Some(expected),
+                "{} in {system_arg}",
+                body["id"]
+            );
+        }
+        if system_arg == "WholeSign" {
+            for cusp in json["cusps"].as_array().expect("an array") {
+                assert_eq!(num(&cusp["degree_in_sign"]), 0.0, "cusp shown at {cusp}");
+            }
+            for cusp in &cusps {
+                let signs = cusp / 30.0;
+                assert!(
+                    (signs - signs.round()).abs() * 30.0 < 1e-6,
+                    "{cusp} is not a sign boundary"
+                );
+            }
+            let asc_sign = (num(&json["ascendant"]["longitude"]) / 30.0).floor();
+            for body in json["bodies"].as_array().expect("an array") {
+                let in_asc_sign = (num(&body["longitude"]) / 30.0).floor() == asc_sign;
+                assert_eq!(body["house"] == 1, in_asc_sign, "{}", body["id"]);
+            }
+        }
+    }
+}
+
+#[test]
+fn panchang_matches_the_library() {
+    let jd = calendar_to_jd(2026, 11, 7, 0.0, CalendarSystem::ProlepticGregorian);
+    let jd_tt = JdUT1(jd.0)
+        .to_tt(&DeltaTModel::StephensonMorrisonHohenkerk2016)
+        .0;
+    let aya = Ayanamsa::Lahiri.compute_deg(jd_tt);
+    let almanac = Almanac::default_vedic();
+    let sun = almanac
+        .sidereal_longitude_deg(Body::Sun, jd, aya)
+        .expect("computes");
+    let moon = almanac
+        .sidereal_longitude_deg(Body::Moon, jd, aya)
+        .expect("computes");
+    let expected = compute_panchang(sun, moon, jd.0);
+    let json = json_of(&[
+        "panchang",
+        "--date",
+        "2026-11-07T00:00:00Z",
+        "--place",
+        "delhi",
+        "--json",
+    ]);
+    assert_eq!(
+        json["tithi"]["number"].as_u64(),
+        Some(u64::from(expected.tithi.number))
+    );
+    assert_eq!(json["nakshatra"]["name"], expected.nakshatra.to_string());
+    assert_eq!(
+        json["yoga"]["number"].as_u64(),
+        Some(u64::from(expected.yoga.number))
+    );
+    assert_eq!(json["karana"]["name"], expected.karana.name());
+    assert!((num(&json["moon_longitude"]) - moon).abs() < 1e-9);
+}
+
+#[test]
+fn rise_set_matches_the_library_within_a_second() {
+    let jd = calendar_to_jd(2026, 11, 7, 0.0, CalendarSystem::ProlepticGregorian);
+    let almanac = Almanac::default_vedic();
+    let json = json_of(&[
+        "rise-set",
+        "--date",
+        "2026-11-07T00:00:00Z",
+        "--lat",
+        "28.6139",
+        "--lon",
+        "77.2090",
+        "--body",
+        "sun",
+        "--json",
+    ]);
+    let expected = almanac
+        .rise_transit_set(Body::Sun, jd, 28.6139, 77.2090, 0.0)
+        .expect("computes");
+    let second = 1.0 / 86_400.0;
+    for (key, value) in [
+        ("rise_jd_ut", expected.rise),
+        ("transit_jd_ut", expected.transit),
+        ("set_jd_ut", expected.set),
+    ] {
+        let want = value.expect("the Sun rises, transits and sets in Delhi").0;
+        assert!((num(&json[key]) - want).abs() < second, "{key}");
+    }
+}
+
+#[test]
+fn absurd_dates_and_julian_days_exit_two() {
+    for args in [
+        vec!["convert", "--jd", "99999999"],
+        vec!["convert", "--jd", "-5000000"],
+        vec!["convert", "--date", "20000-01-01"],
+        vec!["convert", "--date", "-14000-01-01"],
+    ] {
+        let out = xalen(&args);
+        assert_eq!(out.code, 2, "{args:?}");
+        assert!(out.stdout.is_empty(), "{args:?}");
+        assert_eq!(out.stderr.trim().lines().count(), 1, "{args:?}");
+    }
+    assert_eq!(xalen(&["convert", "--date", "-4712-01-01"]).code, 0);
 }

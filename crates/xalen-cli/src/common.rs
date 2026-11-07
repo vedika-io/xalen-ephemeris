@@ -134,6 +134,10 @@ pub struct Placement {
 
 /// Describe a zodiac longitude in degrees.
 pub fn placement(longitude: f64, sidereal: bool) -> Placement {
+    // A cusp that sits on a sign boundary can come out a hair below it
+    // (59.99999999999 instead of 60); snap to a nanodegree so it is shown in
+    // the sign it starts, at 0 degrees.
+    let longitude = ((longitude * 1e9).round() / 1e9).rem_euclid(360.0);
     let rashi = Rashi::from_longitude_deg(longitude);
     let sign = if sidereal {
         rashi.to_string()
