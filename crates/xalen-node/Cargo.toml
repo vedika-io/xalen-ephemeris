@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Node.js N-API bindings for XALEN Ephemeris — npm install xalen"
+description = "Node.js N-API bindings for XALEN Ephemeris — npm install @xalen/ephemeris"
 keywords = ["node", "napi", "ephemeris", "astrology", "astronomy"]
 categories = ["science", "api-bindings"]
 

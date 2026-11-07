@@ -25,8 +25,7 @@
       "aarch64-apple-darwin",
       "x86_64-apple-darwin",
       "aarch64-unknown-linux-gnu",
-      "x86_64-unknown-linux-gnu",
-      "x86_64-pc-windows-msvc"
+      "x86_64-unknown-linux-gnu"
     ]
   },
   "engines": {
@@ -35,10 +34,10 @@
   "scripts": {
     "build": "napi build --platform --release",
     "build:debug": "napi build --platform",
-    "test": "node --test __test__/"
+    "test": "node --test __test__/smoke.test.mjs __test__/platform-matrix.test.mjs"
   },
   "devDependencies": {
-    "@napi-rs/cli": "^3.0.0"
+    "@napi-rs/cli": "^3.10.12"
   },
-  "files": ["index.js", "index.d.ts", "*.node", "README.md", "LICENSE"]
+  "files": ["index.js", "index.d.ts", "README.md", "LICENSE"]
 }
