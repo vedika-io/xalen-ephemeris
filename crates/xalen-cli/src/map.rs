@@ -66,7 +66,14 @@ fn paran_table(found: &[Paran]) -> String {
         })
         .collect();
     table(
-        &["Latitude", "Longitude", "Body A", "Angle A", "Body B", "Angle B"],
+        &[
+            "Latitude",
+            "Longitude",
+            "Body A",
+            "Angle A",
+            "Body B",
+            "Angle B",
+        ],
         &rows,
     )
 }
@@ -164,7 +171,9 @@ pub fn run(args: &MapArgs) -> Result<Report> {
     };
     let orb = args.orb.unwrap_or(1.0);
     if !(0.0..90.0).contains(&orb) {
-        return Err(CliError::usage("--orb must be at least 0 and less than 90 degrees"));
+        return Err(CliError::usage(
+            "--orb must be at least 0 and less than 90 degrees",
+        ));
     }
     let (bodies, skipped) = available_bodies(&almanac, &[inst.jd_ut], named, explicit)?;
     let map = astro_map(&almanac, inst.ut1(), &bodies, &options)?;

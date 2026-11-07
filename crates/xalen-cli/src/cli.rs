@@ -616,7 +616,12 @@ pub struct MapArgs {
     pub parans: bool,
     /// With --parans --lat, the latitude orb of the parans listed, in degrees
     /// (default 1)
-    #[arg(long, value_name = "DEG", requires = "parans", allow_negative_numbers = true)]
+    #[arg(
+        long,
+        value_name = "DEG",
+        requires = "parans",
+        allow_negative_numbers = true
+    )]
     pub orb: Option<f64>,
     /// Print a GeoJSON FeatureCollection (one LineString per line segment, a
     /// Point per zenith and, with --parans, a Point per paran) instead of a

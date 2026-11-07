@@ -1399,8 +1399,26 @@ fn the_relationship_and_map_commands_exit_two_on_bad_input() {
         vec!["map", "--date", "2024-06-21", "--geojson", "--lat", "40"],
         vec!["map", "--date", "2024-06-21", "--bodies", "earth"],
         // map: a negative or non-finite orb, and an orb without --parans.
-        vec!["map", "--date", "2024-06-21", "--parans", "--lat", "40", "--orb", "-1"],
-        vec!["map", "--date", "2024-06-21", "--parans", "--lat", "40", "--orb", "nan"],
+        vec![
+            "map",
+            "--date",
+            "2024-06-21",
+            "--parans",
+            "--lat",
+            "40",
+            "--orb",
+            "-1",
+        ],
+        vec![
+            "map",
+            "--date",
+            "2024-06-21",
+            "--parans",
+            "--lat",
+            "40",
+            "--orb",
+            "nan",
+        ],
         vec!["map", "--date", "2024-06-21", "--lat", "40", "--orb", "1"],
         vec!["map"],
     ];
@@ -1918,7 +1936,7 @@ fn map_parans_json_matches_the_library() {
     assert_eq!(skipped.len(), want.skipped.len());
     assert_eq!(json["paran_options"]["include_horizon_pairs"], true);
     // Without --parans the map JSON has no parans.
-    let plain = json_of(&PARAN_ARGS[..5]);
+    let plain = json_of_owned(&with_flags(&PARAN_ARGS[..5], &["--json"]));
     assert!(plain.get("parans").is_none());
 }
 
@@ -1951,7 +1969,9 @@ fn map_parans_geojson_points_are_lon_lat() {
 fn map_parans_at_a_latitude_match_parans_near() {
     let map = paran_map();
     let options = ParanOptions::default();
-    let all = parans(&map, &options).expect("the library finds parans").parans;
+    let all = parans(&map, &options)
+        .expect("the library finds parans")
+        .parans;
     assert!(!all.is_empty());
     // A latitude just off a known paran, so the band holds at least one.
     let lat = all[all.len() / 2].latitude_deg + 0.25;
@@ -1972,8 +1992,16 @@ fn map_parans_at_a_latitude_match_parans_near() {
     let refs: Vec<&str> = args.iter().map(String::as_str).collect();
     let out = xalen(&refs);
     assert_eq!(out.code, 0, "{}", out.stderr);
-    assert!(out.stdout.contains("Parans within 2.00 deg of latitude"), "{}", out.stdout);
-    let section = out.stdout.split("Parans within").nth(1).expect("the paran section");
+    assert!(
+        out.stdout.contains("Parans within 2.00 deg of latitude"),
+        "{}",
+        out.stdout
+    );
+    let section = out
+        .stdout
+        .split("Parans within")
+        .nth(1)
+        .expect("the paran section");
     let rows: Vec<&str> = section
         .lines()
         .skip(3)

@@ -91,7 +91,10 @@ fn horizon_meridian_hand_values() {
     assert_eq!(set.parans.len(), 2, "{:?}", set.parans);
     // Ordered by latitude: -53.95 then +53.95.
     for (p, (ka, kb, la, lo)) in set.parans.iter().zip(expected) {
-        assert_eq!((p.body_a, p.kind_a, p.body_b, p.kind_b), (Body::Sun, ka, Body::Mars, kb));
+        assert_eq!(
+            (p.body_a, p.kind_a, p.body_b, p.kind_b),
+            (Body::Sun, ka, Body::Mars, kb)
+        );
         assert!((p.latitude_deg - la).abs() < 1e-9, "{p:?} vs {la}");
         assert!((p.longitude_deg - lo).abs() < 1e-9, "{p:?} vs {lo}");
     }
@@ -289,7 +292,10 @@ fn a_circumpolar_body_has_no_horizon_parans_and_they_are_reported() {
     };
     let set = parans(&map, &o).unwrap();
     for p in &set.parans {
-        assert!(is_meridian(p.kind_a), "the Sun has no horizon line here: {p:?}");
+        assert!(
+            is_meridian(p.kind_a),
+            "the Sun has no horizon line here: {p:?}"
+        );
     }
     for meridian in [LineKind::Mc, LineKind::Ic] {
         let s = set
@@ -345,9 +351,11 @@ fn coincident_lines_are_reported() {
     // Two bodies at the same place share both horizon lines.
     let twins = sky_map(0.0, &[(Body::Sun, 30.0, 10.0), (Body::Mars, 30.0, 10.0)]);
     let set = parans(&twins, &ParanOptions::default()).unwrap();
-    assert!(set.skipped.iter().any(|s| s.kind_a.is_none()
-        && s.kind_b.is_none()
-        && s.reason == SkipReason::SameLine));
+    assert!(
+        set.skipped
+            .iter()
+            .any(|s| s.kind_a.is_none() && s.kind_b.is_none() && s.reason == SkipReason::SameLine)
+    );
 }
 
 #[test]
@@ -421,17 +429,29 @@ fn bad_options_and_maps_are_errors() {
             ..ok
         },
     ] {
-        assert!(matches!(parans(&map, &o), Err(MapError::InvalidInput(_))), "{o:?}");
+        assert!(
+            matches!(parans(&map, &o), Err(MapError::InvalidInput(_))),
+            "{o:?}"
+        );
     }
     let mut broken = map.clone();
     broken.bodies[0].dec_deg = f64::NAN;
-    assert!(matches!(parans(&broken, &ok), Err(MapError::InvalidInput(_))));
+    assert!(matches!(
+        parans(&broken, &ok),
+        Err(MapError::InvalidInput(_))
+    ));
     let mut broken = map.clone();
     broken.gast_deg = f64::INFINITY;
-    assert!(matches!(parans(&broken, &ok), Err(MapError::InvalidInput(_))));
+    assert!(matches!(
+        parans(&broken, &ok),
+        Err(MapError::InvalidInput(_))
+    ));
     for (lat, orb) in [(90.0, 1.0), (f64::NAN, 1.0), (40.0, -1.0), (40.0, f64::NAN)] {
         assert!(
-            matches!(parans_near(&map, lat, orb, &ok), Err(MapError::InvalidInput(_))),
+            matches!(
+                parans_near(&map, lat, orb, &ok),
+                Err(MapError::InvalidInput(_))
+            ),
             "{lat} {orb}"
         );
     }
@@ -475,7 +495,11 @@ fn parans_near_returns_exactly_those_within_the_orb() {
     assert!(non_empty >= 2, "only {non_empty} bands held a paran");
     // Each paran is found at its own latitude with a zero orb.
     for p in &full {
-        assert!(parans_near(&map, p.latitude_deg, 0.0, &o).unwrap().contains(p));
+        assert!(
+            parans_near(&map, p.latitude_deg, 0.0, &o)
+                .unwrap()
+                .contains(p)
+        );
     }
     // Outside the default -66..66 the band replaces the limits.
     let polar = parans_near(&map, 70.0, 3.0, &o).unwrap();
@@ -513,12 +537,13 @@ fn check_against_the_almanac(set: &ParanSet, map: &AstroMap, h0: f64) -> usize {
             match kind {
                 LineKind::Mc | LineKind::Ic => {
                     let want = if kind == LineKind::Mc { 0.0 } else { 180.0 };
-                    assert!(sdiff(ha, want).abs() < 0.01, "{p:?}: {body:?} hour angle {ha}");
+                    assert!(
+                        sdiff(ha, want).abs() < 0.01,
+                        "{p:?}: {body:?} hour angle {ha}"
+                    );
                 }
                 LineKind::Asc | LineKind::Dsc => {
-                    let alt = a
-                        .topocentric_altitude_deg(body, jd, lat, lon, 0.0)
-                        .unwrap();
+                    let alt = a.topocentric_altitude_deg(body, jd, lat, lon, 0.0).unwrap();
                     if body == Body::Moon {
                         assert!((alt - h0).abs() < 1.0, "{p:?}: Moon altitude {alt}");
                         let geo = geo_altitude(map, body, lat, lon);
@@ -543,13 +568,28 @@ fn parans_agree_with_topocentric_altitude_and_hour_angle() {
     let set = parans(&map, &ParanOptions::default()).unwrap();
     let checked = check_against_the_almanac(&set, &map, 0.0);
     assert!(checked >= 24, "only {checked} angles were checked");
-    // Every pair of the four bodies has at least one paran in -66..66.
+    // Every pair of the four bodies has a paran in -66..66 except Mars and
+    // Jupiter, which are close in right ascension on this date, so all their
+    // crossings lie beyond 66 degrees and are reported as skipped.
     for (i, &a) in FOUR.iter().enumerate() {
         for &b in &FOUR[i + 1..] {
-            assert!(
-                set.parans.iter().any(|p| p.body_a == a && p.body_b == b),
-                "{a:?} {b:?}"
-            );
+            let found = set.parans.iter().any(|p| p.body_a == a && p.body_b == b);
+            if (a, b) == (Body::Mars, Body::Jupiter) {
+                assert!(!found);
+                let far = set
+                    .skipped
+                    .iter()
+                    .filter(|s| s.body_a == a && s.body_b == b)
+                    .map(|s| match s.reason {
+                        SkipReason::OutsideLatitudes { latitude_deg, .. } => latitude_deg,
+                        other => panic!("{s:?}: {other:?}"),
+                    })
+                    .collect::<Vec<f64>>();
+                assert_eq!(far.len(), 6, "{far:?}");
+                assert!(far.iter().all(|l| l.abs() > 66.0), "{far:?}");
+            } else {
+                assert!(found, "{a:?} {b:?}");
+            }
         }
     }
 }
