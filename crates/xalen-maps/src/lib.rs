@@ -33,6 +33,16 @@
 //! * A line that crosses the antimeridian is split into separate segments, with
 //!   end points placed on the meridian at ±180 degrees.
 //!
+//! ## Parans
+//!
+//! A paran (Brady, *The Eagle and the Lark*) is a place where two bodies are on
+//! angles at the same moment: one rising or setting while the other culminates
+//! or anti-culminates, or both on the horizon together. On the map these are the
+//! crossings of one body's lines with another's. [`parans`] solves every
+//! crossing in closed form from the right ascensions, declinations and sidereal
+//! time (not from the drawn polylines), and [`parans_near`] gives the parans
+//! within an orb of a latitude, such as a birthplace's.
+//!
 //! ## Example
 //!
 //! ```no_run
@@ -57,18 +67,19 @@
 //! * No atmospheric refraction unless you set
 //!   [`MapOptions::horizon_altitude_deg`] (for example `-0.5667` for the Sun's
 //!   centre at the standard horizon).
-//! * Parans (latitudes where two bodies are on angles together; Brady) are not
-//!   computed yet.
-//! * Latitudes are sampled; the default step is one degree.
+//! * Latitudes are sampled; the default step is one degree. Parans are exact
+//!   and do not depend on the step.
 
 mod lines;
 mod map;
+mod parans;
 
 use serde::{Deserialize, Serialize};
 use xalen_ephem::{Body, EphemerisError};
 
 pub use lines::{horizon_half_arc, horizon_lines, ic_longitude_deg, mc_longitude_deg};
 pub use map::astro_map;
+pub use parans::{Paran, ParanOptions, ParanSet, SkipReason, SkippedParan, parans, parans_near};
 
 /// A point on Earth: `(latitude_deg, longitude_deg)`, latitude north-positive,
 /// longitude east-positive in `[-180, 180)`.
