@@ -263,7 +263,11 @@ fn swiss_ayanamsas() -> BTreeMap<u32, String> {
         let Some(aya) = Ayanamsa::from_swiss_ephem_id(number) else {
             continue;
         };
-        assert_eq!(aya.swiss_ephem_id(), Some(number), "{aya:?} does not round-trip");
+        assert_eq!(
+            aya.swiss_ephem_id(),
+            Some(number),
+            "{aya:?} does not round-trip"
+        );
         assert!(
             compat::swe_get_ayanamsa_ut_ex(J2000, number as i32).is_ok(),
             "compat::swe_get_ayanamsa_ut_ex rejects SE_SIDM {number}"
@@ -306,10 +310,23 @@ fn swiss_ayanamsas_table() -> String {
             .iter()
             .find(|(_, v)| **v == variant)
             .map_or("-".to_string(), |(id, _)| id.to_string());
-        rows.push(vec![number.to_string(), code(&variant), constant, binding_id]);
+        rows.push(vec![
+            number.to_string(),
+            code(&variant),
+            constant,
+            binding_id,
+        ]);
     }
-    assert!(constants.is_empty(), "xalen.swe exports unknown SIDM numbers: {constants:?}");
-    let header = ["Swiss number", "`Ayanamsa`", "`xalen.swe` constant", "Binding ID"];
+    assert!(
+        constants.is_empty(),
+        "xalen.swe exports unknown SIDM numbers: {constants:?}"
+    );
+    let header = [
+        "Swiss number",
+        "`Ayanamsa`",
+        "`xalen.swe` constant",
+        "Binding ID",
+    ];
     table(&header, &rows)
 }
 
@@ -353,7 +370,11 @@ fn houses_table() -> String {
         .collect();
     swiss_only.sort_by_key(|(_, chars)| chars[0]);
     for (variant, _) in swiss_only {
-        let mut row = vec!["-".to_string(), code(variant), letter_cell(variant.as_str())];
+        let mut row = vec![
+            "-".to_string(),
+            code(variant),
+            letter_cell(variant.as_str()),
+        ];
         row.extend(BINDINGS.iter().map(|_| "-".to_string()));
         rows.push(row);
     }
