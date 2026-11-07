@@ -103,7 +103,7 @@ impl HouseCusps {
             let start = self.cusps[i];
             let end = self.cusps[(i + 1) % 12];
             if end > start {
-                if lon >= start && lon < end {
+                if (start..end).contains(&lon) {
                     return i + 1;
                 }
             } else {
@@ -2029,7 +2029,7 @@ mod tests {
         for i in 0..12 {
             let deg = h.cusp_deg(i);
             assert!(
-                deg >= 0.0 && deg < 360.0,
+                (0.0..360.0).contains(&deg),
                 "Cusp {} out of range: {deg}°",
                 i + 1
             );
@@ -2165,7 +2165,7 @@ mod tests {
         for i in 0..12 {
             let deg = h.cusps[i].to_degrees().rem_euclid(360.0);
             assert!(
-                deg >= 0.0 && deg < 360.0,
+                (0.0..360.0).contains(&deg),
                 "Campanus cusp {} out of range: {deg}",
                 i + 1
             );
@@ -2346,7 +2346,7 @@ mod tests {
         for i in 0..12 {
             let deg = h.cusp_deg(i);
             assert!(
-                deg >= 0.0 && deg < 360.0,
+                (0.0..360.0).contains(&deg),
                 "Koch cusp {} out of range at Pune: {deg}°",
                 i + 1
             );
@@ -2427,7 +2427,7 @@ mod tests {
         for i in 0..12 {
             let deg = h.cusp_deg(i);
             assert!(
-                deg >= 0.0 && deg < 360.0,
+                (0.0..360.0).contains(&deg),
                 "Alcabitius cusp {} out of range at Pune: {deg}°",
                 i + 1
             );
@@ -2526,7 +2526,7 @@ mod tests {
         for i in 0..12 {
             let deg = h.cusp_deg(i);
             assert!(
-                deg >= 0.0 && deg < 360.0,
+                (0.0..360.0).contains(&deg),
                 "Topocentric cusp {} out of range at Pune: {deg}°",
                 i + 1
             );
@@ -2638,7 +2638,7 @@ mod tests {
         for i in 0..12 {
             let deg = h.cusp_deg(i);
             assert!(
-                deg >= 0.0 && deg < 360.0,
+                (0.0..360.0).contains(&deg),
                 "Meridian cusp {} out of range: {deg}°",
                 i + 1
             );
@@ -4000,7 +4000,7 @@ mod tests {
                 ] {
                     assert!(!v.is_nan(), "{system} {label} asc NaN at lat={lat}");
                     assert!(
-                        v >= 0.0 && v < TAU,
+                        (0.0..TAU).contains(&v),
                         "{system} {label} asc out of [0, 2π) at lat={lat}: {v}"
                     );
                 }

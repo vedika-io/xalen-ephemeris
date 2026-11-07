@@ -37,6 +37,7 @@
 //!      birth correctly rolls back to the previous solar year.
 //!   2. **Daeun (대운) start age** — `daeun` now uses the distance (in days)
 //!      to the adjacent Jie Qi ÷ 3, in the direction that drives the cycle.
+//!
 //! The Saju month pillar still takes a civil month (not a Jie-Qi-resolved
 //! month) and is therefore not cross-validated against the BaZi month oracle.
 

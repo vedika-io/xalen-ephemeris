@@ -636,7 +636,7 @@ mod tests {
             // At the event, elongation should be near the threshold
             let elong = elongation(jupiter(jd), sun(jd)) * RAD_TO_DEG;
             assert!(
-                elong >= 9.0 && elong < 30.0,
+                (9.0..30.0).contains(&elong),
                 "Elongation at heliacal rise should be near threshold, got {elong:.1}°"
             );
         }

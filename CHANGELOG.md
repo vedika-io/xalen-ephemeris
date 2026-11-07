@@ -156,7 +156,7 @@ exception that `except swe.Error` can catch
   Node bindings, policy checks, accuracy harness) and the maintainers post its
   result as the `ci/gate` commit status. The release procedure is in
   `docs/RELEASING.md`.
-
+- SECURITY.md: disclosure timeline, scope and supply-chain sections; SUPPORT.md added; CODEOWNERS and issue forms refreshed.
 - The accuracy harness in `validation/` now runs in the gate. `scripts/gate.sh`
   runs format, clippy, tests, docs, the release-configuration tests and the
   harness (2000 charts by default, `--harness-n` or `GATE_HARNESS_N` for more,

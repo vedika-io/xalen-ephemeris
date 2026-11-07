@@ -750,7 +750,7 @@ mod tests {
         xalen_init();
         let lon = xalen_sidereal_longitude(2451545.0, 0, 0); // Sun, Lahiri
         assert!(
-            lon >= 0.0 && lon < 360.0,
+            (0.0..360.0).contains(&lon),
             "Sidereal Sun should be 0-360°, got {lon}°"
         );
     }
@@ -761,7 +761,7 @@ mod tests {
         for id in 0..=16 {
             let lon = xalen_sidereal_longitude(2451545.0, 0, id); // Sun
             assert!(
-                lon >= 0.0 && lon < 360.0,
+                (0.0..360.0).contains(&lon),
                 "Ayanamsa ID {id} should produce valid sidereal lon, got {lon}"
             );
         }
@@ -782,7 +782,7 @@ mod tests {
         let rahu_lon = xalen_sidereal_longitude(2451545.0, 9, 0); // Rahu, Lahiri
         let ketu_lon = xalen_sidereal_longitude(2451545.0, 13, 0); // Ketu, Lahiri
         assert!(
-            ketu_lon >= 0.0 && ketu_lon < 360.0,
+            (0.0..360.0).contains(&ketu_lon),
             "Ketu sidereal should be [0,360), got {ketu_lon}"
         );
         let expected = (rahu_lon + 180.0).rem_euclid(360.0);
@@ -1004,7 +1004,7 @@ mod tests {
         let aya = xalen_ayanamsa(2451545.0, 0);
         assert!(aya.is_finite() && aya > 0.0);
         let lon = xalen_sidereal_longitude(2451545.0, 0, 0);
-        assert!(lon >= 0.0 && lon < 360.0);
+        assert!((0.0..360.0).contains(&lon));
     }
 
     #[test]

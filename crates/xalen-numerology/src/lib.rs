@@ -439,7 +439,7 @@ mod tests {
     #[test]
     fn personal_year_cycle() {
         let py = personal_year(3, 15, 2026);
-        assert!(py >= 1 && py <= 9);
+        assert!((1..=9).contains(&py));
     }
 
     #[test]
@@ -468,7 +468,7 @@ mod tests {
         let digits = birth_date_digits(1990, 5, 14);
         let grid = lo_shu_grid(&digits);
         let total: u32 = grid.iter().flat_map(|r| r.iter()).sum();
-        let nonzero_digits = digits.iter().filter(|&&d| d >= 1 && d <= 9).count();
+        let nonzero_digits = digits.iter().filter(|&&d| (1..=9).contains(&d)).count();
         assert_eq!(total as usize, nonzero_digits);
     }
 
@@ -526,7 +526,7 @@ mod tests {
     #[test]
     fn personal_day_computed() {
         let pd = personal_day(3, 15, 2026, 6, 10);
-        assert!(pd >= 1 && pd <= 9);
+        assert!((1..=9).contains(&pd));
     }
 
     #[test]

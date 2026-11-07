@@ -309,7 +309,7 @@ mod tests {
         let lon = pos.longitude * RAD_TO_DEG;
         let lat = pos.latitude * RAD_TO_DEG;
         assert!(
-            lon >= 0.0 && lon < 360.0,
+            (0.0..360.0).contains(&lon),
             "Moon lon should be 0-360, got {lon}"
         );
         assert!(lat.abs() < 6.0, "Moon lat should be < 6, got {lat}");
@@ -392,7 +392,10 @@ mod tests {
             let pos = geocentric_moon(JdTT(jd)).unwrap();
             let lon = pos.longitude * RAD_TO_DEG;
             let lat = pos.latitude * RAD_TO_DEG;
-            assert!(lon >= 0.0 && lon < 360.0, "JD {jd}: lon {lon} out of range");
+            assert!(
+                (0.0..360.0).contains(&lon),
+                "JD {jd}: lon {lon} out of range"
+            );
             assert!(lat.abs() < 6.0, "JD {jd}: lat {lat} exceeds 6 deg");
             assert!(
                 pos.distance > 0.002 && pos.distance < 0.003,

@@ -28,6 +28,7 @@
 //!     implements the 77-term 2000B model). The grid gate (2e-8 rad ≈ 4.1 mas)
 //!     is therefore set to the real model gap, not an arbitrary slack value, so
 //!     it still catches a genuine coefficient/argument regression.
+//!
 //! Every grid number below is a real Swiss-Ephemeris output, not an estimate.
 
 use xalen_coords::{mean_obliquity, nutation_2000b};
@@ -47,10 +48,10 @@ fn centuries(jd_tt: f64) -> f64 {
 #[rustfmt::skip]
 const NUT_OBL_GRID: &[(&str, f64, f64, f64, f64)] = &[
     ("1900-01-01T12 TT", 2_415_021.0, 8.493237825236467e-05, -1.105907020492395e-05, 4.093196549827494e-01),
-    ("1950-01-01T12 TT", 2_433_283.0, -1.573547877153770e-05, 4.027870813985479e-05, 4.092061316116486e-01),
+    ("1950-01-01T12 TT", 2_433_283.0, -1.573_547_877_153_77e-5, 4.027870813985479e-05, 4.092061316116486e-01),
     ("J2000.0",          2_451_545.0, -6.754195804145283e-05, -2.797280438806837e-05, 4.090926005957347e-01),
     ("2025-06-01T00 TT", 2_460_827.5, 7.502124993153864e-06, 4.177518796373252e-05, 4.090348926354189e-01),
-    ("2050-01-01T12 TT", 2_469_808.0, 7.350991362897182e-05, -2.592790433724558e-05, 4.089790629618730e-01),
+    ("2050-01-01T12 TT", 2_469_808.0, 7.350991362897182e-05, -2.592790433724558e-05, 4.089_790_629_618_73e-1),
 ];
 
 /// SOFA passes a 2-part TT Julian Date; XALEN takes Julian centuries TT from J2000.
@@ -63,8 +64,8 @@ fn nutation_2000b_matches_sofa() {
     let jd = 2_400_000.5 + 53_736.0;
     let n = nutation_2000b(centuries_tt(jd));
 
-    let dpsi_err = (n.delta_psi - (-0.9632552291148362783e-5)).abs();
-    let deps_err = (n.delta_epsilon - 0.4063197106621159367e-4).abs();
+    let dpsi_err = (n.delta_psi - (-9.632_552_291_148_363e-6)).abs();
+    let deps_err = (n.delta_epsilon - 4.063_197_106_621_159e-5).abs();
 
     println!(
         "\nNut00b @ TT JD {jd}: |Δ(Δψ)| = {dpsi_err:.3e} rad ({:.4e}\"), |Δ(Δε)| = {deps_err:.3e} rad ({:.4e}\")",
@@ -89,7 +90,7 @@ fn nutation_2000b_matches_sofa() {
 fn mean_obliquity_matches_sofa_obl06() {
     let jd = 2_400_000.5 + 54_388.0;
     let eps = mean_obliquity(centuries_tt(jd));
-    let err = (eps - 0.4090749229387258204).abs();
+    let err = (eps - 0.409_074_922_938_725_8).abs();
 
     println!(
         "Obl06 @ TT JD {jd}: |Δε| = {err:.3e} rad ({:.4e}\")",

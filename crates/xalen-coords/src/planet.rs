@@ -208,7 +208,9 @@ mod tests {
     fn display_round_trips() {
         for &p in &Planet::ALL {
             let name = p.to_string();
-            let parsed: Planet = name.parse().expect(&format!("failed to parse '{name}'"));
+            let parsed: Planet = name
+                .parse()
+                .unwrap_or_else(|_| panic!("failed to parse '{name}'"));
             assert_eq!(p, parsed);
         }
     }

@@ -225,7 +225,7 @@ mod tests {
     fn year_star_range_1_to_9() {
         for y in 1900..2100 {
             let s = year_star(y);
-            assert!(s >= 1 && s <= 9, "year {y} gave star {s}");
+            assert!((1..=9).contains(&s), "year {y} gave star {s}");
         }
     }
 
@@ -242,7 +242,7 @@ mod tests {
         for y in 2020..2030 {
             for m in 1..=12 {
                 let s = month_star(y, m);
-                assert!(s >= 1 && s <= 9, "year {y} month {m} gave star {s}");
+                assert!((1..=9).contains(&s), "year {y} month {m} gave star {s}");
             }
         }
     }

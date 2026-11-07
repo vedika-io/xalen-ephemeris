@@ -295,7 +295,7 @@ impl KpChart {
             let start = self.cusps[i].rem_euclid(360.0);
             let end = self.cusps[(i + 1) % 12].rem_euclid(360.0);
             if start < end {
-                if d >= start && d < end {
+                if (start..end).contains(&d) {
                     return i + 1;
                 }
             } else {
@@ -1169,7 +1169,7 @@ mod tests {
         for num in 1..=249 {
             let sign = kp_number_to_sign(num);
             assert!(
-                sign >= 1 && sign <= 12,
+                (1..=12).contains(&sign),
                 "KP#{num} mapped to sign {sign}, expected 1-12"
             );
         }
@@ -1182,13 +1182,13 @@ mod tests {
         // KP 249 = last valid sub, deep in Pisces region
         let s249 = kp_number_to_sign(249);
         assert!(
-            s249 >= 1 && s249 <= 12,
+            (1..=12).contains(&s249),
             "KP 249 should be valid sign, got {s249}"
         );
         // KP subs near the middle should be mid-zodiac signs
         let s125 = kp_number_to_sign(125);
         assert!(
-            s125 >= 5 && s125 <= 8,
+            (5..=8).contains(&s125),
             "KP 125 should be mid-zodiac sign, got {s125}"
         );
     }
