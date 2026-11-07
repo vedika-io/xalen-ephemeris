@@ -610,8 +610,9 @@ pub struct MapArgs {
     #[arg(long, value_name = "DEG", allow_negative_numbers = true)]
     pub lat: Option<f64>,
     /// Print a GeoJSON FeatureCollection (one LineString per line segment and a
-    /// Point per zenith) instead of a table
-    #[arg(long, conflicts_with = "json")]
+    /// Point per zenith) instead of a table; cannot be combined with --lat or
+    /// --json, and leaves out bodies the ephemeris cannot reach at the date
+    #[arg(long, conflicts_with_all = ["json", "lat"])]
     pub geojson: bool,
     #[command(flatten)]
     pub out: OutArgs,
@@ -849,10 +850,12 @@ pub fn build_command() -> clap::Command {
         })
         .mut_subcommand("map", |c| {
             c.after_help(format!(
-                "{}\n\n{bodies}\n\nWith --geojson the output loads in any GIS tool or geojson.io. \
+                "{}\n\n{bodies}\n\nWith --geojson the output loads in any GIS tool or geojson.io; it cannot be \
+                 combined with --lat, and it silently leaves out the bodies the ephemeris cannot \
+                 reach at the date (--json and the table list them as skipped). \
                  Positions are geocentric (the Moon's lines can be off by up to one degree of \
                  parallax). The map has no zodiac.",
-                example("map --date 2024-06-21T00:00:00Z --bodies sun,moon --lat 40 --geojson")
+                example("map --date 2024-06-21T00:00:00Z --bodies sun,moon --geojson")
             ))
         })
         .mut_subcommand("synastry", |c| {

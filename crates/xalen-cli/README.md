@@ -226,7 +226,10 @@ Sun   90.1364   23.4382   23.4382     -179.5467   -179.5467  0.4533    69.1211  
 `--geojson` prints a GeoJSON FeatureCollection instead: one `LineString` feature
 per line segment (properties `body` and `kind`, which is `MC`, `IC`, `ASC` or
 `DSC`) and one `Point` feature per zenith (`kind` is `ZENITH`), with coordinates
-as `[longitude, latitude]`. Segments never cross the antimeridian. Load the file
+as `[longitude, latitude]`. Segments never cross the antimeridian. `--geojson`
+cannot be combined with `--lat` or `--json`, and it leaves out bodies the
+ephemeris cannot reach at the date (Pluto outside 1885-2099 in the default set),
+which the table and `--json` list as skipped. Load the file
 in any GIS tool or on geojson.io.
 
 ```console
@@ -240,7 +243,9 @@ The aspects between two births and the house overlays. Person A is given with
 `--a-alt`); person B the same with `--b-`. `--house-system` applies to both
 charts (default Placidus), `--aspects` takes `major` (default), `all` or names
 such as `trine,square`, `--orb-mult` scales the default orbs, and `--angles` adds
-the Ascendant, Midheaven, Descendant and Imum Coeli. The zodiac is tropical.
+the Ascendant, Midheaven, Descendant and Imum Coeli. The zodiac is tropical. The
+header notes a chart whose houses fell back to Porphyry at a polar latitude
+(`fallback_used` in the JSON).
 
 ```console
 $ xalen synastry --a-date 1990-03-15T06:30:00Z --a-place delhi --b-date 1992-08-02T14:10:00Z --b-place mumbai --bodies sun,moon,venus,mars --angles

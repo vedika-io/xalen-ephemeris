@@ -1208,7 +1208,19 @@ fn sidereal_only_converts_the_printed_longitudes() {
     );
     assert!(gap < 1e-6, "ascendant differs by {gap}");
     // Synastry has no zodiac option.
-    let out = xalen(&["synastry", "--sidereal"]);
+    let out = xalen(&[
+        "synastry",
+        "--a-date",
+        "1990-03-15",
+        "--a-place",
+        "delhi",
+        "--b-date",
+        "1992-08-02",
+        "--b-place",
+        "mumbai",
+        "--sidereal",
+    ]);
+    assert!(out.stderr.contains("--sidereal"), "{}", out.stderr);
     assert_eq!(out.code, 2);
 }
 
@@ -1382,6 +1394,7 @@ fn the_relationship_and_map_commands_exit_two_on_bad_input() {
         vec!["map", "--date", "2024-06-21", "--altitude", "95"],
         vec!["map", "--date", "2024-06-21", "--lat", "90"],
         vec!["map", "--date", "2024-06-21", "--json", "--geojson"],
+        vec!["map", "--date", "2024-06-21", "--geojson", "--lat", "40"],
         vec!["map", "--date", "2024-06-21", "--bodies", "earth"],
         vec!["map"],
     ];
@@ -1406,4 +1419,561 @@ fn the_relationship_and_map_commands_exit_two_on_bad_input() {
         "mumbai",
     ]);
     assert!(missing.stderr.contains("--b-date"), "{}", missing.stderr);
+}
+
+// ---------------------------------------------------------------------------
+// Distinct births and exact positions, compared with direct library calls
+// ---------------------------------------------------------------------------
+
+use serde_json::json;
+use xalen_ephemeris::houses::geocoding::city_coordinates;
+use xalen_ephemeris::houses::{GeoLocation, HouseCusps, HouseSystem};
+use xalen_ephemeris::relationship::{
+    BirthMoment, ChartBody, CompositeAscendant, CompositeOptions, DavisonOptions, NatalChart,
+    SpaceMidpoint, SynastryOptions, composite_chart, davison_chart, default_bodies, synastry,
+};
+
+const DISTINCT_A: [&str; 4] = ["--a-date", "1990-05-10T04:30:00Z", "--a-place", "delhi"];
+const DISTINCT_B: [&str; 4] = ["--b-date", "1992-11-02T19:15:00Z", "--b-place", "mumbai"];
+
+fn city(name: &str) -> GeoLocation {
+    city_coordinates(name).expect("the city is in the table")
+}
+
+fn birth_a() -> JdUT1 {
+    calendar_to_jd(1990, 5, 10, 4.5, CalendarSystem::ProlepticGregorian)
+}
+
+fn birth_b() -> JdUT1 {
+    calendar_to_jd(1992, 11, 2, 19.25, CalendarSystem::ProlepticGregorian)
+}
+
+fn natal(almanac: &Almanac, jd: JdUT1, place: &GeoLocation, system: HouseSystem) -> NatalChart {
+    NatalChart::compute(almanac, jd, place, system, &default_bodies()).expect("the chart computes")
+}
+
+fn distinct_args(command: &str, more: &[&str]) -> Vec<String> {
+    std::iter::once(command)
+        .chain(DISTINCT_A)
+        .chain(DISTINCT_B)
+        .chain(more.iter().copied())
+        .map(str::to_string)
+        .collect()
+}
+
+/// Every body longitude, the ascendant, the midheaven and every cusp of a
+/// chart-style JSON against the library's values.
+fn assert_chart_json(json: &Value, bodies: &[ChartBody], houses: &HouseCusps, what: &str) {
+    let items = json["bodies"].as_array().expect("bodies");
+    assert_eq!(items.len(), bodies.len(), "{what}: body count");
+    for (item, want) in items.iter().zip(bodies) {
+        let gap = angle_gap(num(&item["longitude"]), want.longitude_deg);
+        assert!(gap < 1e-6, "{what}: {} differs by {gap}", item["id"]);
+    }
+    let deg = |radians: f64| radians.to_degrees().rem_euclid(360.0);
+    assert!(
+        angle_gap(angle_of(json, "ascendant"), deg(houses.ascendant)) < 1e-6,
+        "{what}: ASC"
+    );
+    assert!(
+        angle_gap(angle_of(json, "mc"), deg(houses.mc)) < 1e-6,
+        "{what}: MC"
+    );
+    let cusps = json["cusps"].as_array().expect("cusps");
+    assert_eq!(cusps.len(), 12);
+    for (i, cusp) in cusps.iter().enumerate() {
+        let gap = angle_gap(num(&cusp["longitude"]), houses.cusp_deg(i));
+        assert!(gap < 1e-6, "{what}: cusp {} differs by {gap}", i + 1);
+    }
+}
+
+#[test]
+fn synastry_of_different_births_matches_the_library_cell_by_cell() {
+    let almanac = Almanac::default_vedic();
+    let a = natal(&almanac, birth_a(), &city("delhi"), HouseSystem::Placidus);
+    let b = natal(&almanac, birth_b(), &city("mumbai"), HouseSystem::Placidus);
+    let expected = synastry(
+        &a,
+        &b,
+        &SynastryOptions {
+            include_angles: true,
+            ..SynastryOptions::default()
+        },
+    )
+    .expect("the library computes the synastry");
+    let json = json_of_owned(&distinct_args("synastry", &["--angles", "--json"]));
+
+    assert_eq!(json["rows"], serde_json::to_value(&expected.rows).unwrap());
+    assert_eq!(json["cols"], serde_json::to_value(&expected.cols).unwrap());
+    let (rows, cols) = (expected.rows.len(), expected.cols.len());
+    let cells = json["cells"].as_array().expect("cells");
+    assert_eq!(cells.len(), rows * cols);
+    let mut found = 0;
+    for i in 0..rows {
+        for j in 0..cols {
+            let cell = &cells[i * cols + j];
+            match expected.cell(i, j) {
+                None => assert!(cell.is_null(), "cell ({i},{j}) should be empty: {cell}"),
+                Some(hit) => {
+                    found += 1;
+                    assert_eq!(
+                        cell["aspect_type"],
+                        format!("{:?}", hit.aspect_type),
+                        "({i},{j})"
+                    );
+                    assert!(
+                        (num(&cell["orb_deg"]) - hit.orb_deg).abs() < 1e-9,
+                        "({i},{j}) orb"
+                    );
+                    assert!((num(&cell["separation_deg"]) - hit.separation_deg).abs() < 1e-9);
+                    assert_eq!(
+                        cell["a"],
+                        serde_json::to_value(hit.a).unwrap(),
+                        "({i},{j}) a"
+                    );
+                    assert_eq!(
+                        cell["b"],
+                        serde_json::to_value(hit.b).unwrap(),
+                        "({i},{j}) b"
+                    );
+                }
+            }
+        }
+    }
+    assert!(found > 5, "a meaningful grid, got {found} aspects");
+
+    // Each overlay lands in the other chart's houses.
+    for (key, items, host, guest) in [
+        ("b_in_a", &expected.b_in_a, &a, &b),
+        ("a_in_b", &expected.a_in_b, &b, &a),
+    ] {
+        let got = json[key].as_array().expect("overlay");
+        let guest_points = guest.points(true);
+        assert_eq!(got.len(), items.len(), "{key}");
+        for (k, (item, want)) in got.iter().zip(items).enumerate() {
+            assert_eq!(
+                item["point"],
+                serde_json::to_value(want.point).unwrap(),
+                "{key} {k}"
+            );
+            assert_eq!(item["house"], json!(want.house), "{key} {k}");
+            assert!(angle_gap(num(&item["longitude_deg"]), guest_points[k].1) < 1e-9);
+            let house = host.houses.planet_in_house(guest_points[k].1.to_radians());
+            assert_eq!(
+                item["house"],
+                json!(house),
+                "{key} {k} lands in the other chart"
+            );
+        }
+    }
+    assert_ne!(
+        json["b_in_a"], json["a_in_b"],
+        "the two overlays differ for these births"
+    );
+}
+
+#[test]
+fn synastry_reports_a_polar_house_fallback() {
+    let out = xalen(&[
+        "synastry",
+        "--a-date",
+        "1990-05-10T04:30:00Z",
+        "--a-lat",
+        "80",
+        "--a-lon",
+        "0",
+        "--b-date",
+        "1992-11-02T19:15:00Z",
+        "--b-place",
+        "mumbai",
+        "--bodies",
+        "sun,moon",
+    ]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    assert!(
+        out.stdout.contains("chart A fell back to Porphyry"),
+        "{}",
+        out.stdout
+    );
+    assert!(!out.stdout.contains("chart B fell back"));
+    let json = json_of(&[
+        "synastry",
+        "--a-date",
+        "1990-05-10T04:30:00Z",
+        "--a-lat",
+        "80",
+        "--a-lon",
+        "0",
+        "--b-date",
+        "1992-11-02T19:15:00Z",
+        "--b-place",
+        "mumbai",
+        "--bodies",
+        "sun,moon",
+        "--json",
+    ]);
+    assert_eq!(json["a"]["fallback_used"], true);
+    assert_eq!(json["b"]["fallback_used"], false);
+}
+
+#[test]
+fn composite_of_different_births_matches_the_library() {
+    let almanac = Almanac::default_vedic();
+    // Derived Ascendant, Placidus.
+    let a = natal(&almanac, birth_a(), &city("delhi"), HouseSystem::Placidus);
+    let b = natal(&almanac, birth_b(), &city("mumbai"), HouseSystem::Placidus);
+    let expected = composite_chart(&a, &b, &CompositeOptions::default()).expect("composite");
+    let json = json_of_owned(&distinct_args("composite", &["--json"]));
+    assert_eq!(json["ascendant_method"], "derived");
+    assert_chart_json(
+        &json,
+        &expected.bodies,
+        &expected.houses,
+        "composite derived",
+    );
+
+    // Midpoint of the Ascendants, Whole Sign.
+    let a = natal(&almanac, birth_a(), &city("delhi"), HouseSystem::WholeSign);
+    let b = natal(&almanac, birth_b(), &city("mumbai"), HouseSystem::WholeSign);
+    let options = CompositeOptions {
+        house_system: HouseSystem::WholeSign,
+        ascendant: CompositeAscendant::MidpointOfAscendants,
+    };
+    let expected = composite_chart(&a, &b, &options).expect("composite");
+    let json = json_of_owned(&distinct_args(
+        "composite",
+        &[
+            "--ascendant",
+            "midpoint",
+            "--house-system",
+            "wholesign",
+            "--json",
+        ],
+    ));
+    assert_eq!(json["ascendant_method"], "midpoint");
+    assert_chart_json(
+        &json,
+        &expected.bodies,
+        &expected.houses,
+        "composite midpoint",
+    );
+    let derived = json_of_owned(&distinct_args(
+        "composite",
+        &["--house-system", "wholesign", "--json"],
+    ));
+    assert!(
+        angle_gap(
+            angle_of(&json, "ascendant"),
+            angle_of(&derived, "ascendant")
+        ) > 1e-3,
+        "the two Ascendant methods give different Ascendants for these births"
+    );
+}
+
+#[test]
+fn davison_of_different_births_matches_the_library() {
+    let almanac = Almanac::default_vedic();
+    for (space, how) in [
+        ("arithmetic", SpaceMidpoint::Arithmetic),
+        ("great-circle", SpaceMidpoint::GreatCircle),
+    ] {
+        for (place_a, place_b) in [("delhi", "mumbai"), ("london", "sydney")] {
+            let moment = |jd: JdUT1, place: &str| BirthMoment {
+                jd_ut1: jd.0,
+                location: city(place),
+            };
+            let expected = davison_chart(
+                &almanac,
+                &moment(birth_a(), place_a),
+                &moment(birth_b(), place_b),
+                &DavisonOptions {
+                    space: how,
+                    ..DavisonOptions::default()
+                },
+            )
+            .expect("davison");
+            let json = json_of(&[
+                "davison",
+                "--a-date",
+                "1990-05-10T04:30:00Z",
+                "--a-place",
+                place_a,
+                "--b-date",
+                "1992-11-02T19:15:00Z",
+                "--b-place",
+                place_b,
+                "--space",
+                space,
+                "--json",
+            ]);
+            let what = format!("davison {space} {place_a}/{place_b}");
+            assert_chart_json(&json, &expected.bodies, &expected.houses, &what);
+            assert!(
+                (num(&json["jd_ut"]) - expected.jd_ut1).abs() < 1e-9,
+                "{what}: date"
+            );
+            assert!((num(&json["place"]["latitude"]) - expected.location.lat_deg()).abs() < 1e-9);
+            assert!((num(&json["place"]["longitude"]) - expected.location.lon_deg()).abs() < 1e-9);
+        }
+    }
+    // London and Sydney are far enough apart for the two midpoints to differ.
+    let place = |space: &str| {
+        let json = json_of(&[
+            "davison",
+            "--a-date",
+            "1990-05-10T04:30:00Z",
+            "--a-place",
+            "london",
+            "--b-date",
+            "1992-11-02T19:15:00Z",
+            "--b-place",
+            "sydney",
+            "--space",
+            space,
+            "--json",
+        ]);
+        num(&json["place"]["latitude"])
+    };
+    assert!((place("arithmetic") - place("great-circle")).abs() > 0.1);
+}
+
+#[test]
+fn davison_great_circle_of_antipodal_places_exits_two() {
+    let antipodes = [
+        "davison",
+        "--a-date",
+        "1990-05-10",
+        "--a-lat",
+        "10",
+        "--a-lon",
+        "20",
+        "--b-date",
+        "1992-11-02",
+        "--b-lat",
+        "-10",
+        "--b-lon",
+        "-160",
+    ];
+    let out = xalen(
+        &antipodes
+            .iter()
+            .copied()
+            .chain(["--space", "great-circle"])
+            .collect::<Vec<_>>(),
+    );
+    assert_eq!(out.code, 2, "{}", out.stderr);
+    assert!(out.stdout.is_empty());
+    assert_eq!(out.stderr.trim().lines().count(), 1, "{}", out.stderr);
+    assert!(out.stderr.contains("antipodal"), "{}", out.stderr);
+    // The arithmetic midpoint still exists.
+    assert_eq!(xalen(&antipodes).code, 0);
+}
+
+#[test]
+fn sidereal_whole_sign_cusps_sit_on_sign_boundaries() {
+    for command in ["composite", "davison"] {
+        let json = json_of_owned(&distinct_args(command, &["--sidereal", "--json"]));
+        assert_eq!(json["zodiac"], "sidereal", "{command}");
+        assert_eq!(json["house_system"], "WholeSign", "{command}");
+        let cusps = json["cusps"].as_array().expect("cusps");
+        assert_eq!(cusps.len(), 12);
+        for cusp in cusps {
+            let within = num(&cusp["longitude"]).rem_euclid(30.0);
+            assert!(
+                within < 1e-6 || 30.0 - within < 1e-6,
+                "{command}: cusp {cusp} is not on a sign boundary"
+            );
+        }
+    }
+}
+
+#[test]
+fn map_geojson_positions_follow_the_library() {
+    let almanac = Almanac::default_vedic();
+    let expected = astro_map(
+        &almanac,
+        calendar_to_jd(2024, 6, 21, 0.0, CalendarSystem::ProlepticGregorian),
+        &[Body::Sun, Body::Moon],
+        &MapOptions::default(),
+    )
+    .expect("the library maps the bodies");
+    let json = json_of(&[
+        "map",
+        "--date",
+        "2024-06-21T00:00:00Z",
+        "--bodies",
+        "sun,moon",
+        "--geojson",
+    ]);
+    let features = json["features"].as_array().expect("features");
+    for body in &expected.bodies {
+        let id = format!("{:?}", body.body).to_lowercase();
+        let of_kind = |kind: &str| -> Vec<&Value> {
+            features
+                .iter()
+                .filter(|f| f["properties"]["body"] == id && f["properties"]["kind"] == kind)
+                .collect()
+        };
+        // The zenith is [mc_lon, dec].
+        let zeniths = of_kind("ZENITH");
+        assert_eq!(zeniths.len(), 1, "{id}");
+        let at = &zeniths[0]["geometry"]["coordinates"];
+        let mc_lon = body.lines[0].segments[0][0].1;
+        assert!((num(&at[0]) - mc_lon).abs() < 1e-9, "{id} zenith lon");
+        assert!((num(&at[1]) - body.dec_deg).abs() < 1e-9, "{id} zenith lat");
+        // MC and IC are meridians at the library's longitude.
+        for (kind, index) in [("MC", 0), ("IC", 1)] {
+            let lines = of_kind(kind);
+            assert_eq!(lines.len(), 1, "{id} {kind}");
+            let want = body.lines[index].segments[0][0].1;
+            for position in lines[0]["geometry"]["coordinates"]
+                .as_array()
+                .expect("positions")
+            {
+                assert!(
+                    (num(&position[0]) - want).abs() < 1e-9,
+                    "{id} {kind} longitude"
+                );
+                assert!(
+                    (-90.0..=90.0).contains(&num(&position[1])),
+                    "{id} {kind} latitude"
+                );
+            }
+        }
+        // Every ASC and DSC position is a library vertex, as [lon, lat].
+        for (kind, index) in [("ASC", 2), ("DSC", 3)] {
+            let vertices: Vec<(f64, f64)> = body.lines[index]
+                .segments
+                .iter()
+                .flatten()
+                .copied()
+                .collect();
+            let mut count = 0;
+            for line in of_kind(kind) {
+                for position in line["geometry"]["coordinates"]
+                    .as_array()
+                    .expect("positions")
+                {
+                    count += 1;
+                    let (lon, lat) = (num(&position[0]), num(&position[1]));
+                    assert!(
+                        vertices
+                            .iter()
+                            .any(|v| (v.1 - lon).abs() < 1e-9 && (v.0 - lat).abs() < 1e-9),
+                        "{id} {kind}: [{lon}, {lat}] is not a library vertex"
+                    );
+                }
+            }
+            assert_eq!(count, vertices.len(), "{id} {kind} vertex count");
+        }
+    }
+}
+
+fn vertex_lon(line: &Value, lat: f64) -> f64 {
+    line["segments"]
+        .as_array()
+        .expect("segments")
+        .iter()
+        .flat_map(|s| s.as_array().expect("points").iter())
+        .find(|p| (num(&p[0]) - lat).abs() < 1e-9)
+        .map(|p| num(&p[1]))
+        .unwrap_or_else(|| panic!("no vertex at latitude {lat}"))
+}
+
+#[test]
+fn map_dsc_and_never_rises_at_a_latitude() {
+    let json = json_of(&[
+        "map",
+        "--date",
+        "2024-06-21T00:00:00Z",
+        "--bodies",
+        "sun",
+        "--lat",
+        "40",
+        "--lat-step",
+        "0.5",
+        "--json",
+    ]);
+    let dsc = &json["bodies"][0]["lines"][3];
+    assert_eq!(dsc["kind"], "Dsc");
+    let want = num(&json["at_latitude"]["bodies"][0]["dsc_longitude"]);
+    assert!((vertex_lon(dsc, 40.0) - want).abs() < 1e-6);
+
+    // Near the June solstice the Sun never rises at 80 south.
+    let south = json_of(&[
+        "map",
+        "--date",
+        "2024-06-21T00:00:00Z",
+        "--bodies",
+        "sun",
+        "--lat",
+        "-80",
+        "--json",
+    ]);
+    let entry = &south["at_latitude"]["bodies"][0];
+    assert_eq!(entry["status"], "never rises");
+    assert!(entry["asc_longitude"].is_null() && entry["dsc_longitude"].is_null());
+    let text = xalen(&[
+        "map",
+        "--date",
+        "2024-06-21T00:00:00Z",
+        "--bodies",
+        "sun",
+        "--lat",
+        "-80",
+    ]);
+    assert_eq!(text.code, 0, "{}", text.stderr);
+    assert!(text.stdout.contains("never rises"), "{}", text.stdout);
+}
+
+#[test]
+fn map_altitude_moves_the_horizon_lines() {
+    let run = |altitude: &str| {
+        json_of(&[
+            "map",
+            "--date",
+            "2024-06-21T00:00:00Z",
+            "--bodies",
+            "sun",
+            "--lat",
+            "40",
+            "--lat-step",
+            "0.5",
+            "--altitude",
+            altitude,
+            "--json",
+        ])
+    };
+    let flat = run("0");
+    let low = run("-0.5667");
+    assert!((num(&low["options"]["horizon_altitude_deg"]) + 0.5667).abs() < 1e-12);
+    let asc_flat = vertex_lon(&flat["bodies"][0]["lines"][2], 40.0);
+    let asc_low = vertex_lon(&low["bodies"][0]["lines"][2], 40.0);
+    assert!((asc_flat - asc_low).abs() > 1e-3, "{asc_flat} vs {asc_low}");
+
+    let almanac = Almanac::default_vedic();
+    let expected = astro_map(
+        &almanac,
+        calendar_to_jd(2024, 6, 21, 0.0, CalendarSystem::ProlepticGregorian),
+        &[Body::Sun],
+        &MapOptions {
+            lat_step_deg: 0.5,
+            horizon_altitude_deg: -0.5667,
+            ..MapOptions::default()
+        },
+    )
+    .expect("the library maps the Sun");
+    for (index, key, line) in [(2, "asc_longitude", "Asc"), (3, "dsc_longitude", "Dsc")] {
+        let want = expected.bodies[0].lines[index]
+            .segments
+            .iter()
+            .flatten()
+            .find(|v| (v.0 - 40.0).abs() < 1e-9)
+            .expect("a vertex at 40 north")
+            .1;
+        assert_eq!(low["bodies"][0]["lines"][index]["kind"], line);
+        assert!((vertex_lon(&low["bodies"][0]["lines"][index], 40.0) - want).abs() < 1e-9);
+        let at = num(&low["at_latitude"]["bodies"][0][key]);
+        assert!((at - want).abs() < 1e-6, "{key}: {at} vs {want}");
+    }
 }

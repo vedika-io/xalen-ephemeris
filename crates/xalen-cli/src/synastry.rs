@@ -167,8 +167,16 @@ pub fn run(args: &SynastryArgs) -> Result<Report> {
     text.push('\n');
     text.push_str(&birth_line("B", &b));
     text.push('\n');
+    let mut fallback = String::new();
+    for (label, chart) in [("A", &chart_a), ("B", &chart_b)] {
+        if chart.houses.fallback_used {
+            fallback.push_str(&format!(
+                " (chart {label} fell back to Porphyry at its latitude)"
+            ));
+        }
+    }
     text.push_str(&format!(
-        "House system: {system}   orb multiplier: {}   {} aspects found\n\n",
+        "House system: {system}{fallback}   orb multiplier: {}   {} aspects found\n\n",
         num(args.orb_mult, 2),
         result.aspects().count()
     ));
@@ -189,6 +197,8 @@ pub fn run(args: &SynastryArgs) -> Result<Report> {
     json["zodiac"] = json!("tropical");
     json["a"] = birth_json(&a);
     json["b"] = birth_json(&b);
+    json["a"]["fallback_used"] = json!(chart_a.houses.fallback_used);
+    json["b"]["fallback_used"] = json!(chart_b.houses.fallback_used);
     json["house_system"] = json!(format!("{system:?}"));
     json["house_system_name"] = json!(system.to_string());
     json["aspect_types"] = json!(kinds.iter().map(|k| format!("{k:?}")).collect::<Vec<_>>());
