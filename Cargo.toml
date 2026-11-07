@@ -23,6 +23,8 @@ members = [
     "crates/xalen-chart",
     "crates/xalen-cloud",
     "crates/xalen-cli",
+    "crates/xalen-relationship",
+    "crates/xalen-maps",
     "validation",
 ]
 # xalen-python is a PyO3 extension-module — its cdylib needs Python at link
@@ -55,6 +57,8 @@ default-members = [
     "crates/xalen-chart",
     "crates/xalen-cloud",
     "crates/xalen-cli",
+    "crates/xalen-relationship",
+    "crates/xalen-maps",
     "validation",
 ]
 
@@ -119,6 +123,8 @@ xalen-lalkitab = { path = "crates/xalen-lalkitab", version = "0.7.0" }
 xalen-iching = { path = "crates/xalen-iching", version = "0.7.0" }
 xalen-world = { path = "crates/xalen-world", version = "0.7.0" }
 xalen-chart = { path = "crates/xalen-chart", version = "0.7.0" }
+xalen-relationship = { path = "crates/xalen-relationship", version = "0.7.0" }
+xalen-maps = { path = "crates/xalen-maps", version = "0.7.0" }
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }

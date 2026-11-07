@@ -9,7 +9,7 @@ name: release
 #   * npm   — per-platform N-API .node addons (optionalDependencies) via the
 #             napi-rs build matrix, plus the platform-independent WebAssembly
 #             package via wasm-pack.
-#   * crates.io — the 19 source crates published in dependency order.
+#   * crates.io — the 21 source crates published in dependency order.
 #
 # Publish jobs run only on a `v*` tag and read their credential from a secret.
 # When the secret is absent the publish step is skipped (build + test still run),
@@ -224,7 +224,7 @@ jobs:
           fi
 
   # ---------------------------------------------------------------------------
-  # crates.io: publish the 19 source crates in dependency order.
+  # crates.io: publish the 21 source crates in dependency order.
   # Each `cargo publish` waits for the previous crate to be indexed.
   # ---------------------------------------------------------------------------
   crates-publish:
@@ -243,7 +243,7 @@ jobs:
           set -euo pipefail
           # Topological order: every crate's intra-workspace deps precede it.
           # `ephemeris` is the umbrella crate at the repo root; `cli` depends on it.
-          order=(time coords star-anchors ayanamsa houses chart chinese stars vedic ephem cloud western numerology lalkitab iching world ephemeris ffi cli)
+          order=(time coords star-anchors ayanamsa houses chart chinese stars vedic ephem cloud western relationship maps numerology lalkitab iching world ephemeris ffi cli)
           for c in "${order[@]}"; do
             echo "::group::publish xalen-$c"
             cargo publish -p "xalen-$c" --no-verify
