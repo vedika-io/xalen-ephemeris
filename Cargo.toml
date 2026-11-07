@@ -106,6 +106,8 @@ exclude = [
     ".githooks/",
     "scripts/",
     "tools/",
+    # Reads the binding crates' sources, which are not in this package.
+    "tests/binding_ids.rs",
 ]
 
 [dependencies]

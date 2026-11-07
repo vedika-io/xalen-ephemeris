@@ -286,6 +286,10 @@ substitute for `import swisseph as swe` for the common `calc_ut` / `fixstar2`
 calls — a search-and-replace migration path, not a 1:1 reimplementation of every
 pyswisseph entry point.
 
+The integer IDs the bindings take for bodies, ayanamsas and house systems, and
+the Swiss Ephemeris numbers next to them, are listed in
+[docs/BINDING_IDS.md](docs/BINDING_IDS.md).
+
 ---
 
 ## Architecture
@@ -357,6 +361,8 @@ proprietary modules on top.
 
 Contributions are welcome. Please open an issue before starting work on
 significant changes.
+The workflow from issue to merged pull request (branch names, commit style,
+checks, the contributor agreement) is in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 **Before submitting a pull request:**
 

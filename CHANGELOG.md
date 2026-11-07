@@ -11,6 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 for reporting that Shadbala had only seven of the nine Kala Bala parts
 ([#46](https://github.com/vedika-io/xalen-ephemeris/issues/46)).
 
+**Thank you** to [rephil9](https://github.com/rephil9) for asking for
+rise/set/transit and eclipse search in the Python `swe` shim
+([#47](https://github.com/vedika-io/xalen-ephemeris/issues/47)) and for an
+exception that `except swe.Error` can catch
+([#48](https://github.com/vedika-io/xalen-ephemeris/issues/48)).
+
 ### Added
 - **Parans in `xalen-maps` and `xalen map --parans`.** `parans(&map,
   &ParanOptions)` returns every crossing of one body's line with another's (a
@@ -25,6 +31,31 @@ for reporting that Shadbala had only seven of the nine Kala Bala parts
   `--json`, `PARAN` points in `--geojson`), and `--parans --lat <deg> [--orb
   <deg>]` lists the parans within the orb of that latitude (`--orb` needs
   `--lat`).
+- **Python: rise/set/transit, eclipse search and `swe.Error` in `xalen.swe`**
+  ([#47](https://github.com/vedika-io/xalen-ephemeris/issues/47),
+  [#48](https://github.com/vedika-io/xalen-ephemeris/issues/48)).
+  `rise_trans`, `rise_trans_true_hor`, `sol_eclipse_when_glob`,
+  `sol_eclipse_when_loc`, `lun_eclipse_when`, `lun_eclipse_when_loc` and
+  `lun_eclipse_how` with pyswisseph 2.10's signatures, tuple shapes, return
+  codes and `retflag` bits, the `CALC_*`, `BIT_*` and `ECL_*` constants
+  (`ECL_NUT` included, usable as `calc_ut(jd, ECL_NUT)`), and `FLG_MOSEPH` /
+  `FLG_JPLEPH`. `xalen.swe.Error` (a `RuntimeError`) is raised for every
+  calculation failure; `TypeError`/`ValueError` only for bad arguments. The
+  slots the engines do not compute (global solar contact times, the Sun's
+  azimuth and apparent altitude, Saros numbers) are listed in the binding
+  README. In `xalen-ephem`: `rise_set::next_horizon_crossing` with
+  `HorizonCrossing` (disc point, refraction from pressure and temperature,
+  horizon height, fixed disc size, solar twilight, geocentric no-latitude
+  rising), `rise_set::next_transit` (upper and lower),
+  `rise_set::is_above_horizon`, `rise_set::standard_pressure_hpa`,
+  `rise_set::horizon_dip_deg`, `rise_set::refraction_from_true_deg`,
+  `rise_set::apparent_altitude_deg`,
+  `Almanac::geocentric_ecliptic_altitude_deg`,
+  `Almanac::topocentric_azimuth_altitude_deg`,
+  `LocalCircumstances::diameter_ratio`, `eclipse::lunar_shadow_state`,
+  `SolarEclipse::is_central`, `compat::SE_ECL_NUT` and a public
+  `compat::se_planet_to_body`, `compat::se_hsys_to_system` and
+  `compat::SEFLG_UNSUPPORTED_MASK`.
 - **Ayana Bala and Yuddha Bala in `Shadbala::compute_full`**, which now returns
   all nine Kala Bala parts (`KalaBala::ayana_bala`, `KalaBala::yuddha_bala`,
   both included in `KalaBala::total` and so in the Shadbala total). Ayana Bala
@@ -81,6 +112,16 @@ for reporting that Shadbala had only seven of the nine Kala Bala parts
   published with each release from 0.8; Windows has no prebuilt binary yet.
 
 ### Changed (breaking)
+- Python `xalen.swe`: calculation failures that raised `ValueError` (an unknown
+  body number or star name, a failed `houses`/`houses_ex` calculation, a
+  failed `get_ayanamsa_ut`/`get_ayanamsa_ex_ut` calculation, an ephemeris
+  error) now raise `xalen.swe.Error`, a `RuntimeError`. Code that caught
+  `ValueError` for them should catch `swe.Error`; unsupported `calc_ut` flags
+  and bad house arguments (latitude outside ±90°, longitude outside
+  -180°..360°, an unknown house letter) still raise `ValueError`, and a `hsys`
+  of the wrong type raises `TypeError`.
+- `xalen_ephem::local_eclipse::LocalCircumstances` has a new field,
+  `diameter_ratio`, so code that builds it by hand needs it.
 - `xalen_vedic::shadbala::PlanetPosition` has two new fields, `declination`
   (degrees, north positive) and `house` (1 to 12), and `KalaBala` has two new
   fields, so code that builds either struct by hand needs them. To migrate, set
@@ -97,6 +138,21 @@ for reporting that Shadbala had only seven of the nine Kala Bala parts
   `speed` argument of `compute_full` is no longer used.
 
 ### Fixed
+- **Drik Bala in `Shadbala::compute_full`** used graded aspects (15, 30, 45 or
+  60 virupas by the nearest house), so it jumped at sign boundaries and did not
+  follow BPHS. It now uses the Sphuta Drishti curve of BPHS Ch. 26, exposed as
+  `shadbala::sphuta_drishti_deg`: 0 up to 30 degrees, rising to 15 at 60, 45 at
+  90, falling to 30 at 120 and 0 at 150, rising to the full 60 at 180, then
+  falling evenly to 0 at 300. Saturn adds 45 over 60 to 90 and 270 to 300
+  degrees, Jupiter 30 over 120 to 150 and 240 to 270, and Mars 15 over 90 to 120
+  and 210 to 240, so each has a full 60 at its special aspect (B.V. Raman's
+  reading in *Graha and Bhava Balas*; checked against his worked example and
+  against PyJHora). The special aspects of Mars, Jupiter and Saturn are added as
+  constants over one sign, so those three planets step at the sign edges
+  (Raman's reading). Drik Bala stays the sum of benefic minus malefic aspect
+  values divided by 4, with the same benefic and malefic rules. Drik Bala and
+  the Shadbala total change for most charts. Refs
+  [#46](https://github.com/vedika-io/xalen-ephemeris/issues/46).
 - **Cheshta Bala in `Shadbala::compute_full`** was a placeholder (a flat 30 for
   the Sun and Moon and 60, 30 or 15 for the others from the direction of
   motion). It now follows BPHS Ch. 27 (Santhanam; B.V. Raman, *Graha and Bhava
@@ -120,6 +176,26 @@ for reporting that Shadbala had only seven of the nine Kala Bala parts
 - **`npm test` in `crates/xalen-node`** passed the test directory to
   `node --test`, which fails on Node 24. It now names the two test files, which
   works on Node 20 and 24, as proposed by Serlin2175 in #45.
+
+### Documentation
+- **`docs/BINDING_IDS.md`** lists every numeric ID the C, WebAssembly, Node and
+  Python bindings take (bodies, ayanamsas, house systems, WebAssembly
+  divisional charts) next to the Swiss Ephemeris number where one exists, plus
+  the `xalen.swe` Swiss numbers, flags and calendar constants and the C status
+  codes. The tables are generated from the Rust sources by
+  `tests/binding_ids.rs`, which fails with a diff when the file and the
+  sources disagree; `scripts/regen-binding-ids.sh` rewrites them. Linked from
+  the README, each binding README and the migration guides
+  ([#16](https://github.com/vedika-io/xalen-ephemeris/issues/16)).
+- **Issue-to-pull-request workflow in `CONTRIBUTING.md`**: filing an issue,
+  branch names, the `type(scope): subject` commit style with `Refs #N`, one
+  pull request per change with `Closes #N`, the checks a pull request must
+  pass, the contributor agreement for outside contributions, and squash
+  merging. The pull request template is shorter and asks for the same things
+  ([#15](https://github.com/vedika-io/xalen-ephemeris/issues/15)).
+
+Thanks to Semak12345: both documents were added as proposed by
+Semak12345 in #42 and #43.
 
 ## [0.7.0] - 2026-11-07
 

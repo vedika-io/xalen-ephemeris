@@ -150,6 +150,10 @@ pub struct GlobalEclipse {
     pub l2_at_greatest: f64,
 }
 
+/// Least |γ| (Earth equatorial radii) at which the shadow axis still meets the
+/// Earth ellipsoid: below it a solar eclipse is central.
+pub(crate) const CENTRAL_LIMIT: f64 = 0.9972;
+
 /// Classify a solar eclipse near a given New-Moon instant (UT1) by the Besselian
 /// method: locate greatest eclipse (min axis distance), then classify by the
 /// umbral-radius sign and whether the axis reaches the Earth ellipsoid.
@@ -221,7 +225,6 @@ pub fn classify_solar_eclipse(almanac: &Almanac, jd_new_ut: f64) -> Option<Globa
     // Non-central: the axis misses the ellipsoid but the umbra or antumbra still
     // touches the limb when 0.9972 < |γ| < 0.9972 + |l2| (Meeus, *Astronomical
     // Algorithms* 2nd ed. Ch. 54) — Total if l2 < 0, Annular if l2 > 0.
-    const CENTRAL_LIMIT: f64 = 0.9972;
     let eclipse_type = if gamma_abs < CENTRAL_LIMIT {
         let zeta = (1.0 - gamma_abs * gamma_abs).max(0.0).sqrt();
         let l2_sub = b.l2 - zeta * b.tan_f2;

@@ -101,6 +101,9 @@ pub struct LocalCircumstances {
     pub magnitude: f64,
     /// Obscuration: fraction of the solar AREA covered at maximum (0..=1).
     pub obscuration: f64,
+    /// Ratio of the Moon's to the Sun's apparent diameter at maximum, as seen
+    /// by the observer (`> 1` when the Moon can cover the Sun completely).
+    pub diameter_ratio: f64,
     /// First contact C1 — partial begins (penumbra first touches).
     pub c1: Option<Contact>,
     /// Second contact C2 — totality/annularity begins (umbra/antumbra touches).
@@ -301,6 +304,8 @@ pub fn local_circumstances(
 
     let magnitude = magnitude_from_state(&s_max);
     let obsc = obscuration(&s_max);
+    // l1' = r_sun + r_moon and l2' = r_sun − r_moon (see `obscuration`).
+    let diameter_ratio = (s_max.l1p - s_max.l2p) / (s_max.l1p + s_max.l2p);
     let eclipse_type = if s_max.m <= s_max.l2p.abs() {
         if s_max.l2p < 0.0 {
             LocalSolarType::Total
@@ -380,6 +385,7 @@ pub fn local_circumstances(
         jd_maximum_ut: jd_max_ut,
         magnitude,
         obscuration: obsc,
+        diameter_ratio,
         c1,
         c2,
         c3,

@@ -88,6 +88,7 @@ const longitude2 = xalen.planetLongitudeById(0, jd);
 | -- (Ketu) | -- | -- | 13 |
 
 > **Important:** Pluto is ID 11 (not 9) in XALEN. Mean Node is 9 (not 10).
+> All binding IDs are listed in [BINDING_IDS.md](BINDING_IDS.md).
 
 ---
 
