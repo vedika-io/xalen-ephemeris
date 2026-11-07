@@ -4,6 +4,10 @@
 # status; contributors can run it locally. It works on any Linux or macOS host
 # that has rustup, python3 with pip, node with npm, curl, nm and strings.
 #
+# Minimum versions: Python 3.8, Node 18 (for `node --test`), and Rust 1.85, the
+# workspace `rust-version` (MSRV; cargo refuses an older toolchain). The gate
+# stops at once with a message when python3 or node is older.
+#
 # Stages, in order. A failing stage does not stop the later ones, so one run
 # shows every problem. Each stage prints its name and OK, FAIL or SKIPPED (with
 # the reason); the summary lists every stage, and the script exits non-zero if
@@ -46,14 +50,22 @@
 #   bash scripts/gate.sh --harness-n 20000   # larger harness run
 #   bash scripts/gate.sh --base upstream/main         # attribution range base
 #   bash scripts/gate.sh --pr-text pr.txt    # also check a PR title and body
+#   bash scripts/gate.sh --strict            # a SKIPPED stage counts as FAIL
 #   bash scripts/gate.sh --list              # print the stage names
+#
+# The final line is `GATE: PASS`, `GATE: PASS (N stage(s) skipped)` or
+# `GATE: FAIL (N stage(s) failed)`. Under --strict every SKIPPED stage, including
+# an attribution stage that skips itself for an empty range, is reported as FAIL;
+# the maintainers' CI runs the gate with --strict.
 #
 # Settings (environment; the flags override them):
 #   GATE_HARNESS_N      charts for the harness (default 2000)
 #   GATE_HARNESS_SEED   oracle seed (default 42)
 #   GATE_BASE           base revision for the attribution range (default origin/main)
-#   GATE_TOOLS          directory for installed tools (default: a fresh temp dir;
-#                       set it to a fixed path to reuse the tools between runs)
+#   GATE_STRICT         1 behaves like --strict
+#   GATE_TOOLS          directory for installed tools (default: a fresh temp dir,
+#                       removed when the gate exits; set it to a fixed path to
+#                       keep and reuse the tools between runs)
 #   GATE_CACHE          download cache for the DE440 kernel
 #                       (default: ${XDG_CACHE_HOME:-$HOME/.cache}/xalen-gate)
 set -u -o pipefail
@@ -74,6 +86,8 @@ SEED="${GATE_HARNESS_SEED:-42}"
 BASE="${GATE_BASE:-origin/main}"
 PR_TEXT=""
 QUICK=0
+STRICT=0
+[ "${GATE_STRICT:-0}" = 1 ] && STRICT=1
 SKIP=" "
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -94,6 +108,10 @@ while [ $# -gt 0 ]; do
       ;;
     --quick)
       QUICK=1
+      shift
+      ;;
+    --strict)
+      STRICT=1
       shift
       ;;
     --base)
@@ -125,7 +143,35 @@ case "$N" in
   ''|*[!0-9]*) echo "gate: harness N must be a positive integer, got: $N" >&2; exit 2 ;;
 esac
 
-TOOLS="${GATE_TOOLS:-$(mktemp -d "${TMPDIR:-/tmp}/xalen-gate.XXXXXX")}"
+need_version() { # need_version <tool> <minimum> <check command...>
+  local tool="$1" min="$2"
+  shift 2
+  if ! command -v "$tool" >/dev/null 2>&1; then
+    echo "gate: $tool is not installed (need $min or newer)" >&2
+    exit 2
+  fi
+  if ! "$@"; then
+    echo "gate: $tool is too old ($("$tool" --version 2>&1 | head -n 1)); need $min or newer" >&2
+    exit 2
+  fi
+}
+need_version python3 3.8 \
+  python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 8) else 1)'
+case "$SKIP" in
+  *" release-config "*) case "$SKIP" in *" node-binding "*) NEED_NODE=0 ;; *) NEED_NODE=1 ;; esac ;;
+  *) NEED_NODE=1 ;;
+esac
+if [ "$NEED_NODE" -eq 1 ]; then
+  need_version node 18 \
+    node -e 'process.exit(Number(process.versions.node.split(".")[0]) >= 18 ? 0 : 1)'
+fi
+
+if [ -n "${GATE_TOOLS:-}" ]; then
+  TOOLS="$GATE_TOOLS"
+else
+  TOOLS="$(mktemp -d "${TMPDIR:-/tmp}/xalen-gate.XXXXXX")" || exit 2
+  trap 'rm -rf "$TOOLS"' EXIT
+fi
 CACHE="${GATE_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/xalen-gate}"
 mkdir -p "$TOOLS/py" "$TOOLS/cargo/bin" "$CACHE" || exit 2
 export PATH="$TOOLS/cargo/bin:$TOOLS/py/bin:$PATH"
@@ -310,8 +356,13 @@ stage_harness() {
 
 RESULTS=()
 NFAIL=0
+NSKIP=0
 record() { # record <stage> <OK|FAIL|SKIPPED> [note]
   local line
+  if [ "$2" = SKIPPED ] && [ "$STRICT" -eq 1 ]; then
+    set -- "$1" FAIL "skipped under --strict: ${3:-no reason given}"
+  fi
+  [ "$2" = SKIPPED ] && NSKIP=$((NSKIP + 1))
   line="$(printf '%-8s %s' "$2" "$1")"
   [ -n "${3:-}" ] && line="$line ($3)"
   RESULTS+=("$line")
@@ -344,4 +395,8 @@ if [ "$NFAIL" -ne 0 ]; then
   echo "GATE: FAIL ($NFAIL stage(s) failed)"
   exit 1
 fi
-echo "GATE: PASS"
+if [ "$NSKIP" -ne 0 ]; then
+  echo "GATE: PASS ($NSKIP stage(s) skipped)"
+else
+  echo "GATE: PASS"
+fi

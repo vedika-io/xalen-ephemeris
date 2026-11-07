@@ -26,7 +26,7 @@ by hand with the maintainer's own registry credentials.
    `crates/xalen-python/pyproject.toml`).
 3. Regenerate the Node loader and types, which carry the version:
    `cd crates/xalen-node && npm ci && npx napi build --platform --release`, then
-   commit the changed `index.js` and `index.d.ts`. The release build in step 2
+   commit the changed `index.js` and `index.d.ts`. The release build in section 2
    fails if the committed copies differ from what napi generates.
 4. In `CHANGELOG.md`, rename `## [Unreleased]` to `## [X.Y.Z] - YYYY-MM-DD`
    (the release date) and add a new, empty `## [Unreleased]` above it.
@@ -154,13 +154,27 @@ as described or not done:
   the macOS arm64 and Windows x64 wheels and ran `npm test` against the macOS
   arm64 and Windows x64 Node addons on those systems. The build host runs only
   its own architecture's wheel and addon; the others are checked by hand
-  before upload (step 2).
+  before upload (section 2).
 - **The other Linux architecture**: the workflow tested the Linux x86_64 wheel
   and addon natively. The build host tests only its own architecture, so on an
   aarch64 host the x86_64 wheel and addon are built and inspected but not run.
 - **Publishing**: the crates.io, PyPI and npm uploads in step 4 are manual
   commands, not a script.
 - **GitHub Packages mirror**: the workflow also published the WebAssembly
-  package to the repository's GitHub Packages npm registry under the owner's
-  scope (`@vedika-io/xalen-wasm`). Nothing does that now; npmjs.org
-  (`@xalen/wasm`) is the canonical home.
+  package to the repository's GitHub Packages npm registry, so that it shows in
+  the repository's Packages panel. GitHub Packages requires the npm scope to
+  match the repository owner, so the mirror is `@vedika-io/xalen-wasm`; npmjs.org
+  (`@xalen/wasm`) stays the canonical home. The mirror is kept, by hand, with
+  the same steps the workflow ran, applied to the released tarball. It needs a
+  GitHub token with the `write:packages` scope in `GITHUB_PACKAGES_TOKEN`, read
+  through a user-level `~/.npmrc` line
+  `//npm.pkg.github.com/:_authToken=${GITHUB_PACKAGES_TOKEN}`:
+
+  ```bash
+  mirror="$(mktemp -d)"
+  tar -xzf dist/xalen-wasm-X.Y.Z.tgz -C "$mirror"
+  cd "$mirror/package"
+  npm pkg set name="@vedika-io/xalen-wasm"
+  npm pkg set publishConfig.registry="https://npm.pkg.github.com"
+  npm publish
+  ```

@@ -19,6 +19,8 @@ astrological computation library; correctness and accuracy are the priorities.
 
 - Rust **1.85+** (edition 2024). Pinned MSRV: `rust-version = "1.85"`.
 - `rustup component add clippy rustfmt`
+- For `scripts/gate.sh`: Python **3.8+** and Node **18+** (it stops with a
+  message when either is older), plus curl, nm and strings.
 
 ## Project layout
 
@@ -123,7 +125,10 @@ check a pull request must pass, as named stages:
 
 Each stage prints its name and `OK`, `FAIL` or `SKIPPED` with the reason; the
 summary at the end lists every stage, and the script exits non-zero if any
-stage failed. A failing stage does not stop the later ones.
+stage failed. A failing stage does not stop the later ones. The last line is
+`GATE: PASS`, `GATE: PASS (N stage(s) skipped)` or
+`GATE: FAIL (N stage(s) failed)`; with `--strict` any skipped stage, including
+an `attribution` stage that skips itself, counts as a failure.
 
 ```bash
 bash scripts/gate.sh                       # every stage
@@ -131,6 +136,7 @@ bash scripts/gate.sh --quick               # fmt, clippy, test, doc, release-con
 bash scripts/gate.sh --skip wasm --skip node-binding   # leave out named stages (or --skip wasm,node-binding)
 bash scripts/gate.sh --harness-n 20000     # larger harness run (or GATE_HARNESS_N=20000)
 bash scripts/gate.sh --base upstream/main  # base of the attribution range (or GATE_BASE)
+bash scripts/gate.sh --strict              # a skipped stage counts as a failure (or GATE_STRICT=1)
 bash scripts/gate.sh --list                # the stage names
 ```
 
@@ -145,10 +151,11 @@ by default.
 
 CI runs on the maintainers' own AWS infrastructure. Every pull request receives
 a `ci/gate` commit status once the maintainers have run `scripts/gate.sh`
-against its head; contributors can run the same script locally or in their
-fork's CI. Before posting the status, the maintainers also check the pull
-request title and body for attribution (`bash scripts/gate.sh --pr-text FILE`,
-or `scripts/repo-policy/check-attribution.sh --stdin`).
+against its head with `--strict`, so a skipped stage counts as a failure there;
+contributors can run the same script locally. Before posting the status, the
+maintainers also check the pull request title and body for attribution
+(`bash scripts/gate.sh --pr-text FILE`, or
+`scripts/repo-policy/check-attribution.sh --stdin`).
 
 The gate runs on Linux. The test suite is no longer run automatically on macOS
 or Windows; if your change touches platform-specific code, run `cargo test` on

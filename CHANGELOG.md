@@ -150,18 +150,21 @@ exception that `except swe.Error` can catch
   `speed` argument of `compute_full` is no longer used.
 
 ### Changed
-
-- CI no longer runs on GitHub Actions; `scripts/gate.sh` is the complete gate
-  (format, lint, tests, docs, audit, DE440 cross-validation, WASM, Python and
-  Node bindings, policy checks, accuracy harness) and the maintainers post its
-  result as the `ci/gate` commit status. The release procedure is in
-  `docs/RELEASING.md`.
+- **CI no longer runs on GitHub Actions; `scripts/gate.sh` is the complete
+  gate.** It runs format, clippy, tests, docs, the release-configuration tests,
+  the attribution and commercial-clean policy checks, `cargo audit`, the DE440
+  cross-validation, the WASM, Python and Node binding builds, and the accuracy
+  harness in `validation/` (2000 charts by default, `--harness-n` or
+  `GATE_HARNESS_N` for more, `pyswisseph` oracle), as named stages that
+  `--skip` and `--quick` select; `--strict` makes a skipped stage fail. The
+  maintainers run it with `--strict` and post the result as the `ci/gate`
+  commit status. No longer produced automatically: test runs on macOS and
+  Windows, the Windows Python wheel, and the attribution check of each pull
+  request's title and body (now `--pr-text`, run by the maintainers). The
+  release procedure is in `docs/RELEASING.md`. `xalen-validation` now also
+  prints the 99th-percentile error per quantity
+  ([#17](https://github.com/vedika-io/xalen-ephemeris/issues/17)).
 - SECURITY.md: disclosure timeline, scope and supply-chain sections; SUPPORT.md added; CODEOWNERS and issue forms refreshed.
-- The accuracy harness in `validation/` now runs in the gate. `scripts/gate.sh`
-  runs format, clippy, tests, docs, the release-configuration tests and the
-  harness (2000 charts by default, `--harness-n` or `GATE_HARNESS_N` for more,
-  `pyswisseph` oracle) in one go. `xalen-validation` now also prints the
-  99th-percentile error per quantity ([#17](https://github.com/vedika-io/xalen-ephemeris/issues/17)).
 
 ### Fixed
 - **Drik Bala in `Shadbala::compute_full`** used graded aspects (15, 30, 45 or
