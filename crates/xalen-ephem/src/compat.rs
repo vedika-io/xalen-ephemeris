@@ -1129,4 +1129,30 @@ mod tests {
             "ARMC must be identical in tropical and sidereal frames"
         );
     }
+
+    #[test]
+    fn houses_ex_sidereal_whole_sign_cusps_sit_on_sign_boundaries() {
+        // Swiss converts the ascendant to the sidereal zodiac first and takes the
+        // sign boundaries from it, so sidereal Whole Sign cusps are multiples of
+        // 30 degrees (shifting the tropical boundaries left them ~ayanamsa off).
+        swe_set_sid_mode(SE_SIDM_LAHIRI, 0.0, 0.0);
+        let sid = swe_houses_ex(2461351.5, 28.6139, 77.2090, 'W', true).unwrap();
+        for (i, cusp) in sid.cusps.iter().enumerate() {
+            let sign = cusp / 30.0;
+            assert!(
+                (sign - sign.round()).abs() * 30.0 < 1e-9,
+                "cusp {} = {cusp} is not a sign boundary",
+                i + 1
+            );
+        }
+        let asc_sign_start = (sid.ascendant / 30.0).floor() * 30.0;
+        assert!((sid.cusps[0] - asc_sign_start).abs() < 1e-9);
+        // Equal houses keep the ascendant as cusp 1 in the sidereal frame.
+        let eq = swe_houses_ex(2461351.5, 28.6139, 77.2090, 'A', true).unwrap();
+        for i in 0..12 {
+            let expected = (eq.ascendant + 30.0 * i as f64).rem_euclid(360.0);
+            let d = (eq.cusps[i] - expected).rem_euclid(360.0);
+            assert!(d.min(360.0 - d) < 1e-9);
+        }
+    }
 }

@@ -17,6 +17,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   message, computation errors exit 1. The tool contains no astronomy of its
   own and works offline.
 
+### Fixed
+- **Sidereal Whole Sign houses** (`HouseCusps::to_sidereal`,
+  `compute_houses_sidereal`, `compat::swe_houses_ex` with the sidereal flag)
+  shifted the tropical sign boundaries by the ayanamsa, so the cusps were not
+  on sign boundaries of the sidereal zodiac and planets near the ascendant
+  could land in the wrong house. The cusps are now built from the sidereal
+  ascendant, as Swiss Ephemeris does.
+
 ## [0.7.0] - 2026-11-07
 
 The first release since 0.6.0. It carries three fixes sent in by outside
