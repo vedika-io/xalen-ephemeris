@@ -165,8 +165,10 @@ impl Shadbala {
     /// The magnitude follows Sripati: the difference of the two planets'
     /// partial sums (Sthana, Dig, Nathonnatha, Paksha, Tribhaga and Hora
     /// Bala), divided by the difference of their disc diameters in seconds of
-    /// arc (Mars 9.4, Mercury 6.6, Jupiter 190.4, Venus 16.6, Saturn 158.0,
-    /// the classical Surya Siddhanta Ch. 7 values as tabulated for Shadbala).
+    /// arc (Mars 9.4, Mercury 6.6, Jupiter 190.4, Venus 16.6, Saturn 158.0:
+    /// the table of the modern Shadbala literature, B.V. Raman, *Graha and
+    /// Bhava Balas*, which PyJHora also uses; the Surya Siddhanta's own Ch. 7
+    /// figures are in yojanas on the Moon's orbit and are not used here).
     /// The result is added to the winner and subtracted from the loser, so
     /// the Yuddha Bala of all planets sums to zero. A planet within one
     /// degree of two others is treated pair by pair. The Sun and Moon never
@@ -437,7 +439,7 @@ fn ayana_bala(planet: &str, declination_deg: f64) -> f64 {
 }
 
 /// Disc diameter in seconds of arc used by Yuddha Bala, for the five planets
-/// that can fight.
+/// that can fight (B.V. Raman's table, see [`Shadbala::compute_full`]).
 fn disc_diameter(planet: &str) -> Option<f64> {
     match planet {
         "Mars" => Some(9.4),
