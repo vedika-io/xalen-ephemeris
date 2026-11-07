@@ -1420,6 +1420,7 @@ fn the_relationship_and_map_commands_exit_two_on_bad_input() {
             "nan",
         ],
         vec!["map", "--date", "2024-06-21", "--lat", "40", "--orb", "1"],
+        vec!["map", "--date", "2024-06-21", "--parans", "--orb", "1"],
         vec!["map"],
     ];
     for args in cases {

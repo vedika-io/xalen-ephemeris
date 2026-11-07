@@ -67,7 +67,7 @@ println!("Sun overhead at {:?}", sun.zenith);
 - No refraction unless you set `MapOptions::horizon_altitude_deg` (for example `-0.5667`).
 - Pluto is available 1885-2099 on the built-in series; outside it `astro_map` returns `MapError::Ephemeris`.
 - Latitudes are sampled (default one degree, -66 to 66), so very close turning points are approximated by the limit vertex only.
-- Parans use the same geocentric positions; set `ParanOptions::horizon_altitude_deg` to the value used for the map so the crossings lie on the drawn lines.
+- Parans use the same geocentric positions; set `ParanOptions::horizon_altitude_deg` to the value used for the map so the crossings lie on the drawn lines. The Moon's horizon parans (the Moon rising or setting) can be off by up to about one degree for the same reason as its lines; on its MC and IC the parallax in hour angle vanishes.
 
 ## Accuracy & sources
 The lines are validated against the independent topocentric altitude and hour-angle code in `xalen-ephem` for the Sun, Mars and Jupiter (altitude within 0.01 degrees of the horizon altitude at every vertex); see `tests/maps.rs`. Every paran is checked the same way in `tests/parans.rs`: a body on the horizon has topocentric altitude within 0.01 degrees of the horizon altitude, and a body on the MC or IC has hour angle within 0.01 degrees of 0 or 180 (the Moon's horizon crossings are held to its parallax, about one degree). For the accuracy of the underlying positions see [ACCURACY.md](../../docs/ACCURACY.md) and [CREDITS.md](../../CREDITS.md).

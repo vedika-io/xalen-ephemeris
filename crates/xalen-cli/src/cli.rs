@@ -614,12 +614,13 @@ pub struct MapArgs {
     /// (the crossings of one body's lines with another's)
     #[arg(long)]
     pub parans: bool,
-    /// With --parans --lat, the latitude orb of the parans listed, in degrees
-    /// (default 1)
+    /// The latitude orb of the parans listed with --lat, in degrees, at least 0
+    /// and under 90 (default 1); needs --parans and --lat
     #[arg(
         long,
         value_name = "DEG",
         requires = "parans",
+        requires = "lat",
         allow_negative_numbers = true
     )]
     pub orb: Option<f64>,

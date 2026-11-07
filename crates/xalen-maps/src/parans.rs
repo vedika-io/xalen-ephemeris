@@ -5,6 +5,8 @@
 //! declination and sidereal time on the [`AstroMap`]; the drawn polylines are
 //! not used.
 
+use std::f64::consts::PI;
+
 use serde::{Deserialize, Serialize};
 use xalen_ephem::Body;
 
@@ -77,7 +79,10 @@ pub enum SkipReason {
     },
     /// The two lines are the same curve, so there is no single crossing: a body
     /// on the celestial equator whose rising or setting meridian is the other
-    /// body's MC or IC, or two bodies at the same place in the sky.
+    /// body's MC or IC, or two bodies at the same place in the sky (both
+    /// horizon lines shared). "Same" means equal to within about 1e-9 radians
+    /// (6e-8 degrees); closer than that the direction of the crossing is not
+    /// numerically defined.
     SameLine,
 }
 
@@ -165,28 +170,36 @@ enum Roots<T> {
 /// `R cos(φ - ψ) = sin h0` with `R = hypot(sin δ, cos δ cos H)` and
 /// `ψ = atan2(sin δ, cos δ cos H)`, so `φ = ψ ± acos(sin h0 / R)`. Only roots
 /// within ±90 degrees lie on this half-meridian; the others are on the opposite
-/// one.
+/// one. When `|sin h0 / R|` is within 1e-12 of 1 the meridian is tangent to the
+/// altitude circle and there is one root, `ψ` (or `ψ + 180`); the altitude
+/// there is off by at most `R * 1e-12`.
 fn meridian_roots(sky: &Sky, lon_deg: f64, h0_deg: f64) -> Roots<f64> {
     let h = (lon_deg - sky.mc_lon).to_radians();
     let dec = sky.dec_deg.to_radians();
     let (s, c) = (dec.sin(), dec.cos() * h.cos());
     let r = s.hypot(c);
     let target = h0_deg.to_radians().sin();
-    if r < 1e-12 {
-        return if target.abs() < 1e-12 {
+    if r < 1e-9 {
+        return if target.abs() < 1e-9 {
             Roots::SameLine
         } else {
             Roots::Never
         };
     }
     let ratio = target / r;
-    if ratio.abs() > 1.0 {
+    if ratio.abs() > 1.0 + 1e-12 {
         return Roots::Never;
     }
     let psi = s.atan2(c);
-    let w = ratio.acos();
+    let (candidates, count) = if ratio.abs() >= 1.0 - 1e-12 {
+        let phi = if ratio > 0.0 { psi } else { psi + PI };
+        ([phi, phi], 1)
+    } else {
+        let w = ratio.acos();
+        ([psi - w, psi + w], 2)
+    };
     let mut out: Vec<f64> = Vec::with_capacity(2);
-    for phi in [psi - w, psi + w] {
+    for &phi in &candidates[..count] {
         let lat = wrap180(phi.to_degrees());
         if lat.abs() <= 90.0 && !out.iter().any(|&x| (x - lat).abs() < 1e-12) {
             out.push(lat);
@@ -204,12 +217,15 @@ fn meridian_roots(sky: &Sky, lon_deg: f64, h0_deg: f64) -> Roots<f64> {
 ///
 /// Writing `P = a (za + zb) + c (za × zb)` with `g = za·zb` gives
 /// `a = sin h0 / (1 + g)` and `c² = (1 - 2 sin² h0 / (1 + g)) / (1 - g²)`.
+/// Both are computed with `|za × zb|² = 1 - g²` from the cross product, which
+/// stays accurate when the points are nearly opposite and `1 + g` rounds to 0:
+/// `a = sin h0 (1 - g) / |za × zb|²`.
 fn horizon_points(za: [f64; 3], zb: [f64; 3], h0_deg: f64) -> Roots<(f64, f64)> {
     let s = h0_deg.to_radians().sin();
     let g = dot(za, zb).clamp(-1.0, 1.0);
     let n = cross(za, zb);
     let n2 = dot(n, n);
-    if n2 < 1e-24 {
+    if n2 < 1e-18 {
         // The same or opposite substellar points: one circle, or two disjoint
         // ones (opposite points with a horizon off zero).
         return if g > 0.0 || s.abs() < 1e-12 {
@@ -218,12 +234,13 @@ fn horizon_points(za: [f64; 3], zb: [f64; 3], h0_deg: f64) -> Roots<(f64, f64)> 
             Roots::Never
         };
     }
-    let a = s / (1.0 + g);
+    let a = s * (1.0 - g) / n2;
     let c2 = (1.0 - 2.0 * s * a) / n2;
-    if c2 < 0.0 {
+    if !c2.is_finite() || c2 < -1e-15 {
         return Roots::Never;
     }
-    let c = c2.sqrt();
+    // Within rounding of zero the circles touch: one point.
+    let c = if c2 > 0.0 { c2.sqrt() } else { 0.0 };
     let mut out = Vec::with_capacity(2);
     for sign in [1.0, -1.0] {
         let p = [
@@ -396,8 +413,13 @@ fn sky_of(map: &AstroMap) -> Result<Vec<Sky>, MapError> {
 ///   by the sign of its hour angle there.
 ///
 /// Two meridian lines never cross. A body listed twice is used once, at its
-/// first place, and is never paired with itself. Line pairs with no crossing inside the limits
-/// are listed in [`ParanSet::skipped`] with the reason.
+/// first place, and is never paired with itself. Line pairs with no crossing
+/// inside the limits are listed in [`ParanSet::skipped`] with the reason.
+///
+/// Positions are geocentric, like the lines. The Moon's diurnal parallax (up to
+/// about one degree) is not applied, so a paran on the Moon's rising or setting
+/// line can be off by up to about one degree; on its MC and IC the parallax in
+/// hour angle vanishes.
 ///
 /// Errors with [`MapError::InvalidInput`] for bad options or a map holding
 /// non-finite values.

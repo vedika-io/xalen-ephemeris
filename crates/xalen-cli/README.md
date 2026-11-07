@@ -228,9 +228,13 @@ at the same moment, which are the crossings of one body's lines with another's,
 within `--lat-min` and `--lat-max`. Each row gives the latitude and longitude
 and the two bodies with their angles; `--json` adds a `parans` array (the
 library's `Paran` values), `parans_skipped` (line pairs that do not cross in the
-range, with the reason) and `paran_options`. With `--lat` the table lists only
-the parans within `--orb` degrees (default 1) of that latitude, and `--json`
-adds them as `parans_near`.
+range, with the reason) and `paran_options` (the options of that full list).
+With `--lat` the table lists only the parans within `--orb` degrees (default 1,
+at least 0 and under 90) of that latitude, and `--json` adds them as
+`parans_near`. That search uses the band `--lat` plus or minus `--orb` in place
+of `--lat-min` and `--lat-max`, so it also works outside them. `--orb` needs
+both `--parans` and `--lat`. The Moon's horizon parans are geocentric and can be
+off by up to about one degree.
 
 ```console
 $ xalen map --date 2024-06-21T00:00:00Z --bodies sun,moon,mars,jupiter --parans --lat 28.61 --orb 2
@@ -240,7 +244,8 @@ $ xalen map --date 2024-06-21T00:00:00Z --bodies sun,moon,mars,jupiter --parans 
 per line segment (properties `body` and `kind`, which is `MC`, `IC`, `ASC` or
 `DSC`) and one `Point` feature per zenith (`kind` is `ZENITH`), with coordinates
 as `[longitude, latitude]`. With `--parans` it also has one `Point` per paran,
-with `kind` `PARAN` and properties `body_a`, `kind_a`, `body_b` and `kind_b`. Segments never cross the antimeridian. `--geojson`
+with `kind` `PARAN` and properties `body_a`, `kind_a`, `body_b` and `kind_b`.
+Segments never cross the antimeridian. `--geojson`
 cannot be combined with `--lat` or `--json`, and it leaves out bodies the
 ephemeris cannot reach at the date (Pluto outside 1885-2099 in the default set),
 which the table and `--json` list as skipped. Load the file

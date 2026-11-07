@@ -6,8 +6,8 @@
 
 use xalen_ephem::{Almanac, Body};
 use xalen_maps::{
-    AstroMap, BodyLines, LineKind, MapError, MapOptions, Paran, ParanOptions, ParanSet, SkipReason,
-    astro_map, parans, parans_near,
+    AstroMap, BodyLines, LatLon, LineKind, MapError, MapOptions, Paran, ParanOptions, ParanSet,
+    SkipReason, astro_map, parans, parans_near,
 };
 use xalen_time::JdUT1;
 
@@ -545,7 +545,8 @@ fn check_against_the_almanac(set: &ParanSet, map: &AstroMap, h0: f64) -> usize {
                 LineKind::Asc | LineKind::Dsc => {
                     let alt = a.topocentric_altitude_deg(body, jd, lat, lon, 0.0).unwrap();
                     if body == Body::Moon {
-                        assert!((alt - h0).abs() < 1.0, "{p:?}: Moon altitude {alt}");
+                        // Horizontal parallax reaches about 1.02 degrees at perigee.
+                        assert!((alt - h0).abs() < 1.1, "{p:?}: Moon altitude {alt}");
                         let geo = geo_altitude(map, body, lat, lon);
                         assert!((geo - h0).abs() < 1e-7, "{p:?}: Moon geocentric {geo}");
                         let geo_ha = geo_hour_angle(map, body, lon);
@@ -606,4 +607,239 @@ fn parans_with_a_lowered_horizon_agree_with_the_almanac() {
     assert!(!set.parans.is_empty());
     let checked = check_against_the_almanac(&set, &map, h0);
     assert!(checked >= 12, "only {checked} angles were checked");
+}
+
+// ------------------------------------------------- raised horizon, numerics
+
+/// Every crossing of a hand-built map has the horizon body at altitude `h0`
+/// and the meridian body at hour angle 0 or 180, from the map's own numbers.
+fn check_geometry(set: &ParanSet, map: &AstroMap, h0: f64) {
+    for p in &set.parans {
+        let (lat, lon) = (p.latitude_deg, p.longitude_deg);
+        assert!(lat.is_finite() && lon.is_finite(), "{p:?}");
+        for (body, kind) in [(p.body_a, p.kind_a), (p.body_b, p.kind_b)] {
+            let ha = geo_hour_angle(map, body, lon);
+            match kind {
+                LineKind::Mc | LineKind::Ic => {
+                    let off = if kind == LineKind::Mc { ha } else { sdiff(ha, 180.0) };
+                    assert!(off.abs() < 1e-9, "{p:?}: {body:?} hour angle {ha}");
+                }
+                LineKind::Asc | LineKind::Dsc => {
+                    let alt = geo_altitude(map, body, lat, lon);
+                    assert!((alt - h0).abs() < 1e-9, "{p:?}: {body:?} altitude {alt}");
+                    assert_eq!(kind == LineKind::Asc, ha < 0.0, "{p:?}: hour angle {ha}");
+                }
+            }
+        }
+    }
+}
+
+/// With the horizon raised, a meridian can cut a body's altitude circle twice:
+/// `φ = ψ ± acos(sin h0 / R)` with both roots on the same half-meridian.
+#[test]
+fn a_raised_horizon_gives_two_crossings_on_one_meridian() {
+    let map = sky_map(
+        0.0,
+        &[
+            (Body::Sun, 0.0, 5.0),
+            (Body::Mars, 50.0, -15.0),
+            (Body::Jupiter, 250.0, 20.0),
+        ],
+    );
+    for h0 in [10.0, 30.0] {
+        let o = ParanOptions {
+            min_lat_deg: -89.0,
+            max_lat_deg: 89.0,
+            horizon_altitude_deg: h0,
+            ..ParanOptions::default()
+        };
+        let set = parans(&map, &o).unwrap();
+        assert!(!set.parans.is_empty(), "h0 {h0}");
+        check_geometry(&set, &map, h0);
+        let doubles = set
+            .parans
+            .iter()
+            .filter(|p| is_meridian(p.kind_a) || is_meridian(p.kind_b))
+            .filter(|p| {
+                let same = |q: &&Paran| key(q) == key(p) && q.longitude_deg == p.longitude_deg;
+                set.parans.iter().filter(same).count() == 2
+            })
+            .count();
+        assert!(doubles >= 2, "h0 {h0}: no meridian with two crossings");
+        // The Sun's setting line crosses the MC of Mars (longitude 50) twice.
+        let sun_mars: Vec<f64> = set
+            .parans
+            .iter()
+            .filter(|p| {
+                p.body_a == Body::Sun && p.body_b == Body::Mars && p.kind_b == LineKind::Mc
+            })
+            .map(|p| p.latitude_deg)
+            .collect();
+        assert_eq!(sun_mars.len(), 2, "h0 {h0}: {sun_mars:?}");
+    }
+}
+
+/// `sin h0 / R = 1` up to rounding: the meridian only touches the altitude
+/// circle, and there is one crossing, not two a hair apart. Here the Sun is on
+/// the equator, Mars's MC is 60 degrees west of the Sun's, so `R = cos 60` and
+/// `sin h0 = sin 30`.
+#[test]
+fn a_tangent_meridian_gives_one_crossing() {
+    let map = sky_map(0.0, &[(Body::Sun, 0.0, 0.0), (Body::Mars, 60.0, 40.0)]);
+    let o = ParanOptions {
+        horizon_altitude_deg: 30.0,
+        include_horizon_pairs: false,
+        ..ParanOptions::default()
+    };
+    let set = parans(&map, &o).unwrap();
+    let touching: Vec<&Paran> = set
+        .parans
+        .iter()
+        .filter(|p| p.body_a == Body::Sun && p.body_b == Body::Mars && p.kind_b == LineKind::Mc)
+        .collect();
+    assert_eq!(touching.len(), 1, "{touching:?}");
+    let p = touching[0];
+    assert_eq!(p.kind_a, LineKind::Dsc);
+    assert!(p.latitude_deg.abs() < 1e-9, "{p:?}");
+    assert!((p.longitude_deg - 60.0).abs() < 1e-9, "{p:?}");
+    check_geometry(&set, &map, 30.0);
+}
+
+/// Sub-points about 2e-9 radians from opposite: `1 + g` rounds to zero, but the
+/// cross product does not. The crossings must be finite and on both horizons.
+#[test]
+fn nearly_opposite_bodies_give_finite_crossings() {
+    let eps_deg = 2e-9_f64.to_degrees();
+    let map = sky_map(
+        0.0,
+        &[(Body::Sun, 0.0, 0.0), (Body::Mars, 180.0, eps_deg)],
+    );
+    for h0 in [0.0, 10.0] {
+        let o = ParanOptions {
+            horizon_altitude_deg: h0,
+            ..ParanOptions::default()
+        };
+        let set = parans(&map, &o).unwrap();
+        check_geometry(&set, &map, h0);
+        for s in &set.skipped {
+            if let SkipReason::OutsideLatitudes {
+                latitude_deg,
+                longitude_deg,
+            } = s.reason
+            {
+                assert!(
+                    latitude_deg.is_finite() && longitude_deg.is_finite(),
+                    "{s:?}"
+                );
+            }
+        }
+        let pairs: Vec<&Paran> = set
+            .parans
+            .iter()
+            .filter(|p| !is_meridian(p.kind_a) && !is_meridian(p.kind_b))
+            .collect();
+        if h0 == 0.0 {
+            // Two great circles still meet at two opposite points.
+            assert_eq!(pairs.len(), 2, "{:?}", set.parans);
+            for p in &pairs {
+                for body in [Body::Sun, Body::Mars] {
+                    let alt = geo_altitude(&map, body, p.latitude_deg, p.longitude_deg);
+                    assert!(alt.abs() < 1e-6, "{body:?} altitude {alt} at {p:?}");
+                }
+            }
+        } else {
+            // Circles of radius 80 degrees around opposite points never meet.
+            assert!(pairs.is_empty(), "{pairs:?}");
+            let never = set.skipped.iter().any(|s| {
+                s.kind_a.is_none() && s.kind_b.is_none() && s.reason == SkipReason::NeverCross
+            });
+            assert!(never, "{:?}", set.skipped);
+        }
+    }
+}
+
+// ------------------------------------------------- against the drawn lines
+
+/// Distance in degrees (planar, longitude scaled by cos latitude) from a point
+/// to the nearest piece of a polyline.
+fn distance_to_line(segments: &[Vec<LatLon>], lat: f64, lon: f64) -> f64 {
+    let k = lat.to_radians().cos();
+    let mut best = f64::INFINITY;
+    for w in segments.iter().flat_map(|seg| seg.windows(2)) {
+        let (ax, ay) = (sdiff(w[0].1, lon) * k, w[0].0 - lat);
+        let (bx, by) = (sdiff(w[1].1, lon) * k, w[1].0 - lat);
+        let (dx, dy) = (bx - ax, by - ay);
+        let len2 = dx * dx + dy * dy;
+        let t = if len2 > 0.0 {
+            (-(ax * dx + ay * dy) / len2).clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+        best = best.min((ax + t * dx).hypot(ay + t * dy));
+    }
+    best
+}
+
+fn drawn(map: &AstroMap, body: Body, kind: LineKind) -> &[Vec<LatLon>] {
+    &body_of(map, body)
+        .lines
+        .iter()
+        .find(|l| l.kind == kind)
+        .unwrap()
+        .segments
+}
+
+/// Every paran lies on the lines `astro_map` draws: on the meridian exactly,
+/// and within 0.5 degrees of the sampled horizon polyline (one-degree steps).
+#[test]
+fn parans_lie_on_the_drawn_lines() {
+    let map = real_map(&FOUR);
+    let set = parans(&map, &ParanOptions::default()).unwrap();
+    assert!(!set.parans.is_empty());
+    for p in &set.parans {
+        for (body, kind) in [(p.body_a, p.kind_a), (p.body_b, p.kind_b)] {
+            let line = drawn(&map, body, kind);
+            if is_meridian(kind) {
+                assert!(sdiff(p.longitude_deg, line[0][0].1).abs() < 1e-9, "{p:?}");
+            } else {
+                let d = distance_to_line(line, p.latitude_deg, p.longitude_deg);
+                assert!(d < 0.5, "{p:?}: {d} degrees from the {body:?} {kind:?} line");
+            }
+        }
+    }
+}
+
+/// A brute-force count: scan each meridian line of one body in 0.25-degree
+/// steps and count where the other body's altitude changes sign. That must be
+/// the number of parans for that line pair.
+#[test]
+fn a_latitude_scan_finds_the_same_crossings() {
+    let map = real_map(&[Body::Sun, Body::Jupiter]);
+    let set = parans(&map, &ParanOptions::default()).unwrap();
+    let mut total = 0;
+    for (h, m) in [(Body::Sun, Body::Jupiter), (Body::Jupiter, Body::Sun)] {
+        for meridian in [LineKind::Mc, LineKind::Ic] {
+            let lon = drawn(&map, m, meridian)[0][0].1;
+            let mut changes = 0;
+            let mut prev = geo_altitude(&map, h, -66.0, lon);
+            for i in 1..=528 {
+                let alt = geo_altitude(&map, h, -66.0 + 0.25 * f64::from(i), lon);
+                if (alt < 0.0) != (prev < 0.0) {
+                    changes += 1;
+                }
+                prev = alt;
+            }
+            let found = set
+                .parans
+                .iter()
+                .filter(|p| {
+                    (p.body_a == h && !is_meridian(p.kind_a) && p.kind_b == meridian)
+                        || (p.body_b == h && !is_meridian(p.kind_b) && p.kind_a == meridian)
+                })
+                .count();
+            assert_eq!(found, changes, "{h:?} horizon x {m:?} {meridian:?}");
+            total += found;
+        }
+    }
+    assert!(total >= 2, "only {total} crossings in range");
 }

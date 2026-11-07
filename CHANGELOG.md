@@ -20,9 +20,11 @@ for reporting that Shadbala had only seven of the nine Kala Bala parts
   `parans_near` gives those within an orb of one latitude. Crossings are solved
   in closed form from the right ascensions, declinations and sidereal time, and
   are checked against the topocentric altitude and hour angle in `xalen-ephem`
-  to 0.01 degrees. `xalen map --parans` prints them (a `parans` array in
+  to 0.01 degrees (the Moon's horizon crossings to its parallax, about one
+  degree, since the map is geocentric). `xalen map --parans` prints them (a `parans` array in
   `--json`, `PARAN` points in `--geojson`), and `--parans --lat <deg> [--orb
-  <deg>]` lists the parans within the orb of that latitude.
+  <deg>]` lists the parans within the orb of that latitude (`--orb` needs
+  `--lat`).
 - **Ayana Bala and Yuddha Bala in `Shadbala::compute_full`**, which now returns
   all nine Kala Bala parts (`KalaBala::ayana_bala`, `KalaBala::yuddha_bala`,
   both included in `KalaBala::total` and so in the Shadbala total). Ayana Bala
