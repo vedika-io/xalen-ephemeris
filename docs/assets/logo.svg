@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="560" height="120" viewBox="0 0 560 120" role="img" aria-labelledby="t">
+<title id="t">XALEN Ephemeris</title>
+<!-- Mark: a twelve-part zodiac ring around the ecliptic, drawn tilted by the obliquity (23.44 degrees), with a planet on it. -->
+<g fill="none" stroke-linecap="round">
+<circle cx="60" cy="60" r="46" stroke="#1f2328" stroke-width="3"/>
+<g stroke="#59636e" stroke-width="2.2"><line x1="60" y1="14" x2="60" y2="21" transform="rotate(0 60 60)"/><line x1="60" y1="14" x2="60" y2="21" transform="rotate(30 60 60)"/><line x1="60" y1="14" x2="60" y2="21" transform="rotate(60 60 60)"/><line x1="60" y1="14" x2="60" y2="21" transform="rotate(90 60 60)"/><line x1="60" y1="14" x2="60" y2="21" transform="rotate(120 60 60)"/><line x1="60" y1="14" x2="60" y2="21" transform="rotate(150 60 60)"/><line x1="60" y1="14" x2="60" y2="21" transform="rotate(180 60 60)"/><line x1="60" y1="14" x2="60" y2="21" transform="rotate(210 60 60)"/><line x1="60" y1="14" x2="60" y2="21" transform="rotate(240 60 60)"/><line x1="60" y1="14" x2="60" y2="21" transform="rotate(270 60 60)"/><line x1="60" y1="14" x2="60" y2="21" transform="rotate(300 60 60)"/><line x1="60" y1="14" x2="60" y2="21" transform="rotate(330 60 60)"/></g>
+<ellipse cx="60" cy="60" rx="52" ry="17" transform="rotate(-23.44 60 60)" stroke="#0969da" stroke-width="3.2"/>
+<circle cx="60" cy="60" r="8" fill="#c2410c" stroke="none"/>
+<circle cx="107.7" cy="39.3" r="6" fill="#0969da" stroke="none"/>
+</g>
+<text x="134" y="76" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif"><tspan fill="#1f2328" font-size="50" font-weight="800" letter-spacing="5">XALEN</tspan><tspan dx="10" fill="#59636e" font-size="40" font-weight="400" letter-spacing="0.5">Ephemeris</tspan></text>
+</svg>
