@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="840" height="426" viewBox="0 0 840 426" role="img" aria-labelledby="t d">
+<title id="t">xalen positions in a terminal</title>
+<desc id="d">Sidereal Lahiri positions with nakshatra and pada for 15 August 1947 00:00 IST, printed by the xalen command-line tool.</desc>
+<rect width="840" height="426" rx="10" fill="#0d1117"/>
+<path d="M10 0H830A10 10 0 0 1 840 10V36H0V10A10 10 0 0 1 10 0Z" fill="#161b22"/>
+<circle cx="22" cy="18" r="6" fill="#f85149" opacity="0.85"/>
+<circle cx="42" cy="18" r="6" fill="#d29922" opacity="0.85"/>
+<circle cx="62" cy="18" r="6" fill="#3fb950" opacity="0.85"/>
+<text x="420" y="23" fill="#9198a1" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="12" text-anchor="middle">xalen — offline, no data files</text>
+<g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', 'DejaVu Sans Mono', monospace" font-size="13" xml:space="preserve" style="white-space:pre">
+<text x="24" y="66"><tspan fill="#3fb950">$ </tspan><tspan fill="#e6edf3">xalen positions --date 1947-08-15T00:00:00+05:30 --tz +05:30 \</tspan></text>
+<text x="24" y="85"><tspan fill="#3fb950"></tspan><tspan fill="#e6edf3">    --sidereal --bodies sun,moon,mercury,venus,mars,jupiter,saturn,rahu,ketu</tspan></text>
+<text x="24" y="123" fill="#e6edf3">Positions for 1947-08-15 00:00:00 +05:30</text>
+<text x="24" y="142" fill="#e6edf3">JD UT 2432412.270833   JD TT 2432412.271159</text>
+<text x="24" y="161" fill="#e6edf3">Zodiac: sidereal, Lahiri (Chitrapaksha) ayanamsa 23.121619 deg</text>
+<text x="24" y="180" fill="#e6edf3"></text>
+<text x="24" y="199" fill="#e6edf3">Body       Longitude  Sign                  Deg    Nakshatra  Pada  Latitude  Dist (AU)  Speed/day  R</text>
+<text x="24" y="218" fill="#9198a1">---------  ---------  --------------------  -----  ---------  ----  --------  ---------  ---------  -</text>
+<text x="24" y="237" fill="#e6edf3">Sun        117.9892   Karka (Cancer)        27.99  Ashlesha   4     0.0000    1.012924   0.9610</text>
+<text x="24" y="256" fill="#e6edf3">Moon       93.9838    Karka (Cancer)        3.98   Pushya     1     4.2671    0.002404   15.0805</text>
+<text x="24" y="275" fill="#e6edf3">Mercury    103.6744   Karka (Cancer)        13.67  Pushya     4     0.7734    1.159565   1.8046</text>
+<text x="24" y="294" fill="#e6edf3">Venus      112.5614   Karka (Cancer)        22.56  Ashlesha   2     1.1146    1.719945   1.2351</text>
+<text x="24" y="313" fill="#e6edf3">Mars       67.4564    Mithuna (Gemini)      7.46   Ardra      1     0.2482    1.918734   0.6578</text>
+<text x="24" y="332" fill="#e6edf3">Jupiter    205.8780   Tula (Libra)          25.88  Vishakha   2     0.8509    5.313210   0.0854</text>
+<text x="24" y="351" fill="#e6edf3">Saturn     110.4732   Karka (Cancer)        20.47  Ashlesha   2     0.7514    10.141405  0.1279</text>
+<text x="24" y="370" fill="#e6edf3">Mean Node  35.0735    Vrishabha (Taurus)    5.07   Krittika   3     0.0000    0.000000   -0.0530    R</text>
+<text x="24" y="389" fill="#e6edf3">Ketu       215.0735   Vrishchika (Scorpio)  5.07   Anuradha   1     -0.0000   0.000000   -0.0530    R</text>
+</g>
+</svg>
