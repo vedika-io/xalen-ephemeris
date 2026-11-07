@@ -41,6 +41,8 @@ println!("{}", Nakshatra::from_longitude_deg(sid)); // Swati
 
 - **12+ astrology traditions** -- Vedic/Jyotish (dasha, shadbala, KP, Jaimini, Tajaka, panchang with tithi/nakshatra/yoga/karana transition times, compatibility, 16 divisional charts, yoga, dosha), Western (aspects, dignities, 97 Arabic Lots, Hellenistic, Uranian, Cosmobiology, progressions, exact solar/lunar returns by iterative refinement, declination aspects + antiscia, harmonics, horary), Chinese (BaZi, Zi Wei Dou Shu, Feng Shui Flying Stars, Qi Men Dun Jia [experimental]), Lal Kitab, I Ching (64 hexagrams + all 384 line texts, verbatim public-domain Legge SBE XVI), Numerology, Korean Saju, Japanese Nine Star Ki, Burmese Mahabote (day-sign profile only), Mayan, Aztec, Tibetan, Persian/Zoroastrian, Egyptian, Celtic
 
+- **Relationship charts and astrocartography** -- `xalen-relationship` gives synastry (aspect grid and house overlays), composite charts (Hand) and Davison charts, plus a relocated-chart helper; `xalen-maps` draws astrocartography lines (MC, IC, Ascendant, Descendant and zenith points for each body, Lewis) with circumpolar breaks and antimeridian splitting. Both are geocentric; parans are not yet included
+
 - **9,096 built-in fixed stars** (`xalen-stars`: every star of the Yale Bright Star Catalogue, 5th rev. ed., with IAU-CSN names and positions where a star has an IAU name) plus a 108-star curated core with Ptolemaic natures, and **503 named fixed stars** in `xalen-western` (all mag < 3.0, Behenian, Royal, Nakshatra yogatara, IAU-named to mag ~5). Proper motion and IAU 2006/P03 precession to any epoch, zero data files; the data carries no non-commercial restriction. External catalogs can be loaded from CSV at runtime
 
 - **Solar and lunar eclipse engine** -- rigorous Besselian elements (Explanatory Supplement §11; Meeus Ch. 54) for global type / γ / greatest-eclipse, plus a per-observer local-circumstances layer (magnitude, obscuration, C1–C4 contact times); lunar eclipses from Earth's shadow cones (Danjon) with umbral / penumbral magnitudes and P1–P4 contacts, matching Swiss Ephemeris for every eclipse of 1900–2100. Global type validated against NASA for 2017-08-21 and 2024-04-08
@@ -237,6 +239,8 @@ magnitude, obscuration, and C1–C4 contact times.
 | [`xalen-numerology`](crates/xalen-numerology) | Pythagorean and Chaldean numerology |
 | [`xalen-world`](crates/xalen-world) | Mayan, Aztec, Tibetan, Persian, Egyptian, Celtic, Korean Saju, Nine Star Ki; Burmese Mahabote (day-sign / ruling-planet profile only — not the full 7-house square) |
 | [`xalen-chart`](crates/xalen-chart) | SVG chart rendering: North Indian, South Indian, Western wheel |
+| [`xalen-relationship`](crates/xalen-relationship) | Relationship astrology: synastry, composite and Davison charts, relocated charts |
+| [`xalen-maps`](crates/xalen-maps) | Astrocartography: MC, IC, Ascendant, Descendant and zenith lines |
 | [`xalen-ffi`](crates/xalen-ffi) | C FFI exports (`extern "C"` with `repr(C)` structs) |
 | [`xalen-wasm`](crates/xalen-wasm) | WASM bindings via wasm-bindgen |
 | [`xalen-python`](crates/xalen-python) | Python bindings via PyO3 |
