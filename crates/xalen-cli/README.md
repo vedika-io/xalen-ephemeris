@@ -223,10 +223,24 @@ Sun   90.1364   23.4382   23.4382     -179.5467   -179.5467  0.4533    69.1211  
 ...
 ```
 
+`--parans` adds the parans (Brady): the places where two bodies are on angles
+at the same moment, which are the crossings of one body's lines with another's,
+within `--lat-min` and `--lat-max`. Each row gives the latitude and longitude
+and the two bodies with their angles; `--json` adds a `parans` array (the
+library's `Paran` values), `parans_skipped` (line pairs that do not cross in the
+range, with the reason) and `paran_options`. With `--lat` the table lists only
+the parans within `--orb` degrees (default 1) of that latitude, and `--json`
+adds them as `parans_near`.
+
+```console
+$ xalen map --date 2024-06-21T00:00:00Z --bodies sun,moon,mars,jupiter --parans --lat 28.61 --orb 2
+```
+
 `--geojson` prints a GeoJSON FeatureCollection instead: one `LineString` feature
 per line segment (properties `body` and `kind`, which is `MC`, `IC`, `ASC` or
 `DSC`) and one `Point` feature per zenith (`kind` is `ZENITH`), with coordinates
-as `[longitude, latitude]`. Segments never cross the antimeridian. `--geojson`
+as `[longitude, latitude]`. With `--parans` it also has one `Point` per paran,
+with `kind` `PARAN` and properties `body_a`, `kind_a`, `body_b` and `kind_b`. Segments never cross the antimeridian. `--geojson`
 cannot be combined with `--lat` or `--json`, and it leaves out bodies the
 ephemeris cannot reach at the date (Pluto outside 1885-2099 in the default set),
 which the table and `--json` list as skipped. Load the file

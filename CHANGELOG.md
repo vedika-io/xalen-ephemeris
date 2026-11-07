@@ -12,6 +12,17 @@ for reporting that Shadbala had only seven of the nine Kala Bala parts
 ([#46](https://github.com/vedika-io/xalen-ephemeris/issues/46)).
 
 ### Added
+- **Parans in `xalen-maps` and `xalen map --parans`.** `parans(&map,
+  &ParanOptions)` returns every crossing of one body's line with another's (a
+  body rising or setting while another culminates or anti-culminates, or two
+  bodies on the horizon together; Brady), ordered by latitude, with a `skipped`
+  list of line pairs that do not cross in the latitude range and why.
+  `parans_near` gives those within an orb of one latitude. Crossings are solved
+  in closed form from the right ascensions, declinations and sidereal time, and
+  are checked against the topocentric altitude and hour angle in `xalen-ephem`
+  to 0.01 degrees. `xalen map --parans` prints them (a `parans` array in
+  `--json`, `PARAN` points in `--geojson`), and `--parans --lat <deg> [--orb
+  <deg>]` lists the parans within the orb of that latitude.
 - **Ayana Bala and Yuddha Bala in `Shadbala::compute_full`**, which now returns
   all nine Kala Bala parts (`KalaBala::ayana_bala`, `KalaBala::yuddha_bala`,
   both included in `KalaBala::total` and so in the Shadbala total). Ayana Bala
