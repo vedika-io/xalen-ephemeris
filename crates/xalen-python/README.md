@@ -102,6 +102,47 @@ XALEN is a faithful *shape* drop-in, not a byte-for-byte clone. The differences 
 - **Position-altering flags XALEN does not yet implement** (`SEFLG_HELCTR`, `SEFLG_TOPOCTR`, `SEFLG_J2000`, `SEFLG_EQUATORIAL`, `SEFLG_BARYCTR`, `SEFLG_XYZ`, `SEFLG_RADIANS`) **raise `ValueError`** rather than silently returning a geocentric ecliptic position mislabeled as something else. A loud error beats a silent-wrong drop-in.
 - **`set_ephe_path()` and `close()`** are no-ops — XALEN embeds all data at compile time, so there are no ephemeris files to point at or resources to release.
 
+### Exceptions: `swe.Error`
+
+`xalen.swe.Error` (a `RuntimeError`) for calculation failures; `TypeError`/`ValueError` only for bad arguments.
+
+- **`swe.Error`** is raised for every failed calculation: an unknown body number (`calc_ut(jd, 999)`), an unknown star name, a body `rise_trans` cannot handle, an eclipse search that finds nothing in 100 years, an ephemeris error. Like pyswisseph's `swe.Error`, so `try: ... except swe.Error:` around an optional body keeps working, and `except RuntimeError` catches it too.
+- **`TypeError`**: an argument of the wrong Python type (`geopos` that is not a sequence of three numbers, `hsys` that is neither bytes nor str).
+- **`ValueError`**: an argument with a bad value (a non-finite Julian Day, a latitude outside ±90°, a house longitude outside -180°..360°, an unknown house letter, a negative pressure, a `horhgt` outside -90°..90° other than -100) and the position-altering `calc_ut` flags listed below, which XALEN does not implement.
+
+Before 0.8 the shim raised `ValueError` for some calculation failures (unknown body, unknown star, a failed house or ayanamsa calculation); those are `swe.Error` now.
+
+### Rise, set, transit and eclipses
+
+```python
+import xalen.swe as swe
+
+geopos = (77.2090, 28.6139, 0.0)                  # lon, lat, altitude in metres
+jd = swe.julday(2024, 6, 20, 18.5)                # 00:00 IST on 21 June 2024
+res, tret = swe.rise_trans(jd, swe.SUN, swe.CALC_RISE, geopos)   # res 0, tret[0] = sunrise (JD UT)
+res, tret = swe.rise_trans(jd, swe.MOON, swe.CALC_MTRANSIT, geopos)
+res, tret = swe.rise_trans(jd, swe.SUN, swe.CALC_RISE | swe.BIT_DISC_CENTER | swe.BIT_NO_REFRACTION, geopos)
+res, tret = swe.rise_trans_true_hor(jd, swe.SUN, swe.CALC_SET, geopos, 1013.25, 15.0, 2.0)  # 2° skyline
+res, tret = swe.rise_trans_true_hor(jd, swe.SUN, swe.CALC_SET, (77.2, 28.6, 1000.0), 0.0, 15.0, -100.0)  # sea-horizon dip from 1000 m
+
+retflag, tret = swe.sol_eclipse_when_glob(swe.julday(2024, 1, 1))     # 2024-04-08, ECL_TOTAL | ECL_CENTRAL
+retflag, tret, attr = swe.sol_eclipse_when_loc(swe.julday(2024, 4, 1), (-96.80, 32.78, 0.0))  # Dallas
+retflag, tret = swe.lun_eclipse_when(swe.julday(2022, 10, 1))         # 2022-11-08, ECL_TOTAL
+retflag, attr = swe.lun_eclipse_how(tret[0], (139.69, 35.69, 0.0))     # Tokyo: ECL_TOTAL, attr[0] 1.36
+retflag, attr = swe.lun_eclipse_how(tret[0], geopos)                  # Delhi: 0, the Moon has not risen
+retflag, tret, attr = swe.lun_eclipse_when_loc(swe.julday(2022, 10, 1), geopos)
+retflag, tret = swe.lun_eclipse_when(swe.julday(2022, 10, 1), swe.FLG_SWIEPH, 0, True)  # previous one
+xx, _ = swe.calc_ut(jd, swe.ECL_NUT)              # true and mean obliquity, nutation in lon and obl
+```
+
+Signatures, argument order, tuple lengths (`tret` 10, `attr` 20), `retflag` bits and return codes follow pyswisseph 2.10, and the `CALC_*`, `BIT_*` and `ECL_*` constants have pyswisseph's values in both spellings (`CALC_RISE`, `SE_CALC_RISE`). The astronomy comes from the Rust rise/set and eclipse engines. What differs:
+
+- **`rise_trans`** handles the Sun, Moon, planets and Chiron; a star name raises `swe.Error`. `res` is `-2` when the body does not rise or set within about a day (circumpolar). `atpress` (hPa, `0` = standard atmosphere at the altitude) and `attemp` (°C) scale the standard 34′ refraction; `BIT_FORCE_SLOW_METHOD` changes nothing. As in Swiss, the twilight bits apply to the Sun only and are ignored for other bodies. In `rise_trans_true_hor`, `horhgt=-100` gives the dip of the sea horizon seen from the altitude in `geopos` (1.76′·√metres, standard terrestrial refraction included), as in Swiss; any other `horhgt` outside -90°..90° raises `ValueError`. The `flags` argument (ephemeris choice) is accepted and ignored: XALEN always uses its own engine.
+- **`sol_eclipse_when_glob`** returns greatest eclipse in `tret[0]`; the global contact times `tret[1:10]` are not computed and are `0.0`. Local contacts come from `sol_eclipse_when_loc`.
+- **`sol_eclipse_when_loc`** fills `tret[0:7]` (maximum, C1–C4, sunrise and sunset during the eclipse) and `attr[0]` (magnitude), `attr[1]` (ratio of the Moon's to the Sun's apparent diameter), `attr[2]` (obscuration), `attr[5]` (true Sun altitude at maximum) and `attr[8]` (NASA's magnitude: `attr[0]` for a partial eclipse, `attr[1]` for a total or annular one); the shadow width, azimuth, apparent altitude and elongation slots are `0.0`.
+- **`lun_eclipse_how`** fills `attr[0]`/`attr[8]` (umbral magnitude), `attr[1]` (penumbral magnitude), `attr[4]` (Moon azimuth, from the south point through west, as in Swiss), `attr[5]` (true Moon altitude), `attr[6]` (apparent altitude: Saemundsson refraction for the standard atmosphere at the altitude in `geopos` and 15 °C) and `attr[7]` (distance from the shadow axis). As in Swiss, its `retflag` is `0` when the apparent altitude is at or below 0, with `attr` still filled. `lun_eclipse_when_loc` sets contact times before moonrise (`tret[8]`) or after moonset (`tret[9]`) to `0.0`, as Swiss does; the `*_VISIBLE` bits say which contacts were above the horizon.
+- Saros numbers are not computed: `attr[9]` and `attr[10]` are `-99999999`, pyswisseph's "unknown".
+
 See [docs/MIGRATING_FROM_SWISS_EPH.md](https://github.com/vedika-io/xalen-ephemeris/blob/main/docs/MIGRATING_FROM_SWISS_EPH.md) for the full migration guide.
 
 ---

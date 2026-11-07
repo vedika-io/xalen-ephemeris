@@ -170,6 +170,67 @@ pub struct SolarEclipse {
     pub gamma: f64,
 }
 
+impl SolarEclipse {
+    /// Whether the shadow axis meets the Earth (|γ| below the central limit),
+    /// so a central path (total, annular or hybrid) exists on the surface.
+    /// Always `false` for a partial eclipse.
+    pub fn is_central(&self) -> bool {
+        self.eclipse_type != SolarEclipseType::Partial
+            && self.gamma.abs() < crate::besselian::CENTRAL_LIMIT
+    }
+}
+
+/// Earth's shadow on the Moon at one instant, from the same shadow geometry the
+/// lunar eclipse search uses (Danjon radii).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LunarShadowState {
+    /// Fraction of the Moon's diameter inside the umbra (negative when the
+    /// Moon is clear of the umbra).
+    pub umbral_magnitude: f64,
+    /// Fraction of the Moon's diameter inside the penumbra (negative when the
+    /// Moon is clear of the penumbra).
+    pub penumbral_magnitude: f64,
+    /// Angular distance (degrees) of the Moon's centre from the shadow axis,
+    /// i.e. from the point opposite the Sun.
+    pub separation_deg: f64,
+}
+
+impl LunarShadowState {
+    /// The eclipse type at this instant, or `None` when the Moon is outside the
+    /// penumbra.
+    pub fn eclipse_type(&self) -> Option<LunarEclipseType> {
+        classify_lunar(self.umbral_magnitude, self.penumbral_magnitude)
+    }
+}
+
+fn classify_lunar(umbral_magnitude: f64, penumbral_magnitude: f64) -> Option<LunarEclipseType> {
+    if penumbral_magnitude <= 0.0 {
+        None
+    } else if umbral_magnitude >= 1.0 {
+        Some(LunarEclipseType::Total)
+    } else if umbral_magnitude > 0.0 {
+        Some(LunarEclipseType::Partial)
+    } else {
+        Some(LunarEclipseType::Penumbral)
+    }
+}
+
+/// Earth's shadow on the Moon at any instant `jd_ut` (UT1): umbral and
+/// penumbral magnitudes and the Moon's distance from the shadow axis. At the
+/// greatest eclipse of a [`LunarEclipse`] the magnitudes equal its
+/// [`LunarEclipse::umbral_magnitude`] and [`LunarEclipse::penumbral_magnitude`].
+pub fn lunar_shadow_state(
+    almanac: &Almanac,
+    jd_ut: f64,
+) -> Result<LunarShadowState, EphemerisError> {
+    let s = EarthShadow::at(almanac, jd_ut)?;
+    Ok(LunarShadowState {
+        umbral_magnitude: s.magnitude(s.umbra),
+        penumbral_magnitude: s.magnitude(s.penumbra),
+        separation_deg: s.separation,
+    })
+}
+
 // ── Public API ───────────────────────────────────────────────────────────────
 
 /// Find all lunar eclipses between `jd_start` and `jd_end` (UT1).
@@ -203,17 +264,8 @@ fn lunar_eclipse_at(almanac: &Almanac, jd_full: f64) -> Option<LunarEclipse> {
     let jd_maximum = lunar_greatest_eclipse(almanac, jd_full)?;
     let shadow = EarthShadow::at(almanac, jd_maximum).ok()?;
     let penumbral_magnitude = shadow.magnitude(shadow.penumbra);
-    if penumbral_magnitude <= 0.0 {
-        return None;
-    }
     let umbral_magnitude = shadow.magnitude(shadow.umbra);
-    let eclipse_type = if umbral_magnitude >= 1.0 {
-        LunarEclipseType::Total
-    } else if umbral_magnitude > 0.0 {
-        LunarEclipseType::Partial
-    } else {
-        LunarEclipseType::Penumbral
-    };
+    let eclipse_type = classify_lunar(umbral_magnitude, penumbral_magnitude)?;
     let contact =
         |side: f64, limit: fn(&EarthShadow) -> f64| lunar_contact(almanac, jd_maximum, side, limit);
     let contacts = LunarContacts {
