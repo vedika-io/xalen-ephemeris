@@ -10,16 +10,22 @@ mod aspects;
 mod chart;
 mod cli;
 mod common;
+mod composite;
 mod convert;
 mod dasha;
+mod davison;
 mod eclipses;
 mod error;
 mod input;
+mod map;
 mod output;
 mod panchang;
 mod positions;
+mod rel;
+mod relocate;
 mod rise_set;
 mod star;
+mod synastry;
 
 use std::io::ErrorKind;
 use std::process::ExitCode;
@@ -43,6 +49,11 @@ fn run(command: &Command) -> (Result<Report>, bool) {
         Command::RiseSet(a) => (rise_set::run(a), a.out.json),
         Command::Aspects(a) => (aspects::run(a), a.out.json),
         Command::Convert(a) => (convert::run(a), a.out.json),
+        Command::Map(a) => (map::run(a), a.out.json || a.geojson),
+        Command::Synastry(a) => (synastry::run(a), a.out.json),
+        Command::Composite(a) => (composite::run(a), a.out.json),
+        Command::Davison(a) => (davison::run(a), a.out.json),
+        Command::Relocate(a) => (relocate::run(a), a.out.json),
     }
 }
 

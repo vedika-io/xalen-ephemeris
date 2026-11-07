@@ -55,3 +55,27 @@ impl From<EphemerisError> for CliError {
 
 /// Result alias used by every command.
 pub type Result<T> = std::result::Result<T, CliError>;
+
+impl From<xalen_ephemeris::maps::MapError> for CliError {
+    fn from(error: xalen_ephemeris::maps::MapError) -> Self {
+        use xalen_ephemeris::maps::MapError;
+        match error {
+            MapError::InvalidInput(_) => CliError::Usage(error.to_string()),
+            MapError::Ephemeris(_) => CliError::Compute(error.to_string()),
+        }
+    }
+}
+
+impl From<xalen_ephemeris::relationship::RelationshipError> for CliError {
+    fn from(error: xalen_ephemeris::relationship::RelationshipError) -> Self {
+        use xalen_ephemeris::relationship::RelationshipError;
+        match error {
+            RelationshipError::InvalidInput(_) | RelationshipError::UnsupportedHouseSystem(_) => {
+                CliError::Usage(error.to_string())
+            }
+            RelationshipError::Ephemeris(_) | RelationshipError::NoCommonPoints => {
+                CliError::Compute(error.to_string())
+            }
+        }
+    }
+}

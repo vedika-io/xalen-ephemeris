@@ -33,6 +33,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   date (apparent sidereal time and true obliquity), the frame of the apparent
   planet positions and of `compat::swe_houses`. `compute_houses` is unchanged.
 - The umbrella crate re-exports the new crates as `relationship` and `maps`.
+- **`xalen` commands for the new crates**: `map` (astrocartography lines as a
+  table, `--json` or a GeoJSON FeatureCollection with `--geojson`), `synastry`
+  (aspect grid and house overlays of two births), `composite`, `davison` and
+  `relocate`. Two births are given as `--a-date`/`--a-place` (or `--a-lat`
+  `--a-lon`) and `--b-...`. `composite`, `davison` and `relocate` take
+  `--sidereal`, which only converts the printed longitudes, signs and houses to
+  the chosen ayanamsa; `synastry` and `map` are tropical. No math was added: the
+  commands call `xalen-maps` and `xalen-relationship`.
 - **Node.js package `@xalen/ephemeris`**: the `xalen-node` addon is now packaged
   for npm with prebuilt binaries for Linux x64 and arm64 (glibc 2.17 or newer)
   and macOS arm64 and x64, as one npm package per platform plus a loader that
