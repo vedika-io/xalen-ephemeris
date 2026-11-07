@@ -32,7 +32,7 @@ pub struct SthanaBala {
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-/// Temporal strength sub-components per BPHS Ch.27.
+/// Temporal strength sub-components per BPHS Ch.27, all nine parts.
 pub struct KalaBala {
     pub nathonnatha_bala: f64,
     pub paksha_bala: f64,
@@ -41,15 +41,48 @@ pub struct KalaBala {
     pub masa_bala: f64,
     pub vara_bala: f64,
     pub hora_bala: f64,
+    /// Ayana Bala (declination strength), 0 to 60 virupas, 0 to 120 for the
+    /// Sun. See [`Shadbala::compute_full`].
+    pub ayana_bala: f64,
+    /// Yuddha Bala (planetary war). Positive for the winner, negative for the
+    /// loser, 0 for a planet not in a war. See [`Shadbala::compute_full`].
+    pub yuddha_bala: f64,
     pub total: f64,
 }
 
-/// Position and metadata for a single planet, used as input to Drik Bala.
+/// Position and metadata for a single planet, used as input to Drik Bala,
+/// Ayana Bala and Yuddha Bala.
 #[derive(Debug, Clone)]
 pub struct PlanetPosition {
     pub name: &'static str,
+    /// Sidereal longitude in degrees.
     pub longitude: f64,
+    /// Daily motion in degrees per day.
     pub speed: f64,
+    /// Declination in degrees, positive north of the celestial equator.
+    /// Geocentric apparent declination is best. When no latitude is at hand,
+    /// [`kranti_deg`] gives the classical kranti from the tropical longitude.
+    pub declination: f64,
+    /// House occupied, 1 to 12, with the same meaning as the `house` argument
+    /// of [`Shadbala::compute_full`]. Needed for the Sthana and Dig Bala that
+    /// enter Yuddha Bala.
+    pub house: usize,
+}
+
+/// Classical kranti (declination) of a point on the ecliptic with zero
+/// latitude: `sin(declination) = sin(obliquity) * sin(longitude)`.
+///
+/// `tropical_lon_deg` is the tropical (sayana) longitude, not the sidereal
+/// one. `obliquity_deg` is the obliquity of the ecliptic in degrees, for
+/// example `xalen_coords::mean_obliquity(t).to_degrees()`. The result is in
+/// degrees, positive north. This ignores the planet's own ecliptic latitude,
+/// which can change the declination of the Moon by up to about five degrees
+/// and of the other planets by a few degrees; pass the true declination in
+/// [`PlanetPosition::declination`] when it is known.
+pub fn kranti_deg(tropical_lon_deg: f64, obliquity_deg: f64) -> f64 {
+    (obliquity_deg.to_radians().sin() * tropical_lon_deg.to_radians().sin())
+        .asin()
+        .to_degrees()
 }
 
 /// Extended input for full Shadbala computation.
@@ -65,7 +98,8 @@ pub struct ShadBalaInput {
     /// 0.25 = 6am, 0.5 = noon, 0.75 = 6pm). Used for Nathonnatha and
     /// Tribhaga Bala.
     pub day_fraction: f64,
-    /// Positions of all 7 planets (Sun through Saturn) for Drik Bala.
+    /// Positions of all 7 planets (Sun through Saturn) for Drik Bala, Ayana
+    /// Bala and Yuddha Bala.
     pub all_planets: Vec<PlanetPosition>,
 }
 
@@ -102,8 +136,57 @@ impl Shadbala {
     }
 
     /// Compute all six Shadbala strengths per Brihat Parashara Hora Shastra
-    /// Ch. 27 — Sthana, Dig, Kala (full sub-components), Cheshta, Naisargika and
+    /// Ch. 27 — Sthana, Dig, Kala (all nine parts), Cheshta, Naisargika and
     /// Drik Bala — with Saptavargaja Bala included in Sthana.
+    ///
+    /// # Ayana Bala
+    ///
+    /// Ayana Bala comes from the declination `d` of the planet (BPHS Ch. 27,
+    /// Santhanam's translation vv. 23-24; B.V. Raman, *Graha and Bhava Balas*).
+    /// With the signed declination `k`, the strength is
+    /// `(24 + k) * 60 / 48` virupas. For the Sun, Mars, Jupiter and Venus `k`
+    /// is `d` (north is strong). For the Moon and Saturn `k` is `-d` (south is
+    /// strong). For Mercury `k` is `|d|` (either side is strong). The Sun's
+    /// result is doubled. `k` is clamped to -24..24 degrees, because the
+    /// Moon and the planets with latitude can pass 24 degrees of declination,
+    /// so the result is 0 to 60 virupas, and 0 to 120 for the Sun.
+    ///
+    /// # Yuddha Bala
+    ///
+    /// Only Mars, Mercury, Jupiter, Venus and Saturn fight; the Sun, the
+    /// Moon and the nodes never do. Two of them are at war when their
+    /// longitudes differ by less than one degree (Surya Siddhanta Ch. 7).
+    /// The winner is the planet with the greater declination, the northern
+    /// one (Surya Siddhanta Ch. 7, the rule that the northern planet wins).
+    /// Surya Siddhanta judges the north by ecliptic latitude; this crate uses
+    /// declination because that is what [`PlanetPosition`] carries. If the
+    /// declinations are equal, the planet with the larger partial sum wins.
+    ///
+    /// The magnitude follows Sripati: the difference of the two planets'
+    /// partial sums (Sthana, Dig, Nathonnatha, Paksha, Tribhaga and Hora
+    /// Bala), divided by the difference of their disc diameters in seconds of
+    /// arc (Mars 9.4, Mercury 6.6, Jupiter 190.4, Venus 16.6, Saturn 158.0:
+    /// the table of the modern Shadbala literature, B.V. Raman, *Graha and
+    /// Bhava Balas*, which PyJHora also uses; the Surya Siddhanta's own Ch. 7
+    /// figures are in yojanas on the Moon's orbit and are not used here).
+    /// The result is added to the winner and subtracted from the loser, so
+    /// the Yuddha Bala of all planets sums to zero. A planet within one
+    /// degree of two others is treated pair by pair. The Sun and Moon never
+    /// form a pair, so they do not cancel a war between other planets.
+    ///
+    /// The alternative literal reading of BPHS uses the difference of the
+    /// full Shadbala totals instead of the six partial sums. It is not
+    /// implemented: it is circular, because Yuddha Bala is itself part of
+    /// Kala Bala, and it is larger in order of magnitude, because full
+    /// totals run to several hundred virupas while the six partial sums
+    /// are roughly half of that.
+    ///
+    /// # Inputs
+    ///
+    /// `input.all_planets` must contain the planet being computed, found by
+    /// name. Its `declination`, `house` and `longitude` are used for Ayana
+    /// and Yuddha Bala. If the planet is absent, both are 0 and nothing
+    /// panics.
     ///
     /// NOTE: the Drik Bala component uses the graded-aspect model (see
     /// [`compute_drik_bala`]) — classically-correct special aspects and graded
@@ -317,8 +400,15 @@ fn compute_kala_bala(planet: &str, input: &ShadBalaInput) -> KalaBala {
     let abda_b = abda_bala(planet, input.jd);
     let masa_b = masa_bala(planet, input.jd);
     let hora_b = hora_bala(planet, input.jd, input.day_fraction);
+    let ayana = input
+        .all_planets
+        .iter()
+        .find(|p| p.name == planet)
+        .map_or(0.0, |p| ayana_bala(planet, p.declination));
+    let yuddha = yuddha_bala(planet, input);
 
-    let total = nathonnatha + paksha + tribhaga + vara_b + abda_b + masa_b + hora_b;
+    let total =
+        nathonnatha + paksha + tribhaga + vara_b + abda_b + masa_b + hora_b + ayana + yuddha;
 
     KalaBala {
         nathonnatha_bala: nathonnatha,
@@ -328,8 +418,87 @@ fn compute_kala_bala(planet: &str, input: &ShadBalaInput) -> KalaBala {
         masa_bala: masa_b,
         vara_bala: vara_b,
         hora_bala: hora_b,
+        ayana_bala: ayana,
+        yuddha_bala: yuddha,
         total,
     }
+}
+
+/// Ayana Bala from the signed declination in degrees (BPHS Ch. 27,
+/// Santhanam vv. 23-24). 0 to 60 virupas, doubled for the Sun.
+fn ayana_bala(planet: &str, declination_deg: f64) -> f64 {
+    let k = match planet {
+        "Sun" | "Mars" | "Jupiter" | "Venus" => declination_deg,
+        "Moon" | "Saturn" => -declination_deg,
+        "Mercury" => declination_deg.abs(),
+        _ => return 0.0,
+    };
+    let k = k.clamp(-24.0, 24.0);
+    let b = (24.0 + k) * 60.0 / 48.0;
+    if planet == "Sun" { 2.0 * b } else { b }
+}
+
+/// Disc diameter in seconds of arc used by Yuddha Bala, for the five planets
+/// that can fight (B.V. Raman's table, see [`Shadbala::compute_full`]).
+fn disc_diameter(planet: &str) -> Option<f64> {
+    match planet {
+        "Mars" => Some(9.4),
+        "Mercury" => Some(6.6),
+        "Jupiter" => Some(190.4),
+        "Venus" => Some(16.6),
+        "Saturn" => Some(158.0),
+        _ => None,
+    }
+}
+
+/// Sum of the six Sthana, Dig, Nathonnatha, Paksha, Tribhaga and Hora Bala.
+fn yuddha_partial_sum(p: &PlanetPosition, input: &ShadBalaInput) -> f64 {
+    compute_sthana_bala_full(p.name, p.longitude, p.house).total
+        + compute_dig_bala(p.name, p.house)
+        + nathonnatha_bala(p.name, input.day_fraction)
+        + paksha_bala(p.name, input.sun_lon, input.moon_lon)
+        + tribhaga_bala(p.name, input.day_fraction)
+        + hora_bala(p.name, input.jd, input.day_fraction)
+}
+
+/// Yuddha Bala (planetary war), Sripati's formulation. See
+/// [`Shadbala::compute_full`] for the convention.
+fn yuddha_bala(planet: &str, input: &ShadBalaInput) -> f64 {
+    if disc_diameter(planet).is_none() {
+        return 0.0;
+    }
+    let Some(me) = input.all_planets.iter().find(|p| p.name == planet) else {
+        return 0.0;
+    };
+    let my_sum = yuddha_partial_sum(me, input);
+    let my_diameter = disc_diameter(planet).unwrap_or(0.0);
+
+    let mut total = 0.0;
+    for other in &input.all_planets {
+        let Some(other_diameter) = disc_diameter(other.name) else {
+            continue;
+        };
+        if other.name == planet {
+            continue;
+        }
+        let gap = (me.longitude - other.longitude).rem_euclid(360.0);
+        if gap.min(360.0 - gap) >= 1.0 {
+            continue;
+        }
+        let diameter_diff = (my_diameter - other_diameter).abs();
+        if diameter_diff < 1e-9 {
+            continue;
+        }
+        let other_sum = yuddha_partial_sum(other, input);
+        let magnitude = (my_sum - other_sum).abs() / diameter_diff;
+        let i_win = if (me.declination - other.declination).abs() > 1e-12 {
+            me.declination > other.declination
+        } else {
+            my_sum > other_sum
+        };
+        total += if i_win { magnitude } else { -magnitude };
+    }
+    total
 }
 
 /// Nathonnatha Bala (Day/Night strength).
@@ -989,36 +1158,50 @@ mod tests {
                     name: "Sun",
                     longitude: 280.0,
                     speed: 1.0,
+                    declination: 0.0,
+                    house: 1,
                 },
                 PlanetPosition {
                     name: "Moon",
                     longitude: 100.0,
                     speed: 13.0,
+                    declination: 0.0,
+                    house: 1,
                 },
                 PlanetPosition {
                     name: "Mars",
                     longitude: 30.0,
                     speed: 0.5,
+                    declination: 0.0,
+                    house: 1,
                 },
                 PlanetPosition {
                     name: "Mercury",
                     longitude: 270.0,
                     speed: 1.2,
+                    declination: 0.0,
+                    house: 1,
                 },
                 PlanetPosition {
                     name: "Jupiter",
                     longitude: 50.0,
                     speed: 0.08,
+                    declination: 0.0,
+                    house: 1,
                 },
                 PlanetPosition {
                     name: "Venus",
                     longitude: 310.0,
                     speed: 1.1,
+                    declination: 0.0,
+                    house: 1,
                 },
                 PlanetPosition {
                     name: "Saturn",
                     longitude: 70.0,
                     speed: 0.03,
+                    declination: 0.0,
+                    house: 1,
                 },
             ],
         }
@@ -1251,7 +1434,9 @@ mod tests {
             + kala.abda_bala
             + kala.masa_bala
             + kala.vara_bala
-            + kala.hora_bala;
+            + kala.hora_bala
+            + kala.ayana_bala
+            + kala.yuddha_bala;
         assert!(
             (kala.total - expected).abs() < 0.01,
             "Kala total ({}) should equal sum of subs ({expected})",
@@ -1276,6 +1461,8 @@ mod tests {
             name: "Jupiter",
             longitude: 180.0,
             speed: 0.08,
+            declination: 0.0,
+            house: 1,
         }];
         let drik = compute_drik_bala("Sun", 0.0, &planets, 0.0);
         assert!(
@@ -1292,6 +1479,8 @@ mod tests {
             name: "Saturn",
             longitude: 180.0,
             speed: 0.03,
+            declination: 0.0,
+            house: 1,
         }];
         let drik = compute_drik_bala("Sun", 0.0, &planets, 0.0);
         assert!(
@@ -1310,26 +1499,36 @@ mod tests {
                 name: "Jupiter",
                 longitude: 180.0,
                 speed: 0.08,
+                declination: 0.0,
+                house: 1,
             },
             PlanetPosition {
                 name: "Venus",
                 longitude: 90.0,
                 speed: 1.2,
+                declination: 0.0,
+                house: 1,
             },
             PlanetPosition {
                 name: "Saturn",
                 longitude: 270.0,
                 speed: 0.03,
+                declination: 0.0,
+                house: 1,
             },
             PlanetPosition {
                 name: "Mars",
                 longitude: 120.0,
                 speed: 0.5,
+                declination: 0.0,
+                house: 1,
             },
             PlanetPosition {
                 name: "Sun",
                 longitude: 60.0,
                 speed: 0.98,
+                declination: 0.0,
+                house: 1,
             },
         ];
         for target in [
@@ -1356,6 +1555,8 @@ mod tests {
             name: "Mars",
             longitude: 0.0,
             speed: 0.5,
+            declination: 0.0,
+            house: 1,
         }];
         let drik = compute_drik_bala("Mercury", 90.0, &planets, 0.0);
         assert!(
@@ -1370,6 +1571,8 @@ mod tests {
             name: "Mars",
             longitude: 90.0,
             speed: 0.5,
+            declination: 0.0,
+            house: 1,
         }];
         let drik_4th = compute_drik_bala("Mercury", 90.0, &planets, 0.0);
         let drik_10th = compute_drik_bala("Mercury", 0.0, &reversed, 0.0);
@@ -1389,11 +1592,15 @@ mod tests {
                 name: "Jupiter",
                 longitude: 180.0,
                 speed: 0.08,
+                declination: 0.0,
+                house: 1,
             },
             PlanetPosition {
                 name: "Saturn",
                 longitude: 180.0,
                 speed: 0.03,
+                declination: 0.0,
+                house: 1,
             },
         ];
         let drik = compute_drik_bala("Sun", 0.0, &planets, 0.0);
@@ -1411,11 +1618,15 @@ mod tests {
                 name: "Saturn",
                 longitude: 180.0,
                 speed: 0.03,
+                declination: 0.0,
+                house: 1,
             },
             PlanetPosition {
                 name: "Mars",
                 longitude: 180.0,
                 speed: 0.5,
+                declination: 0.0,
+                house: 1,
             },
         ];
         let drik = compute_drik_bala("Venus", 0.0, &planets, 0.0);
@@ -1548,7 +1759,9 @@ mod tests {
             + k.abda_bala
             + k.masa_bala
             + k.vara_bala
-            + k.hora_bala;
+            + k.hora_bala
+            + k.ayana_bala
+            + k.yuddha_bala;
         assert!(
             (k.total - sub_sum).abs() < 0.01,
             "Kala sub-sum ({sub_sum}) should match total ({})",
@@ -1588,5 +1801,260 @@ mod tests {
         assert!(!is_natural_benefic("Sun", 0.0, 0.0));
         assert!(!is_natural_benefic("Mars", 0.0, 0.0));
         assert!(!is_natural_benefic("Saturn", 0.0, 0.0));
+    }
+
+    // === Ayana Bala and Yuddha Bala (issue #46) ===
+
+    fn pos(name: &'static str, longitude: f64, declination: f64, house: usize) -> PlanetPosition {
+        PlanetPosition {
+            name,
+            longitude,
+            speed: 1.0,
+            declination,
+            house,
+        }
+    }
+
+    fn input_with(planets: Vec<PlanetPosition>) -> ShadBalaInput {
+        ShadBalaInput {
+            all_planets: planets,
+            ..make_test_input()
+        }
+    }
+
+    fn close(a: f64, b: f64) -> bool {
+        (a - b).abs() < 0.05
+    }
+
+    #[test]
+    fn kranti_follows_the_classical_formula() {
+        let eps = 23.44;
+        assert!(close(kranti_deg(90.0, eps), 23.44));
+        assert!(close(kranti_deg(270.0, eps), -23.44));
+        assert!(kranti_deg(0.0, eps).abs() < 1e-9);
+        assert!(kranti_deg(180.0, eps).abs() < 1e-9);
+    }
+
+    #[test]
+    fn ayana_sun_is_doubled_and_follows_the_solstices() {
+        let eps = 23.44;
+        let summer = ayana_bala("Sun", kranti_deg(90.0, eps));
+        let winter = ayana_bala("Sun", kranti_deg(270.0, eps));
+        assert!(close(summer, 118.6), "summer solstice Sun {summer}");
+        assert!(close(winter, 1.4), "winter solstice Sun {winter}");
+        assert!(close(ayana_bala("Sun", 0.0), 60.0));
+        assert!(close(ayana_bala("Mars", 0.0), 30.0));
+    }
+
+    #[test]
+    fn ayana_sign_convention_per_planet() {
+        assert!(close(ayana_bala("Moon", -20.0), 55.0));
+        assert!(close(ayana_bala("Moon", 20.0), 5.0));
+        assert!(close(ayana_bala("Saturn", 20.0), 5.0));
+        assert!(close(ayana_bala("Saturn", -20.0), 55.0));
+        for p in ["Mars", "Jupiter", "Venus"] {
+            assert!(close(ayana_bala(p, 20.0), 55.0), "{p} north");
+            assert!(close(ayana_bala(p, -20.0), 5.0), "{p} south");
+        }
+        assert!(close(ayana_bala("Mercury", 20.0), 55.0));
+        assert!(close(ayana_bala("Mercury", -20.0), 55.0));
+    }
+
+    #[test]
+    fn ayana_clamps_declination_beyond_24_degrees() {
+        assert!(close(ayana_bala("Mars", 26.0), 60.0));
+        assert!(close(ayana_bala("Mars", -26.0), 0.0));
+        assert!(close(ayana_bala("Moon", -29.0), 60.0));
+        assert!(close(ayana_bala("Mercury", -26.0), 60.0));
+        assert!(close(ayana_bala("Sun", 26.0), 120.0));
+    }
+
+    #[test]
+    fn ayana_stays_in_range_for_every_planet() {
+        let mut d = -30.0;
+        while d <= 30.0 {
+            for p in ["Moon", "Mars", "Mercury", "Jupiter", "Venus", "Saturn"] {
+                let b = ayana_bala(p, d);
+                assert!((0.0..=60.0).contains(&b), "{p} at {d}: {b}");
+            }
+            let sun = ayana_bala("Sun", d);
+            assert!((0.0..=120.0).contains(&sun), "Sun at {d}: {sun}");
+            d += 0.5;
+        }
+    }
+
+    #[test]
+    fn ayana_matches_the_issue_46_sun_example() {
+        // Sun about 20 degrees north gives about 110 virupas, the figure the
+        // reporter of #46 expected for a 1983 Delhi chart.
+        let sun = pos("Sun", 280.0, 20.0, 10);
+        let mut planets = make_test_input().all_planets;
+        planets[0] = sun;
+        let input = input_with(planets);
+        let sb = Shadbala::compute_full("Sun", 280.0, 10, 1.0, &input);
+        assert!(
+            close(sb.kala_bala.ayana_bala, 110.0),
+            "{}",
+            sb.kala_bala.ayana_bala
+        );
+    }
+
+    #[test]
+    fn compute_full_total_includes_ayana_and_yuddha() {
+        let mut planets = make_test_input().all_planets;
+        planets[0] = pos("Sun", 280.0, 20.0, 10);
+        let input = input_with(planets);
+        let sb = Shadbala::compute_full("Sun", 280.0, 10, 1.0, &input);
+        let k = &sb.kala_bala;
+        let expected = k.nathonnatha_bala
+            + k.paksha_bala
+            + k.tribhaga_bala
+            + k.abda_bala
+            + k.masa_bala
+            + k.vara_bala
+            + k.hora_bala
+            + k.ayana_bala
+            + k.yuddha_bala;
+        assert!((k.total - expected).abs() < 1e-9);
+        let six = sb.sthana_bala.total
+            + sb.dig_bala
+            + k.total
+            + sb.cheshta_bala
+            + sb.naisargika_bala
+            + sb.drik_bala;
+        assert!((sb.total - six).abs() < 1e-9);
+        // Compared with the seven-part Kala Bala of 0.7.0 the total rose by
+        // exactly the Ayana and Yuddha amounts.
+        let seven = k.nathonnatha_bala
+            + k.paksha_bala
+            + k.tribhaga_bala
+            + k.abda_bala
+            + k.masa_bala
+            + k.vara_bala
+            + k.hora_bala;
+        assert!((k.total - seven - k.ayana_bala - k.yuddha_bala).abs() < 1e-9);
+        assert!(k.ayana_bala > 100.0);
+    }
+
+    #[test]
+    fn planet_missing_from_all_planets_gets_zero_ayana_and_yuddha() {
+        let input = input_with(vec![pos("Mars", 30.0, 10.0, 1)]);
+        let sb = Shadbala::compute_full("Venus", 30.2, 1, 1.0, &input);
+        assert_eq!(sb.kala_bala.ayana_bala, 0.0);
+        assert_eq!(sb.kala_bala.yuddha_bala, 0.0);
+    }
+
+    fn yuddha_of(input: &ShadBalaInput, name: &str) -> f64 {
+        let p = input.all_planets.iter().find(|p| p.name == name).unwrap();
+        Shadbala::compute_full(name, p.longitude, p.house, p.speed, input)
+            .kala_bala
+            .yuddha_bala
+    }
+
+    #[test]
+    fn yuddha_pair_inside_one_degree_gains_and_loses_equally() {
+        let input = input_with(vec![
+            pos("Sun", 280.0, -20.0, 10),
+            pos("Moon", 100.0, 5.0, 4),
+            pos("Mars", 150.0, 10.0, 6),
+            pos("Mercury", 270.0, -22.0, 9),
+            pos("Jupiter", 50.0, 15.0, 2),
+            pos("Venus", 150.5, 8.0, 6),
+            pos("Saturn", 70.0, 22.0, 3),
+        ]);
+        let mars = yuddha_of(&input, "Mars");
+        let venus = yuddha_of(&input, "Venus");
+        // Mars is further north, so it wins.
+        assert!(mars > 0.0, "winner gains: {mars}");
+        assert!(venus < 0.0, "loser loses: {venus}");
+        assert!((mars + venus).abs() < 1e-9);
+        for other in ["Sun", "Moon", "Mercury", "Jupiter", "Saturn"] {
+            assert_eq!(yuddha_of(&input, other), 0.0, "{other}");
+        }
+    }
+
+    #[test]
+    fn yuddha_winner_is_the_northern_planet() {
+        let mk = |mars_dec, venus_dec| {
+            input_with(vec![
+                pos("Mars", 150.0, mars_dec, 6),
+                pos("Venus", 150.5, venus_dec, 6),
+            ])
+        };
+        assert!(yuddha_of(&mk(10.0, 8.0), "Mars") > 0.0);
+        assert!(yuddha_of(&mk(8.0, 10.0), "Mars") < 0.0);
+        assert!(yuddha_of(&mk(8.0, 10.0), "Venus") > 0.0);
+    }
+
+    #[test]
+    fn yuddha_magnitude_is_partial_sum_difference_over_diameter_difference() {
+        let input = input_with(vec![
+            pos("Mars", 150.0, 10.0, 6),
+            pos("Venus", 150.5, 8.0, 6),
+        ]);
+        let partial = |n: &str| {
+            let p = input.all_planets.iter().find(|p| p.name == n).unwrap();
+            yuddha_partial_sum(p, &input)
+        };
+        let expected = (partial("Mars") - partial("Venus")).abs() / (16.6 - 9.4);
+        assert!(expected > 0.0);
+        assert!((yuddha_of(&input, "Mars") - expected).abs() < 1e-9);
+    }
+
+    #[test]
+    fn yuddha_needs_less_than_one_degree() {
+        let input = input_with(vec![
+            pos("Mars", 150.0, 10.0, 6),
+            pos("Venus", 151.5, 8.0, 6),
+        ]);
+        assert_eq!(yuddha_of(&input, "Mars"), 0.0);
+        assert_eq!(yuddha_of(&input, "Venus"), 0.0);
+        // wrap-around at 0/360
+        let wrap = input_with(vec![pos("Mars", 359.8, 10.0, 6), pos("Venus", 0.3, 8.0, 6)]);
+        assert!(yuddha_of(&wrap, "Mars") > 0.0);
+    }
+
+    #[test]
+    fn yuddha_never_involves_sun_or_moon() {
+        for lum in ["Sun", "Moon"] {
+            let input = input_with(vec![pos("Mars", 150.0, 10.0, 6), pos(lum, 150.5, 12.0, 6)]);
+            assert_eq!(yuddha_of(&input, "Mars"), 0.0, "{lum}");
+            assert_eq!(yuddha_of(&input, lum), 0.0, "{lum}");
+        }
+    }
+
+    #[test]
+    fn yuddha_three_planets_are_handled_pair_by_pair() {
+        let input = input_with(vec![
+            pos("Mars", 150.0, 12.0, 6),
+            pos("Mercury", 150.4, 10.0, 6),
+            pos("Venus", 150.8, 8.0, 6),
+        ]);
+        let m = yuddha_of(&input, "Mars");
+        let me = yuddha_of(&input, "Mercury");
+        let v = yuddha_of(&input, "Venus");
+        // Mars beats both, Venus loses to both, Mercury beats Venus and loses to Mars.
+        assert!(m > 0.0 && v < 0.0);
+        assert!((m + me + v).abs() < 1e-9);
+    }
+
+    #[test]
+    fn yuddha_sums_to_zero_over_all_seven_planets() {
+        let input = input_with(vec![
+            pos("Sun", 280.0, -20.0, 10),
+            pos("Moon", 280.4, -18.0, 10),
+            pos("Mars", 150.0, 10.0, 6),
+            pos("Mercury", 150.3, 9.0, 6),
+            pos("Jupiter", 50.0, 15.0, 2),
+            pos("Venus", 150.7, 8.0, 6),
+            pos("Saturn", 50.6, 14.0, 2),
+        ]);
+        let sum: f64 = input
+            .all_planets
+            .iter()
+            .map(|p| yuddha_of(&input, p.name))
+            .sum();
+        assert!(sum.abs() < 1e-9, "sum {sum}");
+        assert!(yuddha_of(&input, "Jupiter") != 0.0);
     }
 }

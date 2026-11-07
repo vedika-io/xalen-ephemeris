@@ -3,10 +3,10 @@
 //! Run with: cargo run --example shadbala_strength
 
 use xalen_ayanamsa::Ayanamsa;
-use xalen_coords::RAD_TO_DEG;
+use xalen_coords::{RAD_TO_DEG, mean_obliquity};
 use xalen_ephem::{Almanac, Body};
 use xalen_time::{CalendarSystem, JulianDay, calendar_to_jd};
-use xalen_vedic::shadbala::{PlanetPosition, ShadBalaInput, Shadbala};
+use xalen_vedic::shadbala::{PlanetPosition, ShadBalaInput, Shadbala, kranti_deg};
 
 fn main() {
     let jd = calendar_to_jd(1947, 8, 15, 0.0 - 5.5, CalendarSystem::default());
@@ -46,6 +46,10 @@ fn main() {
         0.034, // Saturn
     ];
 
+    // Declination from the classical kranti of the tropical longitude. A real
+    // application should pass the true declination when it has the latitude.
+    let obliquity_deg = mean_obliquity((jd.as_f64() - 2451545.0) / 36525.0) * RAD_TO_DEG;
+
     let all_planets: Vec<PlanetPosition> = planets
         .iter()
         .zip(lons.iter())
@@ -54,6 +58,8 @@ fn main() {
             name: n,
             longitude: l,
             speed: s,
+            declination: kranti_deg(l + aya_deg, obliquity_deg),
+            house: (l / 30.0) as usize + 1,
         })
         .collect();
 
