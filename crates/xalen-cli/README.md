@@ -13,6 +13,10 @@ cargo install xalen-cli
 xalen --version
 ```
 
+`xalen-cli` is published to crates.io with each release of the workspace, so the
+command above installs the latest released version. To try the tool before a
+release, build it from a checkout with `cargo install --path crates/xalen-cli`.
+
 ## Conventions
 
 - Time: `--date <ISO-8601>` (`2026-11-07`, `2026-11-07T00:00:00Z`,
@@ -23,8 +27,14 @@ xalen --version
   UTC unless `--tz` is given: `UTC`, an offset such as `+05:30`, or a city from
   the library's timezone table (standard time only; IANA names and daylight
   saving are not supported).
-- Zodiac: tropical by default; `--sidereal [AYANAMSA]` switches to sidereal
-  (Lahiri unless named). `xalen positions --help` lists every ayanamsa.
+- Calendar and time scale: dates are proleptic Gregorian, years -13000 to 17000
+  and Julian Days -3000000 to 10000000 are accepted, and UTC is taken as UT1
+  (no DUT1 correction, the library's convention). TT comes from the library's
+  delta T model.
+- Zodiac: tropical by default. `positions` and `chart` take `--sidereal
+  [AYANAMSA]` (Lahiri unless named). `panchang` and `dasha` are always
+  sidereal and take `--ayanamsa <NAME>` (Lahiri by default). `xalen positions
+  --help` lists every ayanamsa; a name or a Swiss Ephemeris number works.
 - Exit codes: `0` success, `1` the computation failed, `2` bad input (one line on
   stderr).
 
@@ -67,8 +77,19 @@ Angle       Longitude  Sign                 Deg
 ----------  ---------  -------------------  -----
 Ascendant   67.1905    Mithuna (Gemini)     7.19
 Midheaven   322.4921   Kumbha (Aquarius)    22.49
+Descendant  247.1905   Dhanu (Sagittarius)  7.19
+Imum Coeli  142.4921   Simha (Leo)          22.49
+Vertex      202.6252   Tula (Libra)         22.63
+
+House  Cusp      Sign                  Deg
+-----  --------  --------------------  ----
+1      60.0000   Vrishabha (Taurus)    0.00
+2      90.0000   Karka (Cancer)        0.00
 ...
 ```
+
+Sidereal Whole Sign cusps sit on sign boundaries: the ascendant (67.19) is in
+house 1, which starts at 60.
 
 ### panchang
 
