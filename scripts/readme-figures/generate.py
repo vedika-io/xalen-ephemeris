@@ -21,8 +21,8 @@ Every SVG is written into docs/assets/:
     accuracy.svg, accuracy-dark.svg         error per body, the figures of docs/ACCURACY.md
     terminal.svg                            one `xalen positions` run, its output verbatim
 
-The logo files (docs/assets/logo.svg, logo-dark.svg and xalen-mark.svg, the
-official XALEN mark) are hand-made assets; this script does not write them.
+The logo is not generated here: docs/assets/xalen-ephemeris-logo.png is the
+official asset and docs/assets/xalen-ephemeris-logo.svg a tracing of it.
 
 The example birth is the moment of Indian independence, 15 August 1947 00:00
 IST (UTC+05:30) at Delhi from the built-in city table, the same moment as the

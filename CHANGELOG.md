@@ -151,7 +151,7 @@ exception that `except swe.Error` can catch
 
 ### Changed
 
-- The README is now a product page: the official XALEN mark, and a chart wheel,
+- The README is now a product page: the project logo, and a chart wheel,
   an astrocartography map and a terminal run drawn from real `xalen` output,
   and a chart of the docs/ACCURACY.md figures.
   `scripts/readme-figures/generate.py` writes the figures into `docs/assets/`

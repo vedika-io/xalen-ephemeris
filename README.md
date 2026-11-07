@@ -1,9 +1,8 @@
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/logo-dark.svg">
-    <img alt="XALEN Ephemeris" src="docs/assets/logo.svg" width="460">
-  </picture>
+  <img src="docs/assets/xalen-ephemeris-logo.svg" width="120" alt="XALEN Ephemeris">
 </p>
+
+<h1 align="center">XALEN Ephemeris</h1>
 
 <p align="center">
   <b>A pure-Rust astronomical ephemeris for astrology — validated against JPL DE440, zero <code>unsafe</code> core, Apache-2.0.</b>
@@ -227,9 +226,8 @@ Copyright 2024-2026 XALEN Technology Pvt Ltd.
 ```
 
 For commercial licensing inquiries, contact [hello@xalen.io](mailto:hello@xalen.io).
-The XALEN name and mark (the logo in `docs/assets/`) are trademarks of XALEN
-Technology Pvt Ltd and are governed by [TRADEMARK.md](TRADEMARK.md), not by the
-Apache licence.
+The XALEN name and logo are trademarks of XALEN Technology Pvt Ltd and are
+governed by [TRADEMARK.md](TRADEMARK.md), not by the Apache licence.
 
 ## Enterprise
 
