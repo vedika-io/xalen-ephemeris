@@ -70,17 +70,19 @@ Both the generator and the runner are fully deterministic for a fixed
   (default `0.1`, the legacy bound). The report also always shows the tighter
   `<1″` subset fraction.
 
-## Run by the gate and by CI
+## Run by the gate
 
-`scripts/gate.sh` runs this harness as its last step: it installs `pyswisseph`
-into a temporary directory, generates an oracle of N charts (seed 42), pipes it
-into `xalen-validation`, and fails the gate if any gated quantity is more than
-0.1 degree from the oracle. N defaults to 2000. For a larger run:
+The `harness` stage of `scripts/gate.sh`, which the maintainers run on their
+AWS CI for every pull request, runs this harness as the last stage: it installs
+`pyswisseph` into a temporary directory, generates an oracle of N charts (seed
+42), pipes it into `xalen-validation`, and fails the gate if any gated quantity
+is more than 0.1 degree from the oracle. N defaults to 2000. For a larger run:
 
 ```bash
 bash scripts/gate.sh --harness-n 20000
 GATE_HARNESS_N=20000 bash scripts/gate.sh     # same thing
 GATE_HARNESS_SEED=7 bash scripts/gate.sh      # a different sample
+bash scripts/gate.sh --skip harness          # every other stage
 ```
 
 The oracle is a run-time test dependency only; nothing from `pyswisseph` is

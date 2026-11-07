@@ -42,9 +42,9 @@ Published advisories are listed at
 ### Dependencies
 
 Dependencies are checked against the [RustSec advisory database](https://rustsec.org/)
-with `cargo audit` as part of the maintainers' pre-merge checks, and Dependabot
-security updates are enabled on the repository. Coordinated-disclosure
-embargoes from RustSec are honored.
+with `cargo audit` as part of the maintainers' pre-merge checks (the `audit`
+stage of `scripts/gate.sh`), and Dependabot security updates are enabled on the
+repository. Coordinated-disclosure embargoes from RustSec are honored.
 
 ## Scope
 

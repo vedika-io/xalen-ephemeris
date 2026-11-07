@@ -65,8 +65,9 @@ Third-Party Acknowledgments:
 NOTE ON COMMERCIAL SCOPE: the published crates carry no CC BY-NC data. The
 only non-commercial star data in the repository is the Hipparcos-derived
 catalogue in crates/xalen-stars-hip-data, which is unpublished and must not be
-linked into a commercial build. The commercial-clean CI workflow checks that no
-published crate depends on it.
+linked into a commercial build. The `commercial-clean` stage of `scripts/gate.sh`
+(`scripts/repo-policy/check-commercial-clean.sh`) checks that no published crate
+depends on it.
 
 ---
 

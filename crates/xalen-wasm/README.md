@@ -3,7 +3,6 @@
 **Pure-Rust astronomical ephemeris for astrology, compiled to WebAssembly — Vedic charts, panchang, houses, dasha, and compatibility in any browser or Node.js. Zero data files, zero native dependencies.**
 
 [![npm](https://img.shields.io/npm/v/@xalen/wasm.svg)](https://www.npmjs.com/package/@xalen/wasm)
-[![CI](https://github.com/vedika-io/xalen-ephemeris/actions/workflows/ci.yml/badge.svg)](https://github.com/vedika-io/xalen-ephemeris/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](https://github.com/vedika-io/xalen-ephemeris/blob/main/LICENSE)
 
 > Part of the [XALEN Ephemeris](https://github.com/vedika-io/xalen-ephemeris) suite — pure-Rust core, zero `unsafe` in the math, thread-safe, Apache-2.0. This package is the **WebAssembly** build (runs in the browser and in Node). For a faster, synchronous **native** Node addon, use the [`@xalen/ephemeris`](https://github.com/vedika-io/xalen-ephemeris/tree/main/crates/xalen-node) package instead.

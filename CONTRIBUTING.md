@@ -19,6 +19,8 @@ astrological computation library; correctness and accuracy are the priorities.
 
 - Rust **1.85+** (edition 2024). Pinned MSRV: `rust-version = "1.85"`.
 - `rustup component add clippy rustfmt`
+- For `scripts/gate.sh`: Python **3.8+** and Node **18+** (it stops with a
+  message when either is older), plus curl, nm and strings.
 
 ## Project layout
 
@@ -91,11 +93,12 @@ requests: no `Co-authored-by:` trailers for AI tools or bots, no "Generated
 with …" footers, no tool links or bot author addresses. The committer is the
 author of record. `scripts/repo-policy/check-attribution.sh` enforces this in
 the `commit-msg` hook (enable once per clone with
-`git config core.hooksPath .githooks`) and in the `attribution` workflow.
+`git config core.hooksPath .githooks`) and in the `attribution` stage of
+`scripts/gate.sh`, which checks every commit on the branch.
 
 ### 4. Check
 
-Run the four checks CI runs on every pull request. All four must pass:
+Run the four core checks. All four must pass:
 
 ```bash
 cargo fmt --all --check
@@ -104,24 +107,62 @@ cargo test  --workspace --exclude xalen-python
 cargo doc   --no-deps --workspace --exclude xalen-python
 ```
 
-`scripts/gate.sh` runs all of these in one go, plus the release-configuration
-tests (`crates/xalen-python/tests/test_build_config.py` and
-`crates/xalen-node/__test__/platform-matrix.test.mjs`) and the accuracy harness
-in `validation/`. It prints each step, then a summary, and exits non-zero if
-any step failed. The harness runs on 2000 charts by default; for a larger run
-use `bash scripts/gate.sh --harness-n 20000` or `GATE_HARNESS_N=20000 bash
-scripts/gate.sh`. It installs `pyswisseph`, the Swiss Ephemeris bindings it
-compares against, into a temporary directory for the run; that is a test-time
-tool only and nothing from it is committed or shipped.
+`scripts/gate.sh` is the complete gate: it runs these four and every other
+check a pull request must pass, as named stages:
+
+| Stage | What it runs |
+|---|---|
+| `fmt`, `clippy`, `test`, `doc` | the four commands above |
+| `release-config` | `crates/xalen-python/tests/test_build_config.py` (pytest) and `crates/xalen-node/__test__/platform-matrix.test.mjs` (node) |
+| `attribution` | `scripts/repo-policy/check-attribution.sh` over the commits in `origin/main..HEAD` (skipped when that range is empty) |
+| `commercial-clean` | `scripts/repo-policy/check-commercial-clean.sh`: no published crate links the non-commercial Hipparcos data |
+| `audit` | `cargo audit` against the RustSec advisory database |
+| `de440` | downloads the NASA/NAIF `de440s.bsp` kernel (about 31 MB, cached) and runs the `xalen-ephem` DE440 cross-validation tests |
+| `wasm` | `wasm-pack build --target web` in `crates/xalen-wasm` |
+| `python-binding` | `maturin build` in `crates/xalen-python` |
+| `node-binding` | `npm ci`, `npm run build:debug` and `npm test` in `crates/xalen-node` |
+| `harness` | the accuracy harness in `validation/` against a `pyswisseph` oracle |
+
+Each stage prints its name and `OK`, `FAIL` or `SKIPPED` with the reason; the
+summary at the end lists every stage, and the script exits non-zero if any
+stage failed. A failing stage does not stop the later ones. The last line is
+`GATE: PASS`, `GATE: PASS (N stage(s) skipped)` or
+`GATE: FAIL (N stage(s) failed)`; with `--strict` any skipped stage, including
+an `attribution` stage that skips itself, counts as a failure.
+
+```bash
+bash scripts/gate.sh                       # every stage
+bash scripts/gate.sh --quick               # fmt, clippy, test, doc, release-config and the policy checks
+bash scripts/gate.sh --skip wasm --skip node-binding   # leave out named stages (or --skip wasm,node-binding)
+bash scripts/gate.sh --harness-n 20000     # larger harness run (or GATE_HARNESS_N=20000)
+bash scripts/gate.sh --base upstream/main  # base of the attribution range (or GATE_BASE)
+bash scripts/gate.sh --strict              # a skipped stage counts as a failure (or GATE_STRICT=1)
+bash scripts/gate.sh --list                # the stage names
+```
+
+`--quick` leaves out the heavy stages (`audit`, `de440`, `wasm`,
+`python-binding`, `node-binding`, `harness`). The gate installs the tools it
+needs and the host lacks (pytest, cargo-audit, wasm-pack, maturin,
+`pyswisseph`) into a temporary directory (`GATE_TOOLS` to reuse one), and keeps
+the DE440 kernel in `~/.cache/xalen-gate` (`GATE_CACHE`). `pyswisseph`, the
+Swiss Ephemeris bindings the harness compares against, is a test-time tool
+only; nothing from it is committed or shipped. The harness runs on 2000 charts
+by default.
 
 CI runs on the maintainers' own AWS infrastructure. Every pull request receives
 a `ci/gate` commit status once the maintainers have run `scripts/gate.sh`
-against its head; contributors can run the same script locally or in their
-fork's CI.
+against its head with `--strict`, so a skipped stage counts as a failure there;
+contributors can run the same script locally. Before posting the status, the
+maintainers also check the pull request title and body for attribution
+(`bash scripts/gate.sh --pr-text FILE`, or
+`scripts/repo-policy/check-attribution.sh --stdin`).
 
-Clippy runs with warnings as errors. CI also runs the tests on Linux, macOS
-and Windows, `cargo audit` (RustSec advisories), and the WebAssembly, Python
-and Node binding builds.
+The gate runs on Linux. The test suite is no longer run automatically on macOS
+or Windows; if your change touches platform-specific code, run `cargo test` on
+those systems yourself and say so in the pull request.
+
+Releases are cut from the maintainers' infrastructure with the scripts in
+`scripts/`; the steps are in [docs/RELEASING.md](docs/RELEASING.md).
 
 Every change in behaviour comes with a test, and a bug fix with a test that
 fails without the fix. New public items need rustdoc (`///`) comments. Add a
@@ -144,7 +185,7 @@ A pull request without a signed CLA cannot be merged.
 
 ### 6. Review and merge
 
-A maintainer reviews the pull request once CI is green. Answer review comments
+A maintainer reviews the pull request once `ci/gate` is green. Answer review comments
 with new commits on the same branch; you do not need to rebase or force-push.
 Maintainers squash-merge: the pull request becomes one commit on `main` whose
 message is the pull request title with its number, for example

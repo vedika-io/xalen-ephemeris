@@ -72,7 +72,8 @@ cargo run -p xalen-validation --release --bin de440_bench -- \
 If the kernel file is absent the harness still runs, but in a clearly-labelled
 **self-baseline mode** (the analytic almanac sampled against itself, deviations ~0). That
 mode is a wiring check only — it is **not** a validation, and the output says so on every
-run. CI does not fetch the kernel, so CI exercises the self-baseline path.
+run. `scripts/gate.sh` does not run this benchmark; its `de440` stage downloads
+the kernel for the DE440 cross-validation tests only.
 
 ---
 

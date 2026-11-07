@@ -10,12 +10,6 @@ updates:
       cargo-minor-patch:
         update-types: ["minor", "patch"]
 
-  # GitHub Actions used by the CI / CodeQL workflows
-  - package-ecosystem: "github-actions"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-
   # npm dependencies of the Node.js (N-API) binding
   - package-ecosystem: "npm"
     directory: "/crates/xalen-node"

@@ -3,7 +3,6 @@
 **Pure-Rust astronomical & astrology ephemeris for Python — VSOP87 planets, Vedic/Western/KP, house systems, ayanamsa, fixed stars, numerology. A drop-in for `pyswisseph`, with no AGPL and no data files to ship.**
 
 [![PyPI](https://img.shields.io/pypi/v/xalen.svg)](https://pypi.org/project/xalen/)
-[![CI](https://github.com/vedika-io/xalen-ephemeris/actions/workflows/ci.yml/badge.svg)](https://github.com/vedika-io/xalen-ephemeris/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](https://github.com/vedika-io/xalen-ephemeris/blob/main/LICENSE)
 
 > Part of the [XALEN Ephemeris](https://github.com/vedika-io/xalen-ephemeris) suite — pure-Rust core, zero `unsafe` in the math, thread-safe, Apache-2.0. The Python wheel is the `xalen-python` crate (PyO3) wrapping that core.
