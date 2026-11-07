@@ -53,7 +53,7 @@ const REFS: &[Ref] = &[
         h: 0,
         mi: 0,
         s: 0.0,
-        jd_tt: 2_446_247.500_638_703_8,
+        jd_tt: 2_446_247.500_638_704,
     },
     Ref {
         y: 2000,
@@ -89,7 +89,7 @@ const REFS: &[Ref] = &[
         h: 0,
         mi: 0,
         s: 0.0,
-        jd_tt: 2_457_754.500_800_740_9,
+        jd_tt: 2_457_754.500_800_741,
     },
     Ref {
         y: 2024,
@@ -167,26 +167,8 @@ fn ut1_matches_swiss_with_supplied_dut1() {
             0.590_421_259,
             2_457_754.500_006_833_6_f64,
         ),
-        (
-            2000,
-            1,
-            1,
-            12,
-            0,
-            0.0,
-            0.355_097_651,
-            2_451_545.000_004_109_9,
-        ),
-        (
-            1990,
-            1,
-            15,
-            5,
-            0,
-            0.0,
-            0.302_352_011,
-            2_447_906.708_336_832_9,
-        ),
+        (2000, 1, 1, 12, 0, 0.0, 0.355_097_651, 2_451_545.000_004_11),
+        (1990, 1, 15, 5, 0, 0.0, 0.302_352_011, 2_447_906.708_336_833),
     ];
     for (y, mo, d, h, mi, s, dut1, swiss_ut1) in cases {
         let (utc, _) = utc_calendar_to_jd(y, mo, d, h, mi, s);
@@ -275,8 +257,8 @@ fn leap_second_boundary_is_continuous() {
 
     // The leap-second TT matches the Swiss reference, and the post-leap midnight
     // matches the Swiss 2017-01-01 value (37 s offset).
-    let swiss_leap_tt = 2_457_754.500_789_166_9_f64;
-    let swiss_2017_tt = 2_457_754.500_800_740_9_f64;
+    let swiss_leap_tt = 2_457_754.500_789_167_f64;
+    let swiss_2017_tt = 2_457_754.500_800_741_f64;
     assert!(
         (leap - swiss_leap_tt).abs() < TOL_DAYS,
         "leap-second TT should match Swiss, got {leap} vs {swiss_leap_tt}"

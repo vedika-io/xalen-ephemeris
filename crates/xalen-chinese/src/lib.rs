@@ -474,7 +474,7 @@ mod tests {
         // Year should be previous year (1989 = Ji-Si) since before Li Chun
         assert_eq!(chart.year.stem, HeavenlyStem::Ji);
         assert_eq!(chart.year.branch, EarthlyBranch::Si);
-        assert!(format!("{}", chart.day).len() > 0);
+        assert!(!format!("{}", chart.day).is_empty());
     }
 
     #[test]
@@ -503,7 +503,7 @@ mod tests {
         // Sun should be near 0 deg (Aries ingress)
         let lon = solar_longitude_approx(2460388.629);
         assert!(
-            lon < 1.0 || lon > 359.0,
+            !(1.0..=359.0).contains(&lon),
             "Vernal equinox 2024 sun lon={lon}, expected ~0 deg"
         );
     }
@@ -573,7 +573,7 @@ mod tests {
         let mut jd = 2460355.5;
         for _ in 0..12 {
             let (month, _) = solar_month_from_jd(jd);
-            assert!(month >= 1 && month <= 12);
+            assert!((1..=12).contains(&month));
             seen[month - 1] = true;
             jd += 31.0;
         }

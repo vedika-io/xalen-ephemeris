@@ -563,14 +563,14 @@ mod tests {
     fn wasm_tropical_sun() {
         let w = XalenWasm::new();
         let lon = w.tropical_longitude(2451545.0, 0).unwrap();
-        assert!(lon >= 0.0 && lon < 360.0);
+        assert!((0.0..360.0).contains(&lon));
     }
 
     #[test]
     fn wasm_sidereal_sun() {
         let w = XalenWasm::new();
         let lon = w.sidereal_longitude(2451545.0, 0, 0).unwrap();
-        assert!(lon >= 0.0 && lon < 360.0);
+        assert!((0.0..360.0).contains(&lon));
         let tropical = w.tropical_longitude(2451545.0, 0).unwrap();
         assert!(
             tropical > lon,
@@ -591,7 +591,7 @@ mod tests {
             );
             let lon = result.unwrap();
             assert!(
-                lon >= 0.0 && lon < 360.0,
+                (0.0..360.0).contains(&lon),
                 "Body {id} lon out of range: {lon}"
             );
         }
@@ -698,11 +698,7 @@ mod tests {
             (distance - 0.98332764).abs() < 1e-3,
             "Sun distance {distance}"
         );
-        assert_eq!(
-            v["is_retrograde"].as_bool().unwrap(),
-            false,
-            "Sun not retrograde"
-        );
+        assert!(!v["is_retrograde"].as_bool().unwrap(), "Sun not retrograde");
     }
 
     #[test]
@@ -711,11 +707,7 @@ mod tests {
         // Mean node (id 9): always retrograde.
         let rahu_json = w.planet_position_json(2451545.0, 9, false, 0).unwrap();
         let rahu: serde_json::Value = serde_json::from_str(&rahu_json).unwrap();
-        assert_eq!(
-            rahu["is_retrograde"].as_bool().unwrap(),
-            true,
-            "node retrograde"
-        );
+        assert!(rahu["is_retrograde"].as_bool().unwrap(), "node retrograde");
         assert!(
             rahu["lon_speed"].as_f64().unwrap() < 0.0,
             "node lon_speed < 0"

@@ -139,6 +139,8 @@ fn main() {
         let pos = almanac.geocentric_ecliptic(body, jd_ut1).unwrap();
         let sid = (pos.longitude * RAD_TO_DEG - aya_deg).rem_euclid(360.0);
         let house = houses.planet_in_house(pos.longitude);
+        // The simplified estimate is intentional in this example.
+        #[allow(deprecated)]
         let sb = Shadbala::compute(name, sid, house, 1.0);
         println!(
             "  {:<9} total={:>6.1}  ratio={:.2}  {}",

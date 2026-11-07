@@ -398,7 +398,7 @@ mod tests {
     #[test]
     fn egyptian_terms_all_signs() {
         for sign in 0..12 {
-            let mut covered = vec![false; 30];
+            let mut covered = [false; 30];
             for deg in 0..30 {
                 let found = [
                     "Sun", "Moon", "Mercury", "Venus", "Mars", "Jupiter", "Saturn",

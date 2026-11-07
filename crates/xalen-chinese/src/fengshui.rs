@@ -584,7 +584,7 @@ mod tests {
         for y in 1900..2100 {
             let s = annual_center_star(y);
             assert!(
-                s >= 1 && s <= 9,
+                (1..=9).contains(&s),
                 "Annual star {} out of range for year {}",
                 s,
                 y
@@ -609,7 +609,7 @@ mod tests {
             for m in 1..=12 {
                 let s = monthly_center_star(y, m);
                 assert!(
-                    s >= 1 && s <= 9,
+                    (1..=9).contains(&s),
                     "Monthly star {} out of range for {}-{}",
                     s,
                     y,
@@ -797,7 +797,7 @@ mod tests {
             for male in [true, false] {
                 let g = gua_number(y, male);
                 assert!(
-                    g >= 1 && g <= 9 && g != 5,
+                    (1..=9).contains(&g) && g != 5,
                     "Gua {} invalid for year={}, male={}",
                     g,
                     y,

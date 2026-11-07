@@ -90,7 +90,7 @@ mod tests {
             let h = gmst_hours(jd);
             let expected = (gmst_deg(jd) / 15.0).rem_euclid(24.0);
             assert!((h - expected).abs() < 1e-12, "hours vs deg/15 at {jd}");
-            assert!(h >= 0.0 && h < 24.0);
+            assert!((0.0..24.0).contains(&h));
         }
     }
 
@@ -121,7 +121,7 @@ mod tests {
     #[test]
     fn gast_deg_in_range() {
         let g = gast_deg(J2000, 0.0);
-        assert!(g >= 0.0 && g < 360.0);
+        assert!((0.0..360.0).contains(&g));
         // GAST ≈ 280.457° at J2000 (GMST 280.4606 − 0.0035°).
         assert!((g - 280.457).abs() < 0.01, "gast_deg = {g}");
     }

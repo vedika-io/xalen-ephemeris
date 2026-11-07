@@ -749,7 +749,7 @@ fn nakshatra_from_moon_j2000() {
 
     // The Moon's sidereal position should be valid and produce a valid nakshatra
     assert!(
-        moon_sidereal >= 0.0 && moon_sidereal < 360.0,
+        (0.0..360.0).contains(&moon_sidereal),
         "Sidereal Moon should be in [0, 360): got {moon_sidereal:.4} deg"
     );
     assert!(
@@ -783,7 +783,7 @@ fn nakshatra_pada_from_moon_j2000() {
     let pos_in_nak = moon_sidereal.rem_euclid(360.0) % NAKSHATRA_SPAN_DEG;
     let pada = (pos_in_nak / (NAKSHATRA_SPAN_DEG / 4.0)) as u8 + 1;
 
-    assert!(pada >= 1 && pada <= 4, "Pada should be 1-4, got {pada}");
+    assert!((1..=4).contains(&pada), "Pada should be 1-4, got {pada}");
 }
 
 #[test]
