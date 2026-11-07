@@ -170,12 +170,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-      # No `cache: npm` / `npm ci`: there is no committed package-lock.json, so
-      # either would fail. build:debug = `napi build --platform`; the JS test
-      # loads the freshly built .node addon.
+      # crates/xalen-node has a committed package-lock.json, so `npm ci` installs
+      # exactly the locked @napi-rs/cli. build:debug = `napi build --platform`; the
+      # JS test loads the freshly built .node addon.
       - name: napi build + smoke test
         working-directory: crates/xalen-node
         run: |
-          npm install
+          npm ci
           npm run build:debug
           npm test
