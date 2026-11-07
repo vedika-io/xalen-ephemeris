@@ -1,8 +1,9 @@
-<p align="center">
-  <img src="docs/assets/xalen-ephemeris-logo.svg" width="120" alt="XALEN Ephemeris">
-</p>
-
-<h1 align="center">XALEN Ephemeris</h1>
+<h1 align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/xalen-ephemeris-logo-dark.svg">
+    <img src="docs/assets/xalen-ephemeris-logo.svg" width="280" alt="XALEN Ephemeris">
+  </picture>
+</h1>
 
 <p align="center">
   <b>A pure-Rust astronomical ephemeris for astrology — validated against JPL DE440, zero <code>unsafe</code> core, Apache-2.0.</b>

@@ -22,7 +22,8 @@ Every SVG is written into docs/assets/:
     terminal.svg                            one `xalen positions` run, its output verbatim
 
 The logo is not generated here: docs/assets/xalen-ephemeris-logo.png is the
-official asset and docs/assets/xalen-ephemeris-logo.svg a tracing of it.
+official logo, and xalen-ephemeris-logo.svg and xalen-ephemeris-logo-dark.svg
+are vector tracings of it for light and dark pages.
 
 The example birth is the moment of Indian independence, 15 August 1947 00:00
 IST (UTC+05:30) at Delhi from the built-in city table, the same moment as the
