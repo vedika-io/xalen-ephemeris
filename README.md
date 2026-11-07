@@ -267,14 +267,13 @@ magnitude, obscuration, and C1–C4 contact times.
 | **Rust** | `xalen-ephemeris` (umbrella) | Native | On crates.io |
 | **C / C++** | `xalen-ffi` | `extern "C"` + `repr(C)` structs | Source-stable; on crates.io |
 | **Python** | `xalen-python` | PyO3 | Alpha; on PyPI as `xalen` (`pip install xalen`) |
-| **Node.js** | `xalen-node` | napi-rs native addon, prebuilt for Linux and macOS | Alpha; on npm as `@xalen/ephemeris` with each release from 0.8, build from source until then |
+| **Node.js** | `xalen-node` | napi-rs native addon, prebuilt for Linux, macOS and Windows x64 | Alpha; on npm as `@xalen/ephemeris` with each release from 0.8, build from source until then |
 | **Browser / WASM** | `xalen-wasm` | wasm-bindgen | Alpha; on npm as `@xalen/wasm` |
 
 > The native Node.js addon is published to npm as `@xalen/ephemeris` with each
 > release from 0.8, so the `npm install @xalen/ephemeris` command in the migration
 > guides works from that release. Until then, build the addon from this
-> repository with `napi build`. Windows has no prebuilt binary yet; build from
-> source there.
+> repository with `napi build`.
 
 Core computation crates compile to `wasm32-unknown-unknown` without modification.
 

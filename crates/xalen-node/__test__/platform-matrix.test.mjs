@@ -16,14 +16,14 @@ const REPO_ROOT = join(NODE_DIR, '..', '..');
 
 const pkg = JSON.parse(readFileSync(join(NODE_DIR, 'package.json'), 'utf8'));
 
-// The four platform triples published from 0.8 (built by
-// scripts/build-release-artifacts.sh node). Windows is left out of this release:
-// release.yml still lists the MSVC target, but no Windows addon is published yet.
+// The five platform triples published from 0.8, all built on one Linux host by
+// scripts/build-release-artifacts.sh node (Windows x64 through cargo-xwin).
 const EXPECTED = [
   'aarch64-apple-darwin',
   'x86_64-apple-darwin',
   'aarch64-unknown-linux-gnu',
   'x86_64-unknown-linux-gnu',
+  'x86_64-pc-windows-msvc',
 ];
 
 test('package.json declares the full napi target matrix', () => {

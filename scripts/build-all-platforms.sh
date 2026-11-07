@@ -138,7 +138,8 @@ build_python() {
 
 # --- Node (napi-rs) --------------------------------------------------------
 # The publishable addons (Linux x64/arm64 through zig with a glibc 2.17 floor,
-# macOS arm64/x64 through rust-lld against a stub SDK) are built, checked and
+# macOS arm64/x64 through rust-lld against a stub SDK, Windows x64 through
+# cargo-xwin) are built, checked and
 # packed by scripts/build-release-artifacts.sh on a Linux host. The old
 # per-target `napi build` loop that lived here needed a macOS host and an MSVC
 # runner, and its binaries were not the ones that get published.

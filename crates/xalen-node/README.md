@@ -45,11 +45,18 @@ so they load on any glibc 2.17 or newer system (CentOS 7 and later, for example)
 | Linux aarch64 (glibc) | `@xalen/ephemeris-linux-arm64-gnu` | `aarch64-unknown-linux-gnu` |
 | macOS arm64 (Apple silicon) | `@xalen/ephemeris-darwin-arm64` | `aarch64-apple-darwin` |
 | macOS x86_64 (Intel) | `@xalen/ephemeris-darwin-x64` | `x86_64-apple-darwin` |
+| Windows x64 | `@xalen/ephemeris-win32-x64-msvc` | `x86_64-pc-windows-msvc` |
 
-Not prebuilt yet: **Windows** (and musl-based Linux such as Alpine). On those
-systems `require('@xalen/ephemeris')` throws "Cannot find native binding"; build
-from source as shown above. For a browser or any platform without a native
-binary, use the WebAssembly build, [`@xalen/wasm`](https://www.npmjs.com/package/@xalen/wasm).
+The Windows binary is linked with a static C runtime, so it does not need the
+Visual C++ Redistributable. It is built on Linux and checked there (file type,
+exports, imported DLLs), not loaded on a Windows machine before release; please
+[open an issue](https://github.com/vedika-io/xalen-ephemeris/issues) if it does
+not load for you.
+
+Not prebuilt yet: Windows on arm64 or 32-bit x86, and musl-based Linux such as
+Alpine. On those systems `require('@xalen/ephemeris')` throws "Cannot find
+native binding"; build from source as shown above. For a browser or any platform
+without a native binary, use the WebAssembly build, [`@xalen/wasm`](https://www.npmjs.com/package/@xalen/wasm).
 
 The binaries are built on one Linux machine by `scripts/build-release-artifacts.sh node`
 (see that script for the exact steps and the checks it runs on every binary).
