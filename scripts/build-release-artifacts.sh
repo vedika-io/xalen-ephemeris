@@ -9,6 +9,9 @@
 #   xalen-<version>-cp38-abi3-macosx_10_12_x86_64.whl
 #   xalen-<version>.tar.gz        Python source distribution (any other platform)
 #   xalen-wasm-<version>.tgz      npm tarball of @xalen/wasm
+#   xalen-ephemeris-<version>.tgz npm tarball of @xalen/ephemeris (Node, loader only)
+#   xalen-ephemeris-{linux-x64-gnu,linux-arm64-gnu,darwin-arm64,darwin-x64}-<version>.tgz
+#                                 npm tarballs of the four prebuilt Node addons
 #   SHA256SUMS
 #
 # How the cross builds work: every wheel is an abi3 extension module, so it
@@ -21,10 +24,18 @@
 #           string pool unaligned and current macOS refuses to load the result
 #           ("mis-aligned LINKEDIT string pool").
 #
+# The Node addon (crates/xalen-node, npm package @xalen/ephemeris) is built the
+# same way, with cargo directly instead of maturin: cargo-zigbuild with a glibc
+# 2.17 floor for the two Linux targets, rust-lld against the stub SDK for the two
+# macOS targets. Each library is copied to its napi-rs name (xalen.<platform>.node)
+# and the @napi-rs/cli turns the four files into one npm package per platform plus
+# the root package that names them as optionalDependencies. Windows is not built.
+#
 # Tools are installed into a private directory (XALEN_RELEASE_TOOLS, default: a
 # fresh temp dir) and the host Python is left untouched:
 #   maturin, ziglang, pytest   pip install --target
-#   wasm-pack                  cargo install --root
+#   wasm-pack, cargo-zigbuild  cargo install --root
+#   @napi-rs/cli               npm ci inside crates/xalen-node (its own node_modules)
 # Needs on the host: bash, rustup + cargo (with rust-lld), python3 with pip,
 # node + npm.
 #
@@ -36,6 +47,10 @@
 #   - the sdist is scanned so the unpublished non-commercial add-on crate
 #     (xalen-stars-hip-data) can never ship in it;
 #   - the WebAssembly package is loaded in Node and smoke-tested.
+#   - the Node addons: the committed index.js / index.d.ts equal what napi generates,
+#     both Linux addons need glibc 2.17 or older, both macOS addons pass the
+#     __LINKEDIT alignment check, the packed root and platform tarballs for this
+#     host are installed into a scratch project and the Node smoke test runs there.
 # Wheels for other architectures and operating systems cannot run here; import
 # each one on its own platform before uploading it.
 #
@@ -43,6 +58,7 @@
 #   scripts/build-release-artifacts.sh            # everything
 #   scripts/build-release-artifacts.sh python     # wheels + sdist only
 #   scripts/build-release-artifacts.sh wasm       # WebAssembly package only
+#   scripts/build-release-artifacts.sh node       # Node addons (4 platforms) only
 
 set -uo pipefail
 
@@ -50,6 +66,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST_DIR="$REPO_ROOT/dist"
 PY_DIR="$REPO_ROOT/crates/xalen-python"
 WASM_DIR="$REPO_ROOT/crates/xalen-wasm"
+NODE_DIR="$REPO_ROOT/crates/xalen-node"
 TOOLS="${XALEN_RELEASE_TOOLS:-$(mktemp -d)}"
 WHAT="${1:-all}"
 
@@ -112,12 +129,16 @@ exports:
 TBD
 
   # maturin hands one linker argument over in compiler-driver form
-  # (-Wl,-install_name,...); rust-lld takes plain linker arguments.
+  # (-Wl,-install_name,...); rust-lld takes plain linker arguments. napi-build
+  # emits a bare `-Wl` (nothing after it) followed by `-undefined` and
+  # `dynamic_lookup`: the bare `-Wl` carries no argument and is dropped, the
+  # other two pass through unchanged.
   cat > "$TOOLS/bin/macos-lld" <<WRAPPER
 #!/usr/bin/env bash
 args=()
 for a in "\$@"; do
   case "\$a" in
+    -Wl)   ;;
     -Wl,*) IFS=, read -r -a parts <<< "\${a#-Wl,}"; args+=("\${parts[@]}") ;;
     *)     args+=("\$a") ;;
   esac
@@ -127,8 +148,9 @@ WRAPPER
   chmod +x "$TOOLS/bin/macos-lld"
 }
 
-# Fails when a macOS extension inside a wheel has a symbol table or string pool
-# that is not 8-byte aligned in __LINKEDIT (dyld rejects such a file).
+# Fails when a macOS extension has a symbol table or string pool that is not
+# 8-byte aligned in __LINKEDIT (dyld rejects such a file). Each argument is a
+# wheel (every .so inside is checked) or a raw Mach-O file such as a .node addon.
 check_macho_alignment() {
   python3 - "$@" <<'PY'
 import struct
@@ -136,31 +158,42 @@ import sys
 import zipfile
 
 LC_SYMTAB = 0x2
-for wheel in sys.argv[1:]:
-    with zipfile.ZipFile(wheel) as archive:
-        libs = [n for n in archive.namelist() if n.endswith(".so")]
-        if not libs:
-            raise SystemExit(f"{wheel}: no extension module inside")
-        for name in libs:
-            blob = archive.read(name)
-            magic, _cpu, _sub, _type, ncmds = struct.unpack_from("<IiiII", blob, 0)
-            if magic != 0xFEEDFACF:
-                raise SystemExit(f"{wheel}: {name} is not a 64-bit Mach-O file")
-            offset, found = 32, False
-            for _ in range(ncmds):
-                cmd, size = struct.unpack_from("<II", blob, offset)
-                if cmd == LC_SYMTAB:
-                    symoff, _nsyms, stroff, _strsize = struct.unpack_from("<IIII", blob, offset + 8)
-                    if symoff % 8 or stroff % 8:
-                        raise SystemExit(
-                            f"{wheel}: {name}: __LINKEDIT is not 8-byte aligned "
-                            f"(symoff={symoff:#x}, stroff={stroff:#x})"
-                        )
-                    found = True
-                offset += size
-            if not found:
-                raise SystemExit(f"{wheel}: {name}: no symbol table command")
-            print(f"   aligned: {wheel.rsplit('/', 1)[-1]} {name}")
+
+
+def members(path):
+    """Yield (name, bytes) for each Mach-O candidate in a wheel or a raw file."""
+    if path.endswith(".whl"):
+        with zipfile.ZipFile(path) as archive:
+            libs = [n for n in archive.namelist() if n.endswith(".so")]
+            if not libs:
+                raise SystemExit(f"{path}: no extension module inside")
+            for name in libs:
+                yield name, archive.read(name)
+    else:
+        with open(path, "rb") as handle:
+            yield path.rsplit("/", 1)[-1], handle.read()
+
+
+for source in sys.argv[1:]:
+    for name, blob in members(source):
+        magic, _cpu, _sub, _type, ncmds = struct.unpack_from("<IiiII", blob, 0)
+        if magic != 0xFEEDFACF:
+            raise SystemExit(f"{source}: {name} is not a 64-bit Mach-O file")
+        offset, found = 32, False
+        for _ in range(ncmds):
+            cmd, size = struct.unpack_from("<II", blob, offset)
+            if cmd == LC_SYMTAB:
+                symoff, _nsyms, stroff, _strsize = struct.unpack_from("<IIII", blob, offset + 8)
+                if symoff % 8 or stroff % 8:
+                    raise SystemExit(
+                        f"{source}: {name}: __LINKEDIT is not 8-byte aligned "
+                        f"(symoff={symoff:#x}, stroff={stroff:#x})"
+                    )
+                found = True
+            offset += size
+        if not found:
+            raise SystemExit(f"{source}: {name}: no symbol table command")
+        print(f"   aligned: {source.rsplit('/', 1)[-1]} {name}")
 PY
 }
 
@@ -309,11 +342,232 @@ JS
   cd "$REPO_ROOT" || return
 }
 
+# --- Node: four prebuilt N-API addons as npm packages -------------------------
+# rust target -> the platform suffix napi-rs puts in the file and package name
+node_platform() {
+  case "$1" in
+    x86_64-unknown-linux-gnu)  echo linux-x64-gnu ;;
+    aarch64-unknown-linux-gnu) echo linux-arm64-gnu ;;
+    aarch64-apple-darwin)      echo darwin-arm64 ;;
+    x86_64-apple-darwin)       echo darwin-x64 ;;
+    *) return 1 ;;
+  esac
+}
+
+# Highest glibc version a Linux ELF file needs (empty when it needs none).
+# readelf reads ELF files of any architecture; objdump on this host may not.
+glibc_floor() {
+  readelf -W --dyn-syms "$1" | grep -o 'GLIBC_[0-9][0-9.]*' | sed 's/^GLIBC_//' | sort -uV | tail -n 1
+}
+
+# Prints the minimum macOS version recorded in each Mach-O file.
+macho_minos() {
+  python3 - "$@" <<'PY'
+import struct, sys
+for path in sys.argv[1:]:
+    blob = open(path, "rb").read()
+    ncmds = struct.unpack_from("<I", blob, 16)[0]
+    off, minos = 32, None
+    for _ in range(ncmds):
+        cmd, size = struct.unpack_from("<II", blob, off)
+        if cmd == 0x32:  # LC_BUILD_VERSION
+            minos = struct.unpack_from("<I", blob, off + 12)[0]
+        elif cmd == 0x24 and minos is None:  # LC_VERSION_MIN_MACOSX
+            minos = struct.unpack_from("<I", blob, off + 8)[0]
+        off += size
+    if minos is None:
+        print(f"   minos: {path.rsplit('/', 1)[-1]}: none recorded")
+    else:
+        print(f"   minos: {path.rsplit('/', 1)[-1]}: macOS {minos >> 16}.{(minos >> 8) & 255}")
+PY
+}
+
+build_node() {
+  local target_dir="${CARGO_TARGET_DIR:-$REPO_ROOT/target}"
+  local art="$TOOLS/node-addons" # the four xalen.<platform>.node files
+  local native="$TOOLS/node-native"
+  local tgt plat upper floor deps d tgz proj f pkgdir napi_bin target_os_min
+
+  # build_node never edits the source tree (the npm work runs in a scratch copy),
+  # but if it ever did, a killed run must not leave package.json changed.
+  cp "$NODE_DIR/package.json" "$TOOLS/package.json.orig"
+  restore_node_package_json() { cp "$TOOLS/package.json.orig" "$NODE_DIR/package.json" 2>/dev/null; }
+  trap restore_node_package_json EXIT
+  trap 'restore_node_package_json; exit 130' INT
+  trap 'restore_node_package_json; exit 143' TERM
+
+  log "Node tools (ziglang, cargo-zigbuild) -> $TOOLS"
+  python3 -m pip install --quiet --disable-pip-version-check --target "$TOOLS/py" \
+    ziglang || { fail "pip install ziglang"; return; }
+  zig version
+  if ! command -v cargo-zigbuild >/dev/null 2>&1; then
+    cargo install cargo-zigbuild --locked --root "$TOOLS/cargo" >/dev/null 2>&1 \
+      || { fail "cargo install cargo-zigbuild"; return; }
+  fi
+  command -v cargo-zigbuild
+  rustup target add "${LINUX_TARGETS[@]}" "${MACOS_TARGETS[@]}" >/dev/null \
+    || { fail "rustup target add"; return; }
+  setup_macos_linker || { fail "macOS linker setup"; return; }
+
+  log "Node package tooling (@napi-rs/cli from package-lock.json)"
+  cd "$NODE_DIR" || { fail "cd $NODE_DIR"; return; }
+  npm ci --no-audit --no-fund || { fail "npm ci"; cd "$REPO_ROOT" || true; return; }
+  npx napi --version
+
+  # The loader (index.js) and the types (index.d.ts) are generated; the committed
+  # copies must be exactly what the CLI writes for this checkout. This native
+  # build is only used for that comparison and is never shipped.
+  log "Node loader and types are current"
+  rm -rf "$native" && mkdir -p "$native"
+  if npx napi build --platform --release --output-dir "$native"; then
+    for f in index.js index.d.ts; do
+      if cmp -s "$NODE_DIR/$f" "$native/$f"; then
+        ok "committed $f equals the generated one"
+      else
+        fail "committed $f differs from the generated one (run: npx napi build --platform --release)"
+      fi
+    done
+  else
+    fail "native napi build"
+  fi
+
+  log "Node addons $VERSION"
+  rm -rf "$art" && mkdir -p "$art"
+  for tgt in "${LINUX_TARGETS[@]}"; do
+    plat="$(node_platform "$tgt")"
+    # `.2.17` is cargo-zigbuild's glibc floor, the same as manylinux2014.
+    if cargo zigbuild --release -p xalen-node --target "$tgt.2.17" \
+       && cp "$target_dir/$tgt/release/libxalen_node.so" "$art/xalen.$plat.node"; then
+      ok "addon $plat"
+    else
+      fail "addon $plat"
+    fi
+  done
+  for tgt in "${MACOS_TARGETS[@]}"; do
+    plat="$(node_platform "$tgt")"
+    upper="$(echo "$tgt" | tr 'a-z-' 'A-Z_')"
+    case "$tgt" in
+      aarch64-apple-darwin) target_os_min=11.0 ;;
+      *)                    target_os_min=10.13 ;;
+    esac
+    if env SDKROOT="$TOOLS/macsdk" MACOSX_DEPLOYMENT_TARGET="$target_os_min" \
+         "CARGO_TARGET_${upper}_LINKER=$TOOLS/bin/macos-lld" \
+         "CARGO_TARGET_${upper}_RUSTFLAGS=-C linker-flavor=ld64.lld" \
+         cargo build --release -p xalen-node --target "$tgt" \
+       && cp "$target_dir/$tgt/release/libxalen_node.dylib" "$art/xalen.$plat.node"; then
+      ok "addon $plat"
+    else
+      fail "addon $plat"
+    fi
+  done
+  for tgt in "${LINUX_TARGETS[@]}" "${MACOS_TARGETS[@]}"; do
+    plat="$(node_platform "$tgt")"
+    [ -f "$art/xalen.$plat.node" ] || { fail "addon $plat is missing, stopping"; cd "$REPO_ROOT" || true; return; }
+  done
+  ( cd "$art" && sha256sum -- *.node )
+
+  log "Node addon checks"
+  for tgt in "${LINUX_TARGETS[@]}"; do
+    plat="$(node_platform "$tgt")"
+    floor="$(glibc_floor "$art/xalen.$plat.node")"
+    if [ -z "$floor" ]; then
+      fail "$plat: no glibc symbol versions found (not a gnu build?)"
+    elif [ "$(printf '%s\n2.17\n' "$floor" | sort -V | tail -n 1)" = "2.17" ]; then
+      ok "$plat needs glibc $floor at most (floor 2.17)"
+    else
+      fail "$plat needs glibc $floor, above the 2.17 floor"
+    fi
+  done
+  macho_minos "$art"/xalen.darwin-*.node
+  if check_macho_alignment "$art"/xalen.darwin-*.node; then
+    ok "macOS addons are aligned for dyld"
+  else
+    fail "macOS addon alignment"
+  fi
+
+  log "Node npm packages"
+  # create-npm-dirs, artifacts and prepublish write npm/, copies of the addons and
+  # the optionalDependencies edit into the directory they run in. Run them in a
+  # scratch copy of the files the root package ships, so nothing in the source
+  # tree is created, edited or removed.
+  pkgdir="$TOOLS/node-pkg"
+  napi_bin="$NODE_DIR/node_modules/.bin/napi"
+  rm -rf "$pkgdir" && mkdir -p "$pkgdir"
+  cp package.json index.js index.d.ts README.md LICENSE "$pkgdir/" \
+    || { fail "copy package files"; cd "$REPO_ROOT" || true; return; }
+  cd "$pkgdir" || { fail "cd $pkgdir"; return; }
+  if "$napi_bin" create-npm-dirs \
+     && "$napi_bin" artifacts --output-dir "$art" --npm-dir npm \
+     && "$napi_bin" prepublish -t npm --skip-optional-publish --no-gh-release; then
+    ok "npm package directories prepared (nothing published)"
+  else
+    fail "napi create-npm-dirs / artifacts / prepublish"
+    cd "$REPO_ROOT" || true
+    return
+  fi
+  deps="$(node -e 'const p=require("./package.json");const o=p.optionalDependencies||{};const n=Object.keys(o);if(n.length!==4||n.some(k=>o[k]!==p.version))process.exit(1);console.log(n.join(" "))')" \
+    && ok "root optionalDependencies pin all four addons to $VERSION: $deps" \
+    || fail "root optionalDependencies are not the four addons at $VERSION"
+
+  for d in npm/*/; do
+    npm pack --pack-destination "$DIST_DIR" "./$d" >/dev/null || fail "npm pack $d"
+  done
+  npm pack --pack-destination "$DIST_DIR" >/dev/null || fail "npm pack root"
+  # The loader must not have been rewritten on the way.
+  cmp -s index.js "$native/index.js" || fail "index.js changed while packing"
+  cd "$REPO_ROOT" || return
+
+  tgz="$DIST_DIR/xalen-ephemeris-$VERSION.tgz"
+  if [ -f "$tgz" ] && ! tar -tzf "$tgz" | grep -q '\.node$'; then
+    ok "root package carries no binary"
+  else
+    fail "root package is missing or contains a .node file"
+  fi
+  for tgt in "${LINUX_TARGETS[@]}" "${MACOS_TARGETS[@]}"; do
+    plat="$(node_platform "$tgt")"
+    tgz="$DIST_DIR/xalen-ephemeris-$plat-$VERSION.tgz"
+    if [ -f "$tgz" ] && [ "$(tar -tzf "$tgz" | grep -c '\.node$')" = 1 ]; then
+      ok "xalen-ephemeris-$plat-$VERSION.tgz carries exactly one addon"
+    else
+      fail "xalen-ephemeris-$plat-$VERSION.tgz is missing or does not carry exactly one addon"
+    fi
+  done
+
+  # Install this host's platform package into a scratch project (npm checks its
+  # os/cpu/libc fields), unpack the root package beside it, and run the smoke
+  # test from there, the way a user would load the addon.
+  log "Node smoke test on this host ($HOST_ARCH)"
+  plat="$(node_platform "$HOST_ARCH-unknown-linux-gnu")"
+  proj="$(mktemp -d)"
+  mkdir -p "$proj/t"
+  echo '{"name":"xalen-smoke","private":true,"version":"0.0.0"}' > "$proj/package.json"
+  ( cd "$proj" && npm install --offline --ignore-scripts --no-audit --no-fund \
+      "$DIST_DIR/xalen-ephemeris-$plat-$VERSION.tgz" ) \
+    || { fail "npm install of the $plat package (os/cpu/libc fields?)"; return; }
+  # The other addons are not on the registry yet, so unpack the root package
+  # by hand instead of installing it.
+  mkdir -p "$proj/node_modules/@xalen/ephemeris"
+  tar -xzf "$DIST_DIR/xalen-ephemeris-$VERSION.tgz" -C "$proj/node_modules/@xalen/ephemeris" --strip-components=1 \
+    || { fail "unpack root package"; return; }
+  sed "s|require('../index.js')|require('@xalen/ephemeris')|" "$NODE_DIR/__test__/smoke.test.mjs" > "$proj/t/smoke.test.mjs"
+  if ! grep -q "require('@xalen/ephemeris')" "$proj/t/smoke.test.mjs"; then
+    fail "smoke test no longer requires ../index.js; update build_node"
+    return
+  fi
+  if ( cd "$proj" && node --test t/smoke.test.mjs ); then
+    ok "smoke test against the packed $plat addon"
+  else
+    fail "smoke test against the packed $plat addon"
+  fi
+  ( cd "$proj" && node -e 'const x=require("@xalen/ephemeris");console.log("node smoke: Sun longitude "+x.planetLongitude("sun",2451545.0).toFixed(6)+" deg")' )
+}
+
 case "$WHAT" in
   python) build_python ;;
   wasm)   build_wasm ;;
-  all)    build_python; cd "$REPO_ROOT" || exit 2; build_wasm ;;
-  *)      echo "usage: $0 [python|wasm|all]" >&2; exit 2 ;;
+  node)   build_node ;;
+  all)    build_python; cd "$REPO_ROOT" || exit 2; build_node; cd "$REPO_ROOT" || exit 2; build_wasm ;;
+  *)      echo "usage: $0 [python|wasm|node|all]" >&2; exit 2 ;;
 esac
 
 log "Artifacts in dist/"

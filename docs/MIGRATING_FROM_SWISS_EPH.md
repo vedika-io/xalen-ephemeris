@@ -15,8 +15,8 @@ all language bindings.
 
 > **Availability:** the Rust crates are on crates.io and the Python binding is on
 > PyPI as `xalen`. The browser / WASM build is on npm as `@xalen/wasm`. The
-> **native Node.js addon (`npm install xalen`) is not yet published**; until it
-> is, build it from source: `cd crates/xalen-node && napi build --release`.
+> **native Node.js addon (`npm install @xalen/ephemeris`) is published with each
+> release from 0.8**; until then build it from source: `cd crates/xalen-node && napi build --release`.
 
 ```bash
 # Rust
@@ -28,8 +28,8 @@ pip install xalen
 # Browser / WASM
 npm install @xalen/wasm
 
-# Node.js native addon — FORTHCOMING (not yet on npm); build from source for now
-npm install xalen
+# Node.js native addon — on npm from the 0.8 release; build from source until then
+npm install @xalen/ephemeris
 ```
 
 ---
@@ -83,7 +83,7 @@ let latitude  = xx[1];
 ### XALEN (Node.js)
 
 ```js
-const xalen = require("xalen");
+const xalen = require("@xalen/ephemeris");
 
 // By name
 const lon = xalen.planetLongitude("Sun", jd);

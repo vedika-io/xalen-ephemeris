@@ -7,7 +7,7 @@
 [![CI](https://github.com/vedika-io/xalen-ephemeris/actions/workflows/ci.yml/badge.svg)](https://github.com/vedika-io/xalen-ephemeris/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-> **Packages:** Rust crates on [crates.io](https://crates.io/crates/xalen-ephemeris), Python on PyPI as [`xalen`](https://pypi.org/project/xalen/), and browser / WASM on npm as [`@xalen/wasm`](https://www.npmjs.com/package/@xalen/wasm). The native Node.js addon (`crates/xalen-node`) is not on npm yet; build it from source.
+> **Packages:** Rust crates on [crates.io](https://crates.io/crates/xalen-ephemeris), Python on PyPI as [`xalen`](https://pypi.org/project/xalen/), and browser / WASM on npm as [`@xalen/wasm`](https://www.npmjs.com/package/@xalen/wasm). The native Node.js addon (`crates/xalen-node`) is published to npm as [`@xalen/ephemeris`](https://www.npmjs.com/package/@xalen/ephemeris) with each release from 0.8, with prebuilt binaries for Linux and macOS (x64 and arm64); until then build it from source.
 
 > **Validated against the references that matter** — JPL Horizons **DE440** (NASA's
 > definitive ephemeris), the real DE440 binary kernel, **Swiss Ephemeris**, and the
@@ -253,12 +253,14 @@ magnitude, obscuration, and C1–C4 contact times.
 | **Rust** | `xalen-ephemeris` (umbrella) | Native | On crates.io |
 | **C / C++** | `xalen-ffi` | `extern "C"` + `repr(C)` structs | Source-stable; on crates.io |
 | **Python** | `xalen-python` | PyO3 | Alpha; on PyPI as `xalen` (`pip install xalen`) |
-| **Node.js** | `xalen-node` | napi-rs native addon — build with `napi build` | Alpha; **not yet on npm**, build from source |
+| **Node.js** | `xalen-node` | napi-rs native addon, prebuilt for Linux and macOS | Alpha; on npm as `@xalen/ephemeris` with each release from 0.8, build from source until then |
 | **Browser / WASM** | `xalen-wasm` | wasm-bindgen | Alpha; on npm as `@xalen/wasm` |
 
-> The native Node.js addon is not on npm yet. The `npm install xalen` command in
-> the migration guides describes the intended interface; until it is published,
-> build the addon from this repository with `napi build`.
+> The native Node.js addon is published to npm as `@xalen/ephemeris` with each
+> release from 0.8, so the `npm install @xalen/ephemeris` command in the migration
+> guides works from that release. Until then, build the addon from this
+> repository with `napi build`. Windows has no prebuilt binary yet; build from
+> source there.
 
 Core computation crates compile to `wasm32-unknown-unknown` without modification.
 

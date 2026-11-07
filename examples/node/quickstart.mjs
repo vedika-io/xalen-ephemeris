@@ -8,14 +8,15 @@
 //
 //   node examples/node/quickstart.mjs
 //
-// This uses the *native* `xalen` package. For the WebAssembly build (browser
+// This uses the *native* `@xalen/ephemeris` package. For the WebAssembly build (browser
 // or Node), see crates/xalen-wasm and its README.
 
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 
-// Use the built addon directly from the crate while it is unpublished.
-// After `npm install xalen`, this becomes:  const xalen = require('xalen');
+// Use the built addon directly from the crate (the npm package is published
+// with each release from 0.8). After `npm install @xalen/ephemeris`, this
+// becomes:  const xalen = require('@xalen/ephemeris');
 const xalen = require('../../crates/xalen-node/index.js');
 
 const J2000 = 2451545.0;

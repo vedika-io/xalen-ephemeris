@@ -33,6 +33,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   date (apparent sidereal time and true obliquity), the frame of the apparent
   planet positions and of `compat::swe_houses`. `compute_houses` is unchanged.
 - The umbrella crate re-exports the new crates as `relationship` and `maps`.
+- **Node.js package `@xalen/ephemeris`**: the `xalen-node` addon is now packaged
+  for npm with prebuilt binaries for Linux x64 and arm64 (glibc 2.17 or newer)
+  and macOS arm64 and x64, as one npm package per platform plus a loader that
+  names them as optional dependencies. `scripts/build-release-artifacts.sh node`
+  (also part of `all`) builds, checks and packs the five tarballs. The package is
+  published with each release from 0.8; Windows has no prebuilt binary yet.
 
 ### Fixed
 - **Sidereal Whole Sign houses** (`HouseCusps::to_sidereal`,
@@ -41,6 +47,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   on sign boundaries of the sidereal zodiac and planets near the ascendant
   could land in the wrong house. The cusps are now built from the sidereal
   ascendant, as Swiss Ephemeris does.
+- **`npm test` in `crates/xalen-node`** passed the test directory to
+  `node --test`, which fails on Node 24. It now names the two test files, which
+  works on Node 20 and 24, as proposed by Serlin2175 in #45.
 
 ## [0.7.0] - 2026-11-07
 
