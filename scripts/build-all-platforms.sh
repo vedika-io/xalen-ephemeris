@@ -16,12 +16,12 @@
 #   Windows x86_64  (cargo-zigbuild / cargo-xwin, GNU)
 #
 # What CANNOT be cross-built reliably from a macOS host even with zig/docker is
-# noted at each step and is instead covered by .github/workflows/release.yml on
-# native runners (the durable, per-release mechanism). This script is for local
-# matrix verification and for producing artifacts on demand; CI is the source of
-# truth for published artifacts.
+# noted at each step. This script is for local matrix verification and for
+# producing artifacts on demand. Published artifacts come from
+# scripts/build-release-artifacts.sh on a Linux host; docs/RELEASING.md has the
+# release steps and lists what no script builds yet.
 #
-# Prerequisites the orchestrator must install first (printed by --check):
+# Prerequisites to install first (printed by --check):
 #   rustup target add x86_64-apple-darwin \
 #                     x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu \
 #                     x86_64-pc-windows-gnu wasm32-unknown-unknown
@@ -111,7 +111,7 @@ build_python() {
     case "$tgt" in
       *-apple-darwin)
         if [ "$HOST_OS" != "Darwin" ]; then
-          skip "wheel $tgt (Apple targets need a macOS host or CI macOS runner)"
+          skip "wheel $tgt (Apple targets need a macOS host)"
           continue
         fi
         ;;
@@ -119,7 +119,7 @@ build_python() {
         if [ "$use_zig" -eq 1 ]; then
           zig_flag="--zig"
         else
-          skip "wheel $tgt (install cargo-zigbuild for cross-compile, or use CI)"
+          skip "wheel $tgt (install cargo-zigbuild for cross-compile)"
           continue
         fi
         ;;
@@ -195,8 +195,8 @@ main() {
   else
     err "one or more host-supported targets failed (see above)"
   fi
-  printf '   Targets that cannot be produced on this host are covered by\n'
-  printf '   .github/workflows/release.yml on native GitHub runners.\n'
+  printf '   Release artifacts come from scripts/build-release-artifacts.sh on a\n'
+  printf '   Linux host; see docs/RELEASING.md.\n'
   exit "$OVERALL_RC"
 }
 

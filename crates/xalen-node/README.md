@@ -3,7 +3,6 @@
 **Pure-Rust astronomical & astrology ephemeris for Node.js — VSOP87 planets, Vedic/KP, 14 house systems, 17 ayanamsa, nakshatra/panchang, numerology. A native N-API addon (napi-rs), zero data files.**
 
 [![npm](https://img.shields.io/npm/v/@xalen/ephemeris.svg)](https://www.npmjs.com/package/@xalen/ephemeris)
-[![CI](https://github.com/vedika-io/xalen-ephemeris/actions/workflows/ci.yml/badge.svg)](https://github.com/vedika-io/xalen-ephemeris/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](https://github.com/vedika-io/xalen-ephemeris/blob/main/LICENSE)
 
 > Part of the [XALEN Ephemeris](https://github.com/vedika-io/xalen-ephemeris) suite — pure-Rust core, zero `unsafe` in the math, thread-safe, Apache-2.0. This package is a compiled **native addon** (fast, synchronous). For a pure-WebAssembly build that runs in the browser, use [`@xalen/wasm`](https://github.com/vedika-io/xalen-ephemeris/tree/main/crates/xalen-wasm) (the WASM package) instead.

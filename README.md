@@ -4,7 +4,6 @@
 
 [![Crates.io](https://img.shields.io/crates/v/xalen-ephemeris.svg)](https://crates.io/crates/xalen-ephemeris)
 [![docs.rs](https://img.shields.io/docsrs/xalen-ephemeris)](https://docs.rs/xalen-ephemeris)
-[![CI](https://github.com/vedika-io/xalen-ephemeris/actions/workflows/ci.yml/badge.svg)](https://github.com/vedika-io/xalen-ephemeris/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 > **Packages:** Rust crates on [crates.io](https://crates.io/crates/xalen-ephemeris), Python on PyPI as [`xalen`](https://pypi.org/project/xalen/), and browser / WASM on npm as [`@xalen/wasm`](https://www.npmjs.com/package/@xalen/wasm). The native Node.js addon (`crates/xalen-node`) is published to npm as [`@xalen/ephemeris`](https://www.npmjs.com/package/@xalen/ephemeris) with each release from 0.8, with prebuilt binaries for Linux and macOS (x64 and arm64); until then build it from source.

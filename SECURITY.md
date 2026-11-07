@@ -22,7 +22,7 @@ Include: affected crate(s) and version, a description, and a reproduction if
 possible. We aim to acknowledge within 72 hours and to provide a remediation
 timeline after triage.
 
-For dependency vulnerabilities, the CI `cargo audit` job tracks the
+For dependency vulnerabilities, the `audit` stage of `scripts/gate.sh` (`cargo audit`) tracks the
 [RustSec advisory database](https://rustsec.org/); coordinated-disclosure
 embargoes from RustSec are honored.
 
