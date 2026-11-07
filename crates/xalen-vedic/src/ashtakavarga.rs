@@ -496,7 +496,7 @@ mod tests {
         // Including Lagna row, SAV per sign is typically 18-45
         for (sign, &val) in av.sarva.iter().enumerate() {
             assert!(
-                val >= 10 && val <= 55,
+                (10..=55).contains(&val),
                 "SAV[sign={sign}] should be 10-55, got {val}"
             );
         }

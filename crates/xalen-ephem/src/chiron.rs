@@ -204,7 +204,7 @@ fn bracket_epochs(
     for i in 0..n - 1 {
         let a = &CHIRON_OSCULATING[i];
         let b = &CHIRON_OSCULATING[i + 1];
-        if jd >= a.jd && jd < b.jd {
+        if (a.jd..b.jd).contains(&jd) {
             let t = (jd - a.jd) / (b.jd - a.jd);
             return (a, b, t);
         }
@@ -645,7 +645,7 @@ mod tests {
 
             // Basic sanity: longitude in [0, 360), distance reasonable
             assert!(
-                lon >= 0.0 && lon < 360.0,
+                (0.0..360.0).contains(&lon),
                 "lon out of range at JD {jd}: {lon}"
             );
             assert!(

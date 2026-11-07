@@ -488,7 +488,10 @@ mod tests {
             let result = a.geocentric_longitude_deg(*body, jd);
             assert!(result.is_ok(), "Failed for {body}: {:?}", result.err());
             let lon = result.unwrap();
-            assert!(lon >= 0.0 && lon < 360.0, "{body} lon out of range: {lon}°");
+            assert!(
+                (0.0..360.0).contains(&lon),
+                "{body} lon out of range: {lon}°"
+            );
         }
     }
 
@@ -620,7 +623,7 @@ mod tests {
             .collect();
         for h in handles {
             let lon = h.join().unwrap();
-            assert!(lon >= 0.0 && lon < 360.0);
+            assert!((0.0..360.0).contains(&lon));
         }
     }
 

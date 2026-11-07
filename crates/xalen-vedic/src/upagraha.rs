@@ -110,6 +110,6 @@ mod tests {
         let lon = gulika_longitude(sunrise, sunset, 0, sunrise + 0.1, |jd| {
             ((jd - sunrise) * 360.0 / 0.5).rem_euclid(360.0)
         });
-        assert!(lon >= 0.0 && lon < 360.0);
+        assert!((0.0..360.0).contains(&lon));
     }
 }

@@ -501,7 +501,7 @@ mod tests {
         let mars = p.geocentric_ecliptic(Body::Mars, JdTT::J2000).unwrap();
         let lon_deg = mars.longitude * RAD_TO_DEG;
         assert!(
-            lon_deg >= 0.0 && lon_deg < 360.0,
+            (0.0..360.0).contains(&lon_deg),
             "Mars longitude should be 0-360°, got {lon_deg}°"
         );
         assert!(
@@ -584,7 +584,7 @@ mod tests {
         );
         let lon = result.unwrap().longitude * RAD_TO_DEG;
         assert!(
-            lon >= 0.0 && lon < 360.0,
+            (0.0..360.0).contains(&lon),
             "Chiron lon should be 0-360°, got {lon}°"
         );
     }
@@ -745,7 +745,7 @@ mod tests {
             // Verify the longitude is valid and the lat is small
             let lon = geo.longitude * RAD_TO_DEG;
             assert!(
-                lon >= 0.0 && lon < 360.0,
+                (0.0..360.0).contains(&lon),
                 "{body}: longitude {lon}° out of range after aberration"
             );
             // Latitude should remain small (aberration correction in lat is << 1°)
@@ -933,7 +933,7 @@ mod tests {
         let moon = p.geocentric_ecliptic(Body::Moon, JdTT::J2000).unwrap();
         let lon = moon.longitude * RAD_TO_DEG;
         assert!(
-            lon >= 0.0 && lon < 360.0,
+            (0.0..360.0).contains(&lon),
             "Moon longitude should be 0-360 deg, got {lon} deg"
         );
         // Moon distance in AU should be very small (~0.0026 AU)
@@ -1029,7 +1029,7 @@ mod tests {
             let pos = p.geocentric_ecliptic(body, JdTT::J2000).unwrap();
             let lon = pos.longitude * RAD_TO_DEG;
             assert!(
-                lon >= 0.0 && lon < 360.0,
+                (0.0..360.0).contains(&lon),
                 "{body}: longitude {lon} deg out of range after light-time"
             );
             let lat = pos.latitude * RAD_TO_DEG;

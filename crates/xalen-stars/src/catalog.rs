@@ -394,7 +394,7 @@ Vega,279.234,38.783,0.03,201.0,287.5,285.45,61.73
     fn merge_catalogs_basic() {
         let csv = normalize_csv(SAMPLE_CSV);
         let external = load_catalog_from_str(&csv).unwrap();
-        let merged = merge_catalogs(&crate::CATALOG, &external);
+        let merged = merge_catalogs(crate::CATALOG, &external);
 
         // Should have all built-in stars minus duplicates plus external.
         // Sirius, Canopus, Arcturus exist in built-in (108) and external (3).
@@ -411,7 +411,7 @@ Vega,279.234,38.783,0.03,201.0,287.5,285.45,61.73
         let csv = "name,ra_deg,dec_deg,magnitude,pm_ra,pm_dec,ecl_lon,ecl_lat\n\
                    Sirius,101.0,-16.0,-1.50,0.0,0.0,999.0,0.0\n";
         let external = load_catalog_from_str(csv).unwrap();
-        let merged = merge_catalogs(&crate::CATALOG, &external);
+        let merged = merge_catalogs(crate::CATALOG, &external);
 
         let sirius = find_in_catalog(&merged, "Sirius").unwrap();
         // Should have the external value (999.0), not the built-in (104.07).
@@ -427,7 +427,7 @@ Vega,279.234,38.783,0.03,201.0,287.5,285.45,61.73
         let csv = "name,ra_deg,dec_deg,magnitude,pm_ra,pm_dec,ecl_lon,ecl_lat\n\
                    NewStar,50.0,10.0,4.0,0.0,0.0,50.0,10.0\n";
         let external = load_catalog_from_str(csv).unwrap();
-        let merged = merge_catalogs(&crate::CATALOG, &external);
+        let merged = merge_catalogs(crate::CATALOG, &external);
 
         assert_eq!(merged.len(), 109, "Should have 108 + 1 new star");
         let new = find_in_catalog(&merged, "NewStar");

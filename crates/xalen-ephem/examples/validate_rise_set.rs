@@ -2,10 +2,12 @@
 use xalen_ephem::{Almanac, Body};
 use xalen_time::{JdUT1, JulianDay};
 
+type RiseSetCase = (&'static str, f64, f64, f64, f64, Body, f64, f64, f64);
+
 fn main() {
     let a = Almanac::default_vedic();
     // (loc, lon, lat, elev, jd_start, body, swiss_rise, swiss_transit, swiss_set)
-    let cases: &[(&str, f64, f64, f64, f64, Body, f64, f64, f64)] = &[
+    let cases: &[RiseSetCase] = &[
         (
             "Delhi-Jun-Sun",
             77.2090,

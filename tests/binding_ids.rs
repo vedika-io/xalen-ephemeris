@@ -153,9 +153,10 @@ fn binding_ids(fn_name: &str) -> (BTreeMap<u32, String>, Vec<BTreeSet<u32>>) {
         if src.contains(&format!("fn {fn_name}(")) {
             for (id, variant) in id_arms(src, fn_name) {
                 if let Some(seen) = merged.get(&id) {
-                    if *seen != variant {
-                        panic!("{label}: {fn_name}({id}) is {variant}, elsewhere {seen}");
-                    }
+                    assert!(
+                        *seen == variant,
+                        "{label}: {fn_name}({id}) is {variant}, elsewhere {seen}"
+                    );
                 }
                 merged.insert(id, variant);
                 ids.insert(id);

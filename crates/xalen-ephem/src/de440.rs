@@ -2882,7 +2882,7 @@ mod tests {
         let dir = std::env::temp_dir().join("xalen_de440_test");
         let _ = std::fs::create_dir_all(&dir);
         let path = dir.join("truncated.bin");
-        std::fs::write(&path, &[0u8; 100]).unwrap();
+        std::fs::write(&path, [0u8; 100]).unwrap();
         let result = De440Reader::from_file(&path);
         assert!(result.is_err(), "should reject truncated file");
         let _ = std::fs::remove_file(&path);
@@ -2893,7 +2893,7 @@ mod tests {
         let dir = std::env::temp_dir().join("xalen_de440_test");
         let _ = std::fs::create_dir_all(&dir);
         let path = dir.join("garbage.bin");
-        std::fs::write(&path, &[0u8; 8192]).unwrap();
+        std::fs::write(&path, [0u8; 8192]).unwrap();
         let result = De440Reader::from_file(&path);
         assert!(result.is_err(), "should reject file with invalid format");
     }
@@ -3246,12 +3246,12 @@ mod tests {
         ];
 
         for &body in &bodies {
-            let de440_pos = de440.geocentric_ecliptic(body, jd).expect(&format!(
-                "DE440 geocentric for {body} at J2000 should succeed"
-            ));
-            let vsop_pos = vsop.geocentric_ecliptic(body, jd).expect(&format!(
-                "VSOP87 geocentric for {body} at J2000 should succeed"
-            ));
+            let de440_pos = de440
+                .geocentric_ecliptic(body, jd)
+                .unwrap_or_else(|_| panic!("DE440 geocentric for {body} at J2000 should succeed"));
+            let vsop_pos = vsop
+                .geocentric_ecliptic(body, jd)
+                .unwrap_or_else(|_| panic!("VSOP87 geocentric for {body} at J2000 should succeed"));
 
             let de440_lon_deg = de440_pos.longitude.to_degrees().rem_euclid(360.0);
             let vsop_lon_deg = vsop_pos.longitude.to_degrees().rem_euclid(360.0);

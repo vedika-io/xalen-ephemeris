@@ -1158,7 +1158,7 @@ mod tests {
         assert!(sv > 0.0, "Saptavargaja should be positive, got {sv}");
         // Maximum possible = 7 * 45 = 315. Minimum = 7 * 3.75 = 26.25
         assert!(
-            sv >= 26.25 && sv <= 315.0,
+            (26.25..=315.0).contains(&sv),
             "Saptavargaja should be in valid range, got {sv}"
         );
     }
@@ -1405,11 +1405,11 @@ mod tests {
             let b_benefic = paksha_bala("Jupiter", 0.0, elong as f64);
             let b_malefic = paksha_bala("Saturn", 0.0, elong as f64);
             assert!(
-                b_benefic >= 0.0 && b_benefic <= 60.0,
+                (0.0..=60.0).contains(&b_benefic),
                 "Benefic paksha bala out of range at elongation {elong}: {b_benefic}"
             );
             assert!(
-                b_malefic >= 0.0 && b_malefic <= 60.0,
+                (0.0..=60.0).contains(&b_malefic),
                 "Malefic paksha bala out of range at elongation {elong}: {b_malefic}"
             );
         }
