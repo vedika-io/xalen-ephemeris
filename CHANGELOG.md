@@ -174,6 +174,13 @@ exception that `except swe.Error` can catch
 - SECURITY.md: disclosure timeline, scope and supply-chain sections; SUPPORT.md added; CODEOWNERS and issue forms refreshed.
 
 ### Fixed
+- **Validation verdict integrity:** the accuracy runner now exits 2 for empty,
+  malformed or incomplete oracle input, read errors, unsupported quantities,
+  invalid thresholds and computation failures. A declared `_meta.n` must match
+  the chart count, preventing a truncated stream from reporting PASS. Valid
+  comparisons retain exit 0/1 and the existing numerical gates. Expected epoch
+  coverage and house-latitude exclusions are reported; a body with no
+  comparable samples cannot pass.
 - **Drik Bala in `Shadbala::compute_full`** used graded aspects (15, 30, 45 or
   60 virupas by the nearest house), so it jumped at sign boundaries and did not
   follow BPHS. It now uses the Sphuta Drishti curve of BPHS Ch. 26, exposed as
