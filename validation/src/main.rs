@@ -27,7 +27,7 @@ use oracle::OracleRecord;
 use stats::{DeltaStats, angle_sep_deg};
 
 use xalen_ayanamsa::Ayanamsa;
-use xalen_ephem::{Almanac, Body};
+use xalen_ephem::{Almanac, Body, EphemerisError};
 use xalen_houses::{GeoLocation, HouseSystem, compute_houses};
 use xalen_time::{DeltaTModel, JdUT1};
 
@@ -152,6 +152,13 @@ fn ayanamsa_for(name: &str) -> Option<Ayanamsa> {
 }
 
 fn main() {
+    if let Err(error) = run() {
+        eprintln!("validation error: {error}");
+        std::process::exit(2);
+    }
+}
+
+fn run() -> Result<(), String> {
     let mut args = std::env::args().skip(1);
     let path = match args.next() {
         Some(p) if !p.starts_with("--") => p,
@@ -165,11 +172,20 @@ fn main() {
     };
     let mut threshold_deg = 0.1_f64;
     while let Some(a) = args.next() {
-        if a == "--threshold-deg" {
-            threshold_deg = args
-                .next()
-                .and_then(|v| v.parse().ok())
-                .unwrap_or(threshold_deg);
+        if a != "--threshold-deg" {
+            return Err(format!("unknown argument: {a}"));
+        }
+        let value = args.next().ok_or("--threshold-deg requires a value")?;
+        threshold_deg = value
+            .parse()
+            .map_err(|_| format!("invalid threshold: {value}"))?;
+        if !threshold_deg.is_finite()
+            || threshold_deg < 0.0
+            || !(threshold_deg * 3600.0).is_finite()
+        {
+            return Err(
+                "threshold must be finite, non-negative, and representable in arcseconds".into(),
+            );
         }
     }
 
@@ -178,13 +194,10 @@ fn main() {
     let reader: Box<dyn BufRead> = if path == "-" {
         Box::new(BufReader::new(std::io::stdin()))
     } else {
-        match std::fs::File::open(&path) {
-            Ok(f) => Box::new(BufReader::new(f)),
-            Err(e) => {
-                eprintln!("cannot open oracle file {path}: {e}");
-                std::process::exit(2);
-            }
-        }
+        Box::new(BufReader::new(
+            std::fs::File::open(&path)
+                .map_err(|e| format!("cannot open oracle file {path}: {e}"))?,
+        ))
     };
 
     let almanac = Almanac::default_vedic();
@@ -197,26 +210,28 @@ fn main() {
     let mut mc_stats = DeltaStats::default();
     let mut cusp_stats = DeltaStats::default();
     let mut ayan_stats: BTreeMap<String, DeltaStats> = BTreeMap::new();
+    let mut coverage_skips: BTreeMap<String, u64> = BTreeMap::new();
 
     let mut meta: Option<oracle::OracleMeta> = None;
     let mut n_charts: u64 = 0;
-    let mut parse_errors: u64 = 0;
-
-    for line in reader.lines() {
-        let line = match line {
-            Ok(l) if !l.trim().is_empty() => l,
-            _ => continue,
-        };
-        let rec: OracleRecord = match serde_json::from_str(&line) {
-            Ok(r) => r,
-            Err(_) => {
-                parse_errors += 1;
-                continue;
+    for (index, line) in reader.lines().enumerate() {
+        let line_number = index + 1;
+        let line = line.map_err(|e| format!("line {line_number}: cannot read oracle: {e}"))?;
+        if line.trim().is_empty() {
+            continue;
+        }
+        let rec: OracleRecord = serde_json::from_str(&line)
+            .map_err(|e| format!("line {line_number}: invalid oracle record: {e}"))?;
+        validate_record(&rec).map_err(|e| format!("line {line_number}: {e}"))?;
+        if let Some(m) = &rec.meta {
+            if n_charts != 0 || meta.is_some() {
+                return Err(format!(
+                    "line {line_number}: _meta is allowed only on the first chart"
+                ));
             }
-        };
-        if meta.is_none()
-            && let Some(m) = &rec.meta
-        {
+            if m.n == 0 {
+                return Err(format!("line {line_number}: _meta.n must be positive"));
+            }
             meta = Some(m.clone());
         }
         n_charts += 1;
@@ -230,14 +245,33 @@ fn main() {
             &mut mc_stats,
             &mut cusp_stats,
             &mut ayan_stats,
-        );
+            &mut coverage_skips,
+        )
+        .map_err(|e| format!("line {line_number}: {e}"))?;
+    }
+    if n_charts == 0 {
+        return Err("oracle contains no charts".into());
+    }
+    if let Some(m) = &meta
+        && m.n != n_charts
+    {
+        return Err(format!(
+            "oracle is incomplete: _meta.n declares {} charts, read {n_charts}",
+            m.n
+        ));
+    }
+    for name in coverage_skips.keys() {
+        if !lon_stats.contains_key(name) {
+            return Err(format!(
+                "no comparable samples for {name}: every epoch is outside coverage"
+            ));
+        }
     }
 
     print_report(
         &path,
         threshold_deg,
         n_charts,
-        parse_errors,
         meta.as_ref(),
         &lon_stats,
         &lat_stats,
@@ -245,7 +279,46 @@ fn main() {
         &mc_stats,
         &cusp_stats,
         &ayan_stats,
+        &coverage_skips,
     );
+    Ok(())
+}
+
+/// Require the complete schema emitted by oracle_pyswisseph.py. A missing or
+/// unknown quantity must not silently shrink the scope of an accuracy verdict.
+fn validate_record(rec: &OracleRecord) -> Result<(), String> {
+    if !rec.jd.is_finite() || !mean_obliquity_rad(rec.jd).is_finite() {
+        return Err("jd cannot be evaluated with finite arithmetic".into());
+    }
+    if !(-90.0..=90.0).contains(&rec.lat) || !(-180.0..=180.0).contains(&rec.lon) {
+        return Err("latitude/longitude are outside their geographic ranges".into());
+    }
+    if rec.bodies.len() != 14 || rec.bodies.keys().any(|name| body_for(name).is_none()) {
+        return Err("bodies must contain all 14 supported oracle body names".into());
+    }
+    if rec.ayanamsa.len() != 4 || rec.ayanamsa.keys().any(|name| ayanamsa_for(name).is_none()) {
+        return Err("ayanamsa must contain all four supported oracle names".into());
+    }
+    if rec.houses.cusps.len() != 12 {
+        return Err("houses must contain exactly 12 cusps".into());
+    }
+    for (name, &[lon, lat]) in &rec.bodies {
+        if !lon.is_finite() || !(-90.0..=90.0).contains(&lat) {
+            return Err(format!("invalid oracle coordinates for {name}"));
+        }
+    }
+    if !rec.houses.asc.is_finite()
+        || !rec.houses.mc.is_finite()
+        || rec
+            .houses
+            .cusps
+            .iter()
+            .chain(rec.ayanamsa.values())
+            .any(|v| !v.is_finite())
+    {
+        return Err("oracle angles must be finite".into());
+    }
+    Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -259,31 +332,44 @@ fn process_record(
     mc_stats: &mut DeltaStats,
     cusp_stats: &mut DeltaStats,
     ayan_stats: &mut BTreeMap<String, DeltaStats>,
-) {
+    coverage_skips: &mut BTreeMap<String, u64>,
+) -> Result<(), String> {
     let jd = rec.jd;
     let jd_ut1 = JdUT1(jd);
 
     // ── Bodies: apparent geocentric ecliptic longitude (+ latitude) ──────
     for (name, &[o_lon, o_lat]) in &rec.bodies {
-        let Some(body) = body_for(name) else { continue };
-        if let Ok(pos) = almanac.geocentric_ecliptic(body, jd_ut1) {
-            let x_lon = pos.longitude_deg().rem_euclid(360.0);
-            let d_lon = angle_sep_deg(x_lon, o_lon);
-            lon_stats
-                .entry(name.clone())
-                .or_default()
-                .record_deg(d_lon, jd, rec.lat, rec.lon);
-
-            // Nodes report latitude 0 by construction; compare latitude only
-            // where the oracle gives a non-degenerate value (planets, Moon,
-            // apogees). Latitude is a signed small angle, so a plain absolute
-            // difference is the right metric (no 360deg wrap concern).
-            let d_lat = (pos.latitude_deg() - o_lat).abs();
-            lat_stats
-                .entry(name.clone())
-                .or_default()
-                .record_deg(d_lat, jd, rec.lat, rec.lon);
+        let body = body_for(name).ok_or_else(|| format!("unknown body: {name}"))?;
+        let pos = match almanac.geocentric_ecliptic(body, jd_ut1) {
+            Ok(pos) => pos,
+            // The default 1500–2400 oracle span intentionally exceeds the
+            // analytic Pluto series' coverage. Disclose these exclusions, but
+            // do not turn other computation failures into missing samples.
+            Err(EphemerisError::EpochOutOfRange(_)) => {
+                *coverage_skips.entry(name.clone()).or_default() += 1;
+                continue;
+            }
+            Err(e) => return Err(format!("cannot compute {name}: {e}")),
+        };
+        if !pos.longitude_deg().is_finite() || !pos.latitude_deg().is_finite() {
+            return Err(format!("non-finite computed coordinates for {name}"));
         }
+        let x_lon = pos.longitude_deg().rem_euclid(360.0);
+        let d_lon = angle_sep_deg(x_lon, o_lon);
+        lon_stats
+            .entry(name.clone())
+            .or_default()
+            .record_deg(d_lon, jd, rec.lat, rec.lon);
+
+        // Nodes report latitude 0 by construction; compare latitude only
+        // where the oracle gives a non-degenerate value (planets, Moon,
+        // apogees). Latitude is a signed small angle, so a plain absolute
+        // difference is the right metric (no 360deg wrap concern).
+        let d_lat = (pos.latitude_deg() - o_lat).abs();
+        lat_stats
+            .entry(name.clone())
+            .or_default()
+            .record_deg(d_lat, jd, rec.lat, rec.lon);
     }
 
     // ── Houses: tropical Placidus. XALEN's compute_houses uses GMST-derived
@@ -304,6 +390,12 @@ fn process_record(
     if rec.lat.abs() <= 60.0 {
         let loc = GeoLocation::new(rec.lat, rec.lon);
         let h = compute_houses(jd, &loc, eps, HouseSystem::Placidus);
+        if !h.ascendant.is_finite()
+            || !h.mc.is_finite()
+            || (0..12).any(|i| !h.cusp_deg(i).is_finite())
+        {
+            return Err("non-finite computed houses".into());
+        }
         asc_stats.record_deg(
             angle_sep_deg(h.ascendant.to_degrees(), rec.houses.asc),
             jd,
@@ -327,11 +419,15 @@ fn process_record(
     //    UT/TT distinction is sub-milliarcsec, but we convert anyway to mirror
     //    the real pipeline rather than feed UT as TT.) ─────────────────────
     let jd_tt = jd_ut1.to_tt(dt).0;
+    if !jd_tt.is_finite() {
+        return Err("non-finite TT epoch".into());
+    }
     for (name, &o_ayan) in &rec.ayanamsa {
-        let Some(a) = ayanamsa_for(name) else {
-            continue;
-        };
+        let a = ayanamsa_for(name).ok_or_else(|| format!("unknown ayanamsa: {name}"))?;
         let x_ayan = a.compute_deg(jd_tt);
+        if !x_ayan.is_finite() {
+            return Err(format!("non-finite computed ayanamsa: {name}"));
+        }
         ayan_stats.entry(name.clone()).or_default().record_deg(
             angle_sep_deg(x_ayan, o_ayan),
             jd,
@@ -339,6 +435,7 @@ fn process_record(
             rec.lon,
         );
     }
+    Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -346,7 +443,6 @@ fn print_report(
     path: &str,
     threshold_deg: f64,
     n_charts: u64,
-    parse_errors: u64,
     meta: Option<&oracle::OracleMeta>,
     lon_stats: &BTreeMap<String, DeltaStats>,
     lat_stats: &BTreeMap<String, DeltaStats>,
@@ -354,10 +450,20 @@ fn print_report(
     mc_stats: &DeltaStats,
     cusp_stats: &DeltaStats,
     ayan_stats: &BTreeMap<String, DeltaStats>,
+    coverage_skips: &BTreeMap<String, u64>,
 ) {
     println!("XALEN reproducible accuracy validation");
     println!("oracle file : {path}");
-    println!("charts read : {n_charts}  (parse errors: {parse_errors})");
+    println!("charts read : {n_charts}  (parse errors: 0)");
+    for (name, count) in coverage_skips {
+        println!("excluded    : {name}: {count} epochs outside calculation coverage");
+    }
+    if asc_stats.count < n_charts {
+        println!(
+            "excluded    : houses: {} charts outside |latitude| <= 60 deg",
+            n_charts - asc_stats.count
+        );
+    }
     if let Some(m) = meta {
         println!(
             "oracle      : pyswisseph {}, n={}, seed={}, span JD {:.1}..{:.1}",
@@ -451,7 +557,7 @@ fn print_report(
     );
     if overall_pass {
         println!(
-            "RESULT      : PASS — every quantity within {threshold_deg} deg across {n_charts} charts"
+            "RESULT      : PASS — every evaluated gated sample within {threshold_deg} deg; {n_charts} charts read (see counts and exclusions)"
         );
     } else {
         println!("RESULT      : FAIL — at least one quantity exceeded {threshold_deg} deg");
@@ -548,6 +654,7 @@ mod tests {
         let mut mc = DeltaStats::default();
         let mut cusp = DeltaStats::default();
         let mut ayan = BTreeMap::new();
+        let mut coverage_skips = BTreeMap::new();
 
         let mut bodies = BTreeMap::new();
         // Swiss apparent geocentric Sun longitude at J2000 ~= 280.3689 deg.
@@ -573,8 +680,18 @@ mod tests {
         };
 
         process_record(
-            &rec, &almanac, &dt, &mut lon, &mut lat, &mut asc, &mut mc, &mut cusp, &mut ayan,
-        );
+            &rec,
+            &almanac,
+            &dt,
+            &mut lon,
+            &mut lat,
+            &mut asc,
+            &mut mc,
+            &mut cusp,
+            &mut ayan,
+            &mut coverage_skips,
+        )
+        .unwrap();
 
         // The Sun longitude delta vs the Swiss value must be small (well under
         // the 0.1deg legacy bound) — this proves the pipeline computes a real
