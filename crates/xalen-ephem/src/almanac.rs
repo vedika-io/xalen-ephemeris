@@ -158,8 +158,65 @@ impl Almanac {
         elevation_m: f64,
     ) -> Result<f64, EphemerisError> {
         let topo = self.topocentric_ecliptic(body, jd_ut1, lat_deg, lon_deg, elevation_m)?;
+        Ok(self.altitude_of_ecliptic_deg(&topo, jd_ut1, lat_deg, lon_deg))
+    }
+
+    /// Altitude (degrees) of a body's **geocentric** apparent position with its
+    /// ecliptic latitude set to zero, for an observer at `lat_deg`/`lon_deg`: no
+    /// parallax, the body placed on the ecliptic. This is the "Hindu rising"
+    /// convention of `swe_rise_trans` (`SE_BIT_GEOCTR_NO_ECL_LAT`).
+    pub fn geocentric_ecliptic_altitude_deg(
+        &self,
+        body: Body,
+        jd_ut1: JdUT1,
+        lat_deg: f64,
+        lon_deg: f64,
+    ) -> Result<f64, EphemerisError> {
+        let mut geo = self.geocentric_ecliptic(body, jd_ut1)?;
+        geo.latitude = 0.0;
+        Ok(self.altitude_of_ecliptic_deg(&geo, jd_ut1, lat_deg, lon_deg))
+    }
+
+    /// The body's **topocentric azimuth and altitude** (degrees) for an
+    /// observer, after diurnal parallax and without refraction. The azimuth is
+    /// measured from north through east, in `[0, 360)`.
+    pub fn topocentric_azimuth_altitude_deg(
+        &self,
+        body: Body,
+        jd_ut1: JdUT1,
+        lat_deg: f64,
+        lon_deg: f64,
+        elevation_m: f64,
+    ) -> Result<(f64, f64), EphemerisError> {
+        let topo = self.topocentric_ecliptic(body, jd_ut1, lat_deg, lon_deg, elevation_m)?;
+        Ok(self.horizontal_of_ecliptic_deg(&topo, jd_ut1, lat_deg, lon_deg))
+    }
+
+    /// Altitude (degrees) of an apparent ecliptic-of-date position for an
+    /// observer at `lat_deg`/`lon_deg` at `jd_ut1`.
+    fn altitude_of_ecliptic_deg(
+        &self,
+        pos: &EclipticPosition,
+        jd_ut1: JdUT1,
+        lat_deg: f64,
+        lon_deg: f64,
+    ) -> f64 {
+        self.horizontal_of_ecliptic_deg(pos, jd_ut1, lat_deg, lon_deg)
+            .1
+    }
+
+    /// `(azimuth, altitude)` in degrees of an apparent ecliptic-of-date
+    /// position for an observer at `lat_deg`/`lon_deg` at `jd_ut1`; the
+    /// azimuth runs from north through east in `[0, 360)`.
+    fn horizontal_of_ecliptic_deg(
+        &self,
+        pos: &EclipticPosition,
+        jd_ut1: JdUT1,
+        lat_deg: f64,
+        lon_deg: f64,
+    ) -> (f64, f64) {
         let jd_tt = jd_ut1.to_tt(&self.delta_t_model);
-        // `topo` is on the TRUE equinox of date (apparent ecliptic-of-date), so
+        // `pos` is on the TRUE equinox of date (apparent ecliptic-of-date), so
         // use the TRUE obliquity (mean + delta_epsilon) for ecliptic→equatorial and
         // APPARENT sidereal time (GMST + equation of equinoxes) for the hour angle —
         // keeping RA and sidereal time on the same equinox. (Matches
@@ -167,7 +224,7 @@ impl Almanac {
         let t = jd_tt.julian_centuries_from_j2000();
         let nut = nutation_2000b(t);
         let eps = mean_obliquity(t) + nut.delta_epsilon; // true obliquity of date
-        let eq = ecliptic_to_equatorial(&topo, eps);
+        let eq = ecliptic_to_equatorial(pos, eps);
         let eq_of_equinoxes = nut.delta_psi * eps.cos();
         let last = (crate::topocentric::gmst_deg(jd_ut1.as_f64()) + lon_deg).to_radians()
             + eq_of_equinoxes;
@@ -175,7 +232,9 @@ impl Almanac {
         let phi = lat_deg.to_radians();
         let alt =
             (phi.sin() * eq.declination.sin() + phi.cos() * eq.declination.cos() * h.cos()).asin();
-        Ok(alt.to_degrees())
+        let (sin_d, cos_d) = eq.declination.sin_cos();
+        let az = (-cos_d * h.sin()).atan2(sin_d * phi.cos() - cos_d * phi.sin() * h.cos());
+        (az.to_degrees().rem_euclid(360.0), alt.to_degrees())
     }
 
     /// The body's **topocentric local hour angle** in degrees, wrapped to
@@ -429,7 +488,10 @@ mod tests {
             let result = a.geocentric_longitude_deg(*body, jd);
             assert!(result.is_ok(), "Failed for {body}: {:?}", result.err());
             let lon = result.unwrap();
-            assert!(lon >= 0.0 && lon < 360.0, "{body} lon out of range: {lon}°");
+            assert!(
+                (0.0..360.0).contains(&lon),
+                "{body} lon out of range: {lon}°"
+            );
         }
     }
 
@@ -561,7 +623,30 @@ mod tests {
             .collect();
         for h in handles {
             let lon = h.join().unwrap();
-            assert!(lon >= 0.0 && lon < 360.0);
+            assert!((0.0..360.0).contains(&lon));
         }
+    }
+
+    #[test]
+    fn topocentric_azimuth_runs_from_north_through_east() {
+        // New Delhi, 2024-12-21. At sunrise the Sun is in the east-south-east
+        // (cos A = sin δ / cos φ gives about 117°); at the meridian it is due
+        // south. The altitude matches `topocentric_altitude_deg`.
+        let a = Almanac::default_vedic();
+        let (lat, lon) = (28.6139, 77.2090);
+        let sunrise = JdUT1(2460665.5692535527);
+        let (az, alt) = a
+            .topocentric_azimuth_altitude_deg(Body::Sun, sunrise, lat, lon, 0.0)
+            .unwrap();
+        assert!((114.0..120.0).contains(&az), "sunrise azimuth {az}");
+        let alt2 = a
+            .topocentric_altitude_deg(Body::Sun, sunrise, lat, lon, 0.0)
+            .unwrap();
+        assert_eq!(alt, alt2);
+        let noon = JdUT1(2460665.7842695178);
+        let (az, _) = a
+            .topocentric_azimuth_altitude_deg(Body::Sun, noon, lat, lon, 0.0)
+            .unwrap();
+        assert!((az - 180.0).abs() < 1.0, "transit azimuth {az}");
     }
 }

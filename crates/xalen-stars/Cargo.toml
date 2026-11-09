@@ -4,26 +4,25 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Fixed star catalog with precession-corrected positions for XALEN Ephemeris"
+description = "Fixed star catalog (9,096 Bright Star Catalogue stars) with precession-corrected positions for XALEN Ephemeris"
 keywords = ["fixed-stars", "star-catalog", "precession", "astronomy", "astrology"]
 categories = ["science", "mathematics"]
 
 [dependencies]
-xalen-time = { version = "0.6.0", path = "../xalen-time" }
-xalen-coords = { version = "0.6.0", path = "../xalen-coords" }
-# The Hipparcos (CDS I/239, CC BY-NC) catalogue data — OPTIONAL and isolated in
-# its own NC-licensed crate. Pulled in only by the `hip-catalog` feature.
-xalen-stars-hip-data = { version = "0.6.0", path = "../xalen-stars-hip-data", optional = true }
+xalen-time = { version = "0.7.0", path = "../xalen-time" }
+xalen-coords = { version = "0.7.0", path = "../xalen-coords" }
 serde.workspace = true
 
 [features]
-# `hip-catalog` embeds the non-commercial Hipparcos catalogue (8,870 stars) and
-# the HIP-reconciled named-star positions. DEFAULT-ON for the open-source
-# library; commercial / paid builds MUST disable it (`--no-default-features`)
-# so no CC BY-NC data is linked. CI asserts the `xalen-stars-hip-data` package
-# is absent from commercial builds.
-default = ["hip-catalog"]
-hip-catalog = ["dep:xalen-stars-hip-data"]
+# `bright-catalog` (default-on) embeds the 9,096-star Bright Star Catalogue
+# list (`BRIGHT_CATALOG`) and backs `find_by_name` with it. It is a size switch
+# only: the data carries no licence restriction beyond attribution. With it off,
+# only the 108 curated stars are available.
+default = ["bright-catalog"]
+bright-catalog = []
+
+[dev-dependencies]
+xalen-star-anchors = { version = "0.7.0", path = "../xalen-star-anchors" }
 
 [lints]
 workspace = true

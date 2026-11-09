@@ -51,7 +51,7 @@ fn moon_position_is_reasonable() {
         .geocentric_longitude_deg(Body::Moon, JdUT1(J2000))
         .unwrap();
     assert!(
-        lon >= 0.0 && lon < 360.0,
+        (0.0..360.0).contains(&lon),
         "Moon longitude should be 0-360°, got {lon}°"
     );
 }
@@ -84,7 +84,7 @@ fn all_vedic_grahas_computable() {
         assert!(result.is_ok(), "Failed to compute {body}");
         let lon = result.unwrap();
         assert!(
-            lon >= 0.0 && lon < 360.0,
+            (0.0..360.0).contains(&lon),
             "{body} longitude {lon}° out of range"
         );
     }
@@ -145,8 +145,8 @@ fn concurrent_chart_computation() {
 
     for h in handles {
         let (sun, moon) = h.join().unwrap();
-        assert!(sun >= 0.0 && sun < 360.0);
-        assert!(moon >= 0.0 && moon < 360.0);
+        assert!((0.0..360.0).contains(&sun));
+        assert!((0.0..360.0).contains(&moon));
     }
 }
 
@@ -295,7 +295,7 @@ fn mars_position_range() {
             .geocentric_longitude_deg(Body::Mars, JdUT1(J2000 + day_offset))
             .unwrap();
         assert!(
-            lon >= 0.0 && lon < 360.0,
+            (0.0..360.0).contains(&lon),
             "Mars out of range at offset {day_offset}: {lon}°"
         );
     }
@@ -387,8 +387,8 @@ fn numerology_pythagorean_vs_chaldean() {
     use xalen_numerology::{System, expression_number};
     let py = expression_number("VEDIKA", System::Pythagorean);
     let ch = expression_number("VEDIKA", System::Chaldean);
-    assert!(py >= 1 && py <= 33);
-    assert!(ch >= 1 && ch <= 33);
+    assert!((1..=33).contains(&py));
+    assert!((1..=33).contains(&ch));
 }
 
 #[test]
@@ -451,7 +451,7 @@ fn historical_date_computation() {
         .geocentric_longitude_deg(Body::Sun, JdUT1(2_000_000.0))
         .unwrap();
     assert!(
-        lon >= 0.0 && lon < 360.0,
+        (0.0..360.0).contains(&lon),
         "Sun at JD 2000000 (~763 CE) should be valid 0-360°, got {lon}°"
     );
 }
@@ -464,7 +464,7 @@ fn future_date_computation() {
         .geocentric_longitude_deg(Body::Sun, JdUT1(2_500_000.0))
         .unwrap();
     assert!(
-        lon >= 0.0 && lon < 360.0,
+        (0.0..360.0).contains(&lon),
         "Sun at JD 2500000 (~2132 CE) should be valid 0-360°, got {lon}°"
     );
 }
@@ -599,7 +599,7 @@ fn house_cusps_cover_360() {
     for i in 0..12 {
         let cusp = cusps.cusps[i];
         assert!(
-            cusp >= 0.0 && cusp < 360.0,
+            (0.0..360.0).contains(&cusp),
             "Cusp {i} out of range: {cusp}°"
         );
     }

@@ -1,59 +1,70 @@
-# xalen (Node.js)
+# @xalen/ephemeris (Node.js)
 
 **Pure-Rust astronomical & astrology ephemeris for Node.js — VSOP87 planets, Vedic/KP, 14 house systems, 17 ayanamsa, nakshatra/panchang, numerology. A native N-API addon (napi-rs), zero data files.**
 
-[![npm](https://img.shields.io/npm/v/xalen.svg)](https://www.npmjs.com/package/xalen) <!-- coming soon: not yet published -->
-[![CI](https://github.com/vedika-io/xalen-ephemeris/actions/workflows/ci.yml/badge.svg)](https://github.com/vedika-io/xalen-ephemeris/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/@xalen/ephemeris.svg)](https://www.npmjs.com/package/@xalen/ephemeris)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](https://github.com/vedika-io/xalen-ephemeris/blob/main/LICENSE)
 
-> Part of the [XALEN Ephemeris](https://github.com/vedika-io/xalen-ephemeris) suite — pure-Rust core, zero `unsafe` in the math, thread-safe, Apache-2.0. This package is a compiled **native addon** (fast, synchronous). For a pure-WebAssembly build that runs in the browser, use [`xalen-ephemeris`](https://github.com/vedika-io/xalen-ephemeris/tree/main/crates/xalen-wasm) (the WASM package) instead.
+> Part of the [XALEN Ephemeris](https://github.com/vedika-io/xalen-ephemeris) suite — pure-Rust core, zero `unsafe` in the math, thread-safe, Apache-2.0. This package is a compiled **native addon** (fast, synchronous). For a pure-WebAssembly build that runs in the browser, use [`@xalen/wasm`](https://github.com/vedika-io/xalen-ephemeris/tree/main/crates/xalen-wasm) (the WASM package) instead.
 
 ---
 
 ## Install
 
 ```bash
-# FORTHCOMING — not on npm yet.
-npm install xalen
+npm install @xalen/ephemeris
 ```
 
-> **Pre-publish note:** `xalen` is **not on npm yet** (the badge above is a placeholder). Until it ships, build the addon from the repo:
+Requires Node.js 16 or newer. npm installs only the prebuilt binary that matches
+your machine (see the table below); no compiler, `node-gyp` or data files are
+needed.
+
+> **Availability:** the package is published to npm with each XALEN release from
+> 0.8. Until that release, and on any platform without a prebuilt binary, build
+> the addon from the repository:
 
 ```bash
 git clone https://github.com/vedika-io/xalen-ephemeris.git
 cd xalen-ephemeris/crates/xalen-node
-npm install
+npm ci
 npm run build          # release; emits index.js + index.d.ts + xalen.<platform>.node
-npm test               # node --test __test__/
+npm test               # the smoke test and the platform-matrix test
 ```
-
-Requires Node.js ≥ 16.
 
 ### Platform support
 
-The published package ships **prebuilt** N-API addons as per-platform
-`optionalDependencies` (npm installs only the one matching the host). npm
-selects it automatically; no compiler is needed on the install host.
+The package is a small loader plus one prebuilt N-API addon per platform, each
+its own npm package that the loader lists as an `optionalDependency`. npm picks
+the one that matches the host. The Linux binaries are built against glibc 2.17,
+so they load on any glibc 2.17 or newer system (CentOS 7 and later, for example).
 
-| Platform | npm triple | Built by |
-|----------|------------|----------|
-| macOS arm64 | `aarch64-apple-darwin` | `release.yml` (native) · `build-all-platforms.sh` (native) |
-| macOS x86_64 | `x86_64-apple-darwin` | `release.yml` (native) · `build-all-platforms.sh` (on a macOS host) |
-| Linux x86_64 (gnu) | `x86_64-unknown-linux-gnu` | `release.yml` · `build-all-platforms.sh` (zig) |
-| Linux aarch64 (gnu) | `aarch64-unknown-linux-gnu` | `release.yml` · `build-all-platforms.sh` (zig) |
-| Windows x86_64 | `x86_64-pc-windows-msvc` | `release.yml` (native windows runner) |
+| Platform | npm package | Rust target |
+|----------|-------------|-------------|
+| Linux x86_64 (glibc) | `@xalen/ephemeris-linux-x64-gnu` | `x86_64-unknown-linux-gnu` |
+| Linux aarch64 (glibc) | `@xalen/ephemeris-linux-arm64-gnu` | `aarch64-unknown-linux-gnu` |
+| macOS arm64 (Apple silicon) | `@xalen/ephemeris-darwin-arm64` | `aarch64-apple-darwin` |
+| macOS x86_64 (Intel) | `@xalen/ephemeris-darwin-x64` | `x86_64-apple-darwin` |
+| Windows x64 | `@xalen/ephemeris-win32-x64-msvc` | `x86_64-pc-windows-msvc` |
 
-`scripts/build-all-platforms.sh` builds the addon matrix locally (the Windows
-cross-build it produces targets `*-pc-windows-gnu` via `cargo-zigbuild` for
-local verification; the **published** Windows addon is the `*-msvc` build from
-[`.github/workflows/release.yml`](https://github.com/vedika-io/xalen-ephemeris/blob/main/.github/workflows/release.yml), which builds + tests + publishes all five
-platforms above on official runners on every `v*` tag). To compile locally for
-the host platform instead of using a prebuilt addon, build from the repo as
-shown above.
+The Windows binary is linked with a static C runtime, so it does not need the
+Visual C++ Redistributable. It is expected to load on 64-bit Windows 10 /
+Server 2016 or later with Node 16 or later (unverified; no Windows run yet).
+It is built on Linux and checked there (file type,
+exports, imported DLLs), not loaded on a Windows machine before release; please
+[open an issue](https://github.com/vedika-io/xalen-ephemeris/issues) if it does
+not load for you.
+
+Not prebuilt yet: Windows on arm64 or 32-bit x86, and musl-based Linux such as
+Alpine. On those systems `require('@xalen/ephemeris')` throws "Cannot find
+native binding"; build from source as shown above. For a browser or any platform
+without a native binary, use the WebAssembly build, [`@xalen/wasm`](https://www.npmjs.com/package/@xalen/wasm).
+
+The binaries are built on one Linux machine by `scripts/build-release-artifacts.sh node`
+(see that script for the exact steps and the checks it runs on every binary).
 
 ```js
-const xalen = require('xalen');
-// or, with ESM:  import xalen from 'xalen';
+const xalen = require('@xalen/ephemeris');
+// or, with ESM:  import xalen from '@xalen/ephemeris';
 ```
 
 ---
@@ -63,7 +74,7 @@ const xalen = require('xalen');
 The high-fidelity call: the pyswisseph `calc_ut(..., FLG_SPEED)` six components plus a retrograde flag.
 
 ```js
-const xalen = require('xalen');
+const xalen = require('@xalen/ephemeris');
 const J2000 = 2451545.0;
 
 const p = xalen.planetPosition('sun', J2000);
@@ -91,6 +102,8 @@ const ketu = xalen.planetPositionById(13, J2000);  // longitude === (rahu.longit
 ```
 
 When a valid `ayanamsaId` is supplied, the longitude is sidereal (tropical − ayanamsa) **and** the ayanamsa's own precession rate is removed from `lonSpeed`, matching Swiss `SEFLG_SIDEREAL | SEFLG_SPEED`.
+
+Every body, ayanamsa and house-system ID, with the Swiss Ephemeris number next to each, is listed in [docs/BINDING_IDS.md](https://github.com/vedika-io/xalen-ephemeris/blob/main/docs/BINDING_IDS.md).
 
 ---
 

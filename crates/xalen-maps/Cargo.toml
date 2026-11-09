@@ -1,0 +1,19 @@
+[package]
+name = "xalen-maps"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Astrocartography for XALEN Ephemeris — MC, IC, ascendant and descendant lines, zenith points and parans"
+keywords = ["astrocartography", "astrology", "map", "ephemeris", "horizon"]
+categories = ["science", "mathematics"]
+
+[dependencies]
+xalen-time = { version = "0.7.0", path = "../xalen-time" }
+xalen-coords = { version = "0.7.0", path = "../xalen-coords" }
+xalen-ephem = { version = "0.7.0", path = "../xalen-ephem" }
+thiserror.workspace = true
+serde.workspace = true
+
+[lints]
+workspace = true

@@ -69,6 +69,10 @@ pub const SE_OSCU_APOG: i32 = 13;
 pub const SE_CHIRON: i32 = 15;
 /// Earth (SE_EARTH = 14) -- geocentric: returns 0,0,0
 pub const SE_EARTH: i32 = 14;
+/// Obliquity and nutation pseudo-body (SE_ECL_NUT = -1): [`swe_calc_ut`]
+/// returns `[true obliquity, mean obliquity, nutation in longitude, nutation in
+/// obliquity, 0, 0]` in degrees.
+pub const SE_ECL_NUT: i32 = -1;
 
 // ── SE flag constants (accepted but most are no-ops) ────────────────────────
 
@@ -108,7 +112,7 @@ pub const SEFLG_RADIANS: i32 = 8 * 1024;
 
 /// Bit-mask of every flag [`swe_calc_ut`] cannot honour. Setting any of these
 /// produces an error rather than a silently-wrong position.
-const SEFLG_UNSUPPORTED_MASK: i32 = SEFLG_HELCTR
+pub const SEFLG_UNSUPPORTED_MASK: i32 = SEFLG_HELCTR
     | SEFLG_J2000
     | SEFLG_EQUATORIAL
     | SEFLG_BARYCTR
@@ -221,8 +225,9 @@ pub struct HouseCusps {
 
 // ── Planet mapping ──────────────────────────────────────────────────────────
 
-/// Convert an SE planet number to our [`Body`] enum.
-fn se_planet_to_body(planet: i32) -> Result<Body, String> {
+/// Convert an SE planet number to our [`Body`] enum. Errors for a number with
+/// no XALEN body.
+pub fn se_planet_to_body(planet: i32) -> Result<Body, String> {
     match planet {
         SE_SUN => Ok(Body::Sun),
         SE_MOON => Ok(Body::Moon),
@@ -245,7 +250,8 @@ fn se_planet_to_body(planet: i32) -> Result<Body, String> {
 }
 
 /// Convert an SE house system character to our [`HouseSystem`](xalen_houses::HouseSystem).
-fn se_hsys_to_system(hsys: char) -> Result<xalen_houses::HouseSystem, String> {
+/// Errors for a letter that is not a supported Swiss `hsys` code.
+pub fn se_hsys_to_system(hsys: char) -> Result<xalen_houses::HouseSystem, String> {
     use xalen_houses::HouseSystem;
     match hsys {
         'P' => Ok(HouseSystem::Placidus),
@@ -334,6 +340,9 @@ pub fn swe_calc_ut(jd: f64, planet: i32, iflag: i32) -> Result<[f64; 6], String>
              HELCTR/TOPOCTR/J2000/EQUATORIAL/BARYCTR/XYZ/RADIANS are not implemented \
              and must not be silently ignored"
         ));
+    }
+    if planet == SE_ECL_NUT {
+        return Ok(ecl_nut(jd));
     }
 
     let body = se_planet_to_body(planet)?;
@@ -606,29 +615,17 @@ pub fn swe_deltat(jd: f64) -> f64 {
 /// The catalog carries no parallax, so distance is reported as `0.0`.
 /// If the star is not found, returns an error.
 pub fn swe_fixstar_ut(star_name: &str, jd: f64) -> Result<[f64; 6], String> {
-    #[cfg(not(feature = "hip-catalog"))]
-    {
-        let _ = (star_name, jd);
-        return Err(
-            "swe_fixstar_ut requires the `hip-catalog` feature (the Hipparcos \
-             fixed-star catalog is non-commercial and is not linked in this build)"
-                .to_string(),
-        );
-    }
-    #[cfg(feature = "hip-catalog")]
-    {
-        let star = xalen_stars::find_by_name(star_name)
-            .ok_or_else(|| format!("star not found: {star_name}"))?;
-        let year = 2000.0 + (jd - 2_451_545.0) / 365.25;
-        Ok([
-            star.longitude_at_epoch(year),
-            star.latitude_at_epoch(year),
-            0.0, // distance (AU): no parallax data in the catalog
-            0.0, // lon speed
-            0.0, // lat speed
-            0.0, // dist speed
-        ])
-    }
+    let star = xalen_stars::find_by_name(star_name)
+        .ok_or_else(|| format!("star not found: {star_name}"))?;
+    let year = 2000.0 + (jd - 2_451_545.0) / 365.25;
+    Ok([
+        star.longitude_at_epoch(year),
+        star.latitude_at_epoch(year),
+        0.0, // distance (AU): no parallax data in the catalog
+        0.0, // lon speed
+        0.0, // lat speed
+        0.0, // dist speed
+    ])
 }
 
 /// Return the visual magnitude of a fixed star.
@@ -645,21 +642,9 @@ pub fn swe_fixstar_ut(star_name: &str, jd: f64) -> Result<[f64; 6], String> {
 /// assert!((mag - 0.98).abs() < 0.5);
 /// ```
 pub fn swe_fixstar_mag(star_name: &str) -> Result<f64, String> {
-    #[cfg(not(feature = "hip-catalog"))]
-    {
-        let _ = star_name;
-        return Err(
-            "swe_fixstar_mag requires the `hip-catalog` feature (the Hipparcos \
-             fixed-star catalog is non-commercial and is not linked in this build)"
-                .to_string(),
-        );
-    }
-    #[cfg(feature = "hip-catalog")]
-    {
-        let star = xalen_stars::find_by_name(star_name)
-            .ok_or_else(|| format!("star not found: {star_name}"))?;
-        Ok(star.magnitude)
-    }
+    let star = xalen_stars::find_by_name(star_name)
+        .ok_or_else(|| format!("star not found: {star_name}"))?;
+    Ok(star.magnitude)
 }
 
 /// No-op. XALEN embeds all data at compile time.
@@ -676,6 +661,18 @@ pub fn swe_close() {
     // No-op: nothing to clean up.
 }
 
+/// `[true obliquity, mean obliquity, Δψ, Δε, 0, 0]` in degrees at a UT1 epoch
+/// (IAU 2006 mean obliquity, IAU 2000B nutation, both evaluated in TT).
+fn ecl_nut(jd_ut: f64) -> [f64; 6] {
+    let t = JdUT1(jd_ut)
+        .to_tt(&xalen_time::DeltaTModel::StephensonMorrisonHohenkerk2016)
+        .julian_centuries_from_j2000();
+    let eps_mean = xalen_coords::mean_obliquity(t).to_degrees();
+    let nut = xalen_coords::nutation_2000b(t);
+    let (dpsi, deps) = (nut.delta_psi.to_degrees(), nut.delta_epsilon.to_degrees());
+    [eps_mean + deps, eps_mean, dpsi, deps, 0.0, 0.0]
+}
+
 // ── Tests ───────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -683,6 +680,22 @@ mod tests {
     use super::*;
 
     const J2000: f64 = 2_451_545.0;
+
+    #[test]
+    fn calc_ut_ecl_nut_returns_obliquity_and_nutation() {
+        let xx = swe_calc_ut(J2000, SE_ECL_NUT, SEFLG_SWIEPH).unwrap();
+        // IAU 2006 mean obliquity at J2000: 84381.406″ = 23.4392794°.
+        assert!(
+            (xx[1] - 23.439_279).abs() < 1e-4,
+            "mean obliquity {}",
+            xx[1]
+        );
+        // True obliquity = mean + Δε; nutation stays below 20″ in longitude and
+        // 10″ in obliquity.
+        assert!((xx[0] - (xx[1] + xx[3])).abs() < 1e-12);
+        assert!(xx[2].abs() < 20.0 / 3600.0 && xx[3].abs() < 10.0 / 3600.0);
+        assert_eq!((xx[4], xx[5]), (0.0, 0.0));
+    }
 
     #[test]
     fn calc_ut_sun_at_j2000() {
@@ -1015,6 +1028,19 @@ mod tests {
     }
 
     #[test]
+    fn fixstar_sirius_works_in_every_build() {
+        // The star list is in-house data with no feature switch that disables
+        // the lookup, so this holds with default and with
+        // `--no-default-features`.
+        let xx = swe_fixstar_ut("Sirius", J2000).unwrap();
+        // Swiss J2000 mean place: 104.0817 / -39.6053 (within 1" of it).
+        assert!((xx[0] - 104.081_677).abs() < 0.0003, "Sirius lon={}", xx[0]);
+        assert!((xx[1] + 39.605_303).abs() < 0.0003, "Sirius lat={}", xx[1]);
+        let mag = swe_fixstar_mag("Sirius").unwrap();
+        assert!((mag + 1.46).abs() < 0.05, "Sirius magnitude={mag}");
+    }
+
+    #[test]
     fn fixstar_not_found() {
         assert!(swe_fixstar_ut("NonexistentStar", J2000).is_err());
         assert!(swe_fixstar_mag("NonexistentStar").is_err());
@@ -1139,5 +1165,31 @@ mod tests {
             (trop.armc - sid.armc).abs() < 1e-9,
             "ARMC must be identical in tropical and sidereal frames"
         );
+    }
+
+    #[test]
+    fn houses_ex_sidereal_whole_sign_cusps_sit_on_sign_boundaries() {
+        // Swiss converts the ascendant to the sidereal zodiac first and takes the
+        // sign boundaries from it, so sidereal Whole Sign cusps are multiples of
+        // 30 degrees (shifting the tropical boundaries left them ~ayanamsa off).
+        swe_set_sid_mode(SE_SIDM_LAHIRI, 0.0, 0.0);
+        let sid = swe_houses_ex(2461351.5, 28.6139, 77.2090, 'W', true).unwrap();
+        for (i, cusp) in sid.cusps.iter().enumerate() {
+            let sign = cusp / 30.0;
+            assert!(
+                (sign - sign.round()).abs() * 30.0 < 1e-9,
+                "cusp {} = {cusp} is not a sign boundary",
+                i + 1
+            );
+        }
+        let asc_sign_start = (sid.ascendant / 30.0).floor() * 30.0;
+        assert!((sid.cusps[0] - asc_sign_start).abs() < 1e-9);
+        // Equal houses keep the ascendant as cusp 1 in the sidereal frame.
+        let eq = swe_houses_ex(2461351.5, 28.6139, 77.2090, 'A', true).unwrap();
+        for i in 0..12 {
+            let expected = (eq.ascendant + 30.0 * i as f64).rem_euclid(360.0);
+            let d = (eq.cusps[i] - expected).rem_euclid(360.0);
+            assert!(d.min(360.0 - d) < 1e-9);
+        }
     }
 }

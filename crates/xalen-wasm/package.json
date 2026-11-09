@@ -1,6 +1,6 @@
 {
   "name": "xalen-ephemeris",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Pure-Rust astronomical ephemeris for astrology — Vedic charts, panchang, houses, dasha; runs in any browser or Node.js via WebAssembly",
   "license": "Apache-2.0",
   "author": "XALEN Technology Pvt Ltd",

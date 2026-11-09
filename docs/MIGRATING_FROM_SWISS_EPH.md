@@ -13,23 +13,23 @@ all language bindings.
 
 ## Quick start
 
-> **Availability:** the Rust crates are on crates.io at the **0.3.1** line (pin
-> `0.3` or depend on this repo for the newer 0.4.x+ work, which is not yet
-> published). The **Node.js (`npm install xalen`) and Python (`pip install xalen`)
-> packages are forthcoming — not yet published.** There is an unrelated `xalen`
-> package on PyPI (a separate XALEN SDK); it is **not** these ephemeris bindings.
-> Until the bindings publish, build them from source: `cd crates/xalen-python &&
-> maturin develop` and `cd crates/xalen-node && napi build --release`.
+> **Availability:** the Rust crates are on crates.io and the Python binding is on
+> PyPI as `xalen`. The browser / WASM build is on npm as `@xalen/wasm`. The
+> **native Node.js addon (`npm install @xalen/ephemeris`) is published with each
+> release from 0.8**; until then build it from source: `cd crates/xalen-node && napi build --release`.
 
 ```bash
-# Rust (crates.io 0.3.1 line; pin 0.3 or use a git/path dep for newer work)
+# Rust
 cargo add xalen-ephem xalen-ayanamsa xalen-houses xalen-time xalen-stars xalen-vedic
 
-# Node.js — FORTHCOMING (not yet on npm); build from source for now
-npm install xalen
-
-# Python — FORTHCOMING (not yet on PyPI as these bindings); build from source for now
+# Python
 pip install xalen
+
+# Browser / WASM
+npm install @xalen/wasm
+
+# Node.js native addon — on npm from the 0.8 release; build from source until then
+npm install @xalen/ephemeris
 ```
 
 ---
@@ -83,7 +83,7 @@ let latitude  = xx[1];
 ### XALEN (Node.js)
 
 ```js
-const xalen = require("xalen");
+const xalen = require("@xalen/ephemeris");
 
 // By name
 const lon = xalen.planetLongitude("Sun", jd);
@@ -126,6 +126,9 @@ lon = xalen.planet_longitude_by_name("Sun", jd)
 
 > **Note:** SE uses Pluto=9, MeanNode=10; XALEN uses MeanNode=9, Pluto=11.
 > The compat layer in `xalen_ephem::compat` handles this mapping automatically.
+>
+> Every binding ID, with its Swiss number, is in
+> [BINDING_IDS.md](BINDING_IDS.md#bodies).
 
 ---
 
@@ -240,6 +243,9 @@ result = xalen.houses(jd, lat, lon, system=2)  # 2=Placidus
 | `'S'` | Sripati | `Sripati` | 10 |
 | `'G'` | Gauquelin | `Gauquelin` | -- |
 
+The full house-system table, including the letters that have no binding ID, is in
+[BINDING_IDS.md](BINDING_IDS.md#house-systems).
+
 ---
 
 ## 4. Ayanamsa (sidereal mode)
@@ -319,7 +325,10 @@ to convert.
 | 27 | `SE_SIDM_TRUE_CITRA` | `TrueChitra` |
 | 28 | `SE_SIDM_TRUE_REVATI` | `TrueRevati` |
 
-Full table: all 47 SE IDs are mapped. Use `Ayanamsa::from_swiss_ephem_id(n)`.
+Full table: all 47 SE IDs are mapped; see
+[BINDING_IDS.md](BINDING_IDS.md#ayanamsas) for every SE ID and every binding
+ayanamsa ID. Note that binding ayanamsa ID 0 is Lahiri, while SE ID 0 is
+Fagan-Bradley.
 
 ---
 
@@ -385,7 +394,7 @@ const hits = xalen.fixedStarConjunctions(planetLon, 2.0, 2026.0);
 hits = xalen.fixed_star_conjunctions(planet_lon, orb=2.0, year=2026.0)
 ```
 
-XALEN ships a 108-star catalog with proper motion. No external data files needed.
+XALEN ships a 9,096-star catalog (the Yale Bright Star Catalogue, with IAU names) and a 108-star curated core, both with proper motion. No external data files needed. `find_by_name` accepts the IAU or traditional name (case-insensitive); `find_bright_by_hr` and `find_bright_by_hd` look a star up by its Bright Star or Henry Draper number.
 
 ---
 
@@ -420,11 +429,14 @@ let lunar = find_lunar_eclipses(&almanac, jd_start, jd_end);
 ```
 
 XALEN returns typed results (`SolarEclipse`, `LunarEclipse`) with classification
-(`Total`, `Annular`, `Partial`, `Penumbral`), the Besselian `gamma` (solar), and
-honestly-named proxies (`coverage_proxy` for solar, `shadow_depth_proxy` for
-lunar) rather than a true astronomical magnitude. Global eclipse type verified
-against the NASA Eclipse Catalog for 2024--2025. For a real per-observer
-magnitude / obscuration / contact times, use the local-circumstances layer.
+(`Total`, `Annular`, `Partial`, `Penumbral`), the Besselian `gamma` and an
+honestly-named `coverage_proxy` (solar), and for lunar eclipses the umbral and
+penumbral magnitudes and the six contacts (`contacts.penumbral_begin` through
+`contacts.penumbral_end`), the values `swe_lun_eclipse_when` returns in `tret`
+and `swe_lun_eclipse_how` in `attr[0..2]`. Lunar results are cross-validated
+against pyswisseph for 1900–2100 (see `docs/ACCURACY.md`). For a real
+per-observer solar magnitude / obscuration / contact times, use the
+local-circumstances layer.
 
 ---
 
@@ -556,7 +568,7 @@ file I/O, no `ephe_path`, and no `close()` call.
 | Cleanup | `swe_close()` required | None |
 | Ayanamsa | 47 systems (global `swe_set_sid_mode`) | 47 systems (per-call parameter) |
 | Houses | 23 systems | 23 systems |
-| Fixed stars | File-based catalog | 108-star embedded catalog |
+| Fixed stars | File-based catalog | 9,096-star embedded catalog (Bright Star Catalogue) + 108-star curated core |
 | Eclipses | Yes (comprehensive) | Yes (latitude-based, NASA-verified) |
 | Dasha | No | Vimshottari, Yogini, Ashtottari, Chara, Nadi |
 | Panchang | No | Tithi, Nakshatra, Yoga, Karana, Vara |

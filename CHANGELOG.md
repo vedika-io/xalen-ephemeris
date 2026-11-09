@@ -7,10 +7,342 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Security
-- Bump `pyo3` from 0.28 to **0.29** in the Python binding to clear
-  RUSTSEC-2026-0176 and RUSTSEC-2026-0177 (fixed in pyo3 ≥ 0.29.0). Migrated the
-  two deprecated `Bound::downcast` calls to `Bound::cast` (pyo3 0.29 API).
+**Thank you** to [Vidy Atreya Uppaluru](https://github.com/vauppaluru-ctrl)
+for reporting that Shadbala had only seven of the nine Kala Bala parts
+([#46](https://github.com/vedika-io/xalen-ephemeris/issues/46)).
+
+**Thank you** to [rephil9](https://github.com/rephil9) for asking for
+rise/set/transit and eclipse search in the Python `swe` shim
+([#47](https://github.com/vedika-io/xalen-ephemeris/issues/47)) and for an
+exception that `except swe.Error` can catch
+([#48](https://github.com/vedika-io/xalen-ephemeris/issues/48)).
+
+### Added
+- **Parans in `xalen-maps` and `xalen map --parans`.** `parans(&map,
+  &ParanOptions)` returns every crossing of one body's line with another's (a
+  body rising or setting while another culminates or anti-culminates, or two
+  bodies on the horizon together; Brady), ordered by latitude, with a `skipped`
+  list of line pairs that do not cross in the latitude range and why.
+  `parans_near` gives those within an orb of one latitude. Crossings are solved
+  in closed form from the right ascensions, declinations and sidereal time, and
+  are checked against the topocentric altitude and hour angle in `xalen-ephem`
+  to 0.01 degrees (the Moon's horizon crossings to its parallax, about one
+  degree, since the map is geocentric). `xalen map --parans` prints them (a `parans` array in
+  `--json`, `PARAN` points in `--geojson`), and `--parans --lat <deg> [--orb
+  <deg>]` lists the parans within the orb of that latitude (`--orb` needs
+  `--lat`).
+- **Python: rise/set/transit, eclipse search and `swe.Error` in `xalen.swe`**
+  ([#47](https://github.com/vedika-io/xalen-ephemeris/issues/47),
+  [#48](https://github.com/vedika-io/xalen-ephemeris/issues/48)).
+  `rise_trans`, `rise_trans_true_hor`, `sol_eclipse_when_glob`,
+  `sol_eclipse_when_loc`, `lun_eclipse_when`, `lun_eclipse_when_loc` and
+  `lun_eclipse_how` with pyswisseph 2.10's signatures, tuple shapes, return
+  codes and `retflag` bits, the `CALC_*`, `BIT_*` and `ECL_*` constants
+  (`ECL_NUT` included, usable as `calc_ut(jd, ECL_NUT)`), and `FLG_MOSEPH` /
+  `FLG_JPLEPH`. `xalen.swe.Error` (a `RuntimeError`) is raised for every
+  calculation failure; `TypeError`/`ValueError` only for bad arguments. The
+  slots the engines do not compute (global solar contact times, the Sun's
+  azimuth and apparent altitude, Saros numbers) are listed in the binding
+  README. In `xalen-ephem`: `rise_set::next_horizon_crossing` with
+  `HorizonCrossing` (disc point, refraction from pressure and temperature,
+  horizon height, fixed disc size, solar twilight, geocentric no-latitude
+  rising), `rise_set::next_transit` (upper and lower),
+  `rise_set::is_above_horizon`, `rise_set::standard_pressure_hpa`,
+  `rise_set::horizon_dip_deg`, `rise_set::refraction_from_true_deg`,
+  `rise_set::apparent_altitude_deg`,
+  `Almanac::geocentric_ecliptic_altitude_deg`,
+  `Almanac::topocentric_azimuth_altitude_deg`,
+  `LocalCircumstances::diameter_ratio`, `eclipse::lunar_shadow_state`,
+  `SolarEclipse::is_central`, `compat::SE_ECL_NUT` and a public
+  `compat::se_planet_to_body`, `compat::se_hsys_to_system` and
+  `compat::SEFLG_UNSUPPORTED_MASK`.
+- **Ayana Bala and Yuddha Bala in `Shadbala::compute_full`**, which now returns
+  all nine Kala Bala parts (`KalaBala::ayana_bala`, `KalaBala::yuddha_bala`,
+  both included in `KalaBala::total` and so in the Shadbala total). Ayana Bala
+  is `(24 + k) * 60 / 48` virupas from the declination (BPHS Ch. 27), with `k`
+  the declination for the Sun, Mars, Jupiter and Venus, minus the declination
+  for the Moon and Saturn, and its absolute value for Mercury; `k` is clamped to
+  24 degrees and the Sun's result is doubled. Yuddha Bala applies to Mars,
+  Mercury, Jupiter, Venus and Saturn within one degree of each other: the
+  northern planet (greater declination) wins, and the winner gains, and the
+  loser loses, the difference of their Sthana, Dig, Nathonnatha, Paksha,
+  Tribhaga and Hora Bala divided by the difference of their disc diameters
+  (Sripati). The convention and the literal-BPHS alternative that is not
+  implemented are written out in the rustdoc of `compute_full`.
+  `shadbala::kranti_deg` gives the classical declination from a tropical
+  longitude for callers without ecliptic latitudes.
+- **`xalen-cli`** crate with the `xalen` command line (installed with
+  `cargo install xalen-cli`). Nine commands over the library, each with a
+  readable table and `--json`: `positions`, `chart`, `panchang`, `dasha`,
+  `star`, `eclipses`, `rise-set`, `aspects` and `convert`. Dates are ISO-8601
+  (`--date`) or a Julian Day (`--jd`); places are `--lat`/`--lon` or a city
+  from the built-in table (`--place`). Bad input exits 2 with a one-line
+  message, computation errors exit 1. The tool contains no astronomy of its
+  own and works offline.
+- **`xalen-relationship`** crate: `NatalChart` (tropical geocentric bodies plus
+  houses on the true equinox of date, with `relocated`, `points` and
+  `to_chart_data`), `synastry` with `inter_aspects` and `house_overlay`
+  (aspect grid between two charts and house overlays), `composite_chart` with
+  the Ascendant either derived from the midpoint Midheaven (default) or taken as
+  the midpoint of the Ascendants, and `davison_chart` with arithmetic or
+  great-circle midpoint in space. Methods after Hand (1975, 1981) and Davison
+  (1977).
+- **`xalen-maps`** crate: astrocartography after Lewis (1976). `astro_map`
+  returns MC, IC, Ascendant and Descendant lines and the zenith point of each
+  body, with circumpolar breaks, exact limit-latitude vertices and antimeridian
+  splitting; `mc_longitude_deg`, `ic_longitude_deg`, `horizon_half_arc` and
+  `horizon_lines` are public. Geocentric only; parans are not included yet.
+- **`xalen_houses::compute_houses_true`** computes houses on the true equinox of
+  date (apparent sidereal time and true obliquity), the frame of the apparent
+  planet positions and of `compat::swe_houses`. `compute_houses` is unchanged.
+- The umbrella crate re-exports the new crates as `relationship` and `maps`.
+- **`xalen` commands for the new crates**: `map` (astrocartography lines as a
+  table, `--json` or a GeoJSON FeatureCollection with `--geojson`), `synastry`
+  (aspect grid and house overlays of two births), `composite`, `davison` and
+  `relocate`. Two births are given as `--a-date`/`--a-place` (or `--a-lat`
+  `--a-lon`) and `--b-...`. `composite`, `davison` and `relocate` take
+  `--sidereal`, which only converts the printed longitudes, signs and houses to
+  the chosen ayanamsa; `synastry` and `map` are tropical. No math was added: the
+  commands call `xalen-maps` and `xalen-relationship`.
+- **Node.js package `@xalen/ephemeris`**: the `xalen-node` addon is now packaged
+  for npm with prebuilt binaries for Linux x64 and arm64 (glibc 2.17 or newer)
+  and macOS arm64 and x64, as one npm package per platform plus a loader that
+  names them as optional dependencies. `scripts/build-release-artifacts.sh node`
+  (also part of `all`) builds, checks and packs the five tarballs. The package is
+  published with each release from 0.8.
+- **Node.js package `@xalen/ephemeris`: prebuilt Windows x64 addon** from 0.8,
+  as the platform package `@xalen/ephemeris-win32-x64-msvc`
+  (`x86_64-pc-windows-msvc`). `scripts/build-release-artifacts.sh node` now
+  builds it on the same Linux host with cargo-xwin, which downloads the
+  Microsoft CRT and Windows SDK libraries for the link. The addon is linked
+  with a static C runtime, so it needs no Visual C++ Redistributable. No
+  Microsoft file is committed or packed, but the addon contains statically
+  linked Microsoft C-runtime code, as every Rust binary for this target does,
+  redistributed under the distributable-code terms of the Visual Studio
+  licence. Since no Windows machine loads it during the
+  build, the script checks it is a PE32+ x86-64 DLL under 20 MB that exports
+  `napi_register_module_v1` and imports only Windows system DLLs.
+
+### Changed (breaking)
+- Python `xalen.swe`: calculation failures that raised `ValueError` (an unknown
+  body number or star name, a failed `houses`/`houses_ex` calculation, a
+  failed `get_ayanamsa_ut`/`get_ayanamsa_ex_ut` calculation, an ephemeris
+  error) now raise `xalen.swe.Error`, a `RuntimeError`. Code that caught
+  `ValueError` for them should catch `swe.Error`; unsupported `calc_ut` flags
+  and bad house arguments (latitude outside ±90°, longitude outside
+  -180°..360°, an unknown house letter) still raise `ValueError`, and a `hsys`
+  of the wrong type raises `TypeError`.
+- `xalen_ephem::local_eclipse::LocalCircumstances` has a new field,
+  `diameter_ratio`, so code that builds it by hand needs it.
+- `xalen_vedic::shadbala::PlanetPosition` has two new fields, `declination`
+  (degrees, north positive) and `house` (1 to 12), and `KalaBala` has two new
+  fields, so code that builds either struct by hand needs them. To migrate, set
+  `declination` from the planet's true declination or from
+  `kranti_deg(tropical_longitude, obliquity_deg)`, and `house` to the house the
+  planet occupies, the same value you pass to `compute_full`. Totals of
+  `compute_full` change by the added Ayana and Yuddha Bala.
+- `xalen_vedic::shadbala::ShadBalaInput` has a new field `ayanamsa_deg`: the
+  ayanamsa in degrees that was subtracted to make the sidereal longitudes in
+  the input (0.0 if they are already tropical). Cheshta Bala needs it because
+  its mean longitudes are tropical. To migrate, set it to the value you used
+  to convert, for example `Ayanamsa::Lahiri.compute_deg(jd)`. Cheshta Bala,
+  and so the Shadbala total, changes for every planet (see *Fixed*), and the
+  `speed` argument of `compute_full` is no longer used.
+
+### Changed
+- **CI no longer runs on GitHub Actions; `scripts/gate.sh` is the complete
+  gate.** It runs format, clippy, tests, docs, the release-configuration tests,
+  the attribution and commercial-clean policy checks, `cargo audit`, the DE440
+  cross-validation, the WASM, Python and Node binding builds, and the accuracy
+  harness in `validation/` (2000 charts by default, `--harness-n` or
+  `GATE_HARNESS_N` for more, `pyswisseph` oracle), as named stages that
+  `--skip` and `--quick` select; `--strict` makes a skipped stage fail. The
+  maintainers run it with `--strict` and post the result as the `ci/gate`
+  commit status. No longer produced automatically: test runs on macOS and
+  Windows, the Windows Python wheel, and the attribution check of each pull
+  request's title and body (now `--pr-text`, run by the maintainers). The
+  release procedure is in `docs/RELEASING.md`. `xalen-validation` now also
+  prints the 99th-percentile error per quantity
+  ([#17](https://github.com/vedika-io/xalen-ephemeris/issues/17)).
+- The README is now a product page: the project logo, and a chart wheel,
+  an astrocartography map and a terminal run drawn from real `xalen` output,
+  and a chart of the docs/ACCURACY.md figures.
+  `scripts/readme-figures/generate.py` writes the figures into `docs/assets/`
+  (light and dark variants). The page has get-started snippets for Rust,
+  Python, Node.js, WASM and the CLI. The crate map moved to `docs/CRATES.md`
+  and the full feature list and accuracy-by-theory table to `docs/FEATURES.md`.
+- SECURITY.md: disclosure timeline, scope and supply-chain sections; SUPPORT.md added; CODEOWNERS and issue forms refreshed.
+
+### Fixed
+- **Validation verdict integrity:** the accuracy runner now exits 2 for empty,
+  malformed or incomplete oracle input, read errors, unsupported quantities,
+  invalid thresholds and computation failures. A declared `_meta.n` must match
+  the chart count, preventing a truncated stream from reporting PASS. Valid
+  comparisons retain exit 0/1 and the existing numerical gates. Expected epoch
+  coverage and house-latitude exclusions are reported; a body with no
+  comparable samples cannot pass.
+- **Drik Bala in `Shadbala::compute_full`** used graded aspects (15, 30, 45 or
+  60 virupas by the nearest house), so it jumped at sign boundaries and did not
+  follow BPHS. It now uses the Sphuta Drishti curve of BPHS Ch. 26, exposed as
+  `shadbala::sphuta_drishti_deg`: 0 up to 30 degrees, rising to 15 at 60, 45 at
+  90, falling to 30 at 120 and 0 at 150, rising to the full 60 at 180, then
+  falling evenly to 0 at 300. Saturn adds 45 over 60 to 90 and 270 to 300
+  degrees, Jupiter 30 over 120 to 150 and 240 to 270, and Mars 15 over 90 to 120
+  and 210 to 240, so each has a full 60 at its special aspect (B.V. Raman's
+  reading in *Graha and Bhava Balas*; checked against his worked example and
+  against PyJHora). The special aspects of Mars, Jupiter and Saturn are added as
+  constants over one sign, so those three planets step at the sign edges
+  (Raman's reading). Drik Bala stays the sum of benefic minus malefic aspect
+  values divided by 4, with the same benefic and malefic rules. Drik Bala and
+  the Shadbala total change for most charts. Refs
+  [#46](https://github.com/vedika-io/xalen-ephemeris/issues/46).
+- **Cheshta Bala in `Shadbala::compute_full`** was a placeholder (a flat 30 for
+  the Sun and Moon and 60, 30 or 15 for the others from the direction of
+  motion). It now follows BPHS Ch. 27 (Santhanam; B.V. Raman, *Graha and Bhava
+  Balas*): the Sun's Cheshta Bala is its Ayana Bala, the Moon's is its Paksha
+  Bala, and Mars, Mercury, Jupiter, Venus and Saturn get the Cheshta Kendra
+  divided by 3, 0 to 60 virupas. The Kendra is the Seeghrocca minus the mean of
+  the Madhya and the true longitude; the Seeghrocca is the Sun's mean longitude
+  for Mars, Jupiter and Saturn and the planet's own mean heliocentric longitude
+  for Mercury and Venus, with the Madhya the other one. The mean longitudes
+  are the Meeus polynomials (mean equinox of date), exposed as
+  `shadbala::mean_sun_longitude_deg` and
+  `shadbala::mean_heliocentric_longitude_deg`, and checked against VSOP87D in
+  the test suite. The deprecated `Shadbala::compute` keeps its old rule. Reported
+  in [#46](https://github.com/vedika-io/xalen-ephemeris/issues/46).
+- **Sidereal Whole Sign houses** (`HouseCusps::to_sidereal`,
+  `compute_houses_sidereal`, `compat::swe_houses_ex` with the sidereal flag)
+  shifted the tropical sign boundaries by the ayanamsa, so the cusps were not
+  on sign boundaries of the sidereal zodiac and planets near the ascendant
+  could land in the wrong house. The cusps are now built from the sidereal
+  ascendant, as Swiss Ephemeris does.
+- **`npm test` in `crates/xalen-node`** passed the test directory to
+  `node --test`, which fails on Node 24. It now names the two test files, which
+  works on Node 20 and 24, as proposed by Serlin2175 in #45.
+
+### Documentation
+- **`docs/BINDING_IDS.md`** lists every numeric ID the C, WebAssembly, Node and
+  Python bindings take (bodies, ayanamsas, house systems, WebAssembly
+  divisional charts) next to the Swiss Ephemeris number where one exists, plus
+  the `xalen.swe` Swiss numbers, flags and calendar constants and the C status
+  codes. The tables are generated from the Rust sources by
+  `tests/binding_ids.rs`, which fails with a diff when the file and the
+  sources disagree; `scripts/regen-binding-ids.sh` rewrites them. Linked from
+  the README, each binding README and the migration guides
+  ([#16](https://github.com/vedika-io/xalen-ephemeris/issues/16)).
+- **Issue-to-pull-request workflow in `CONTRIBUTING.md`**: filing an issue,
+  branch names, the `type(scope): subject` commit style with `Refs #N`, one
+  pull request per change with `Closes #N`, the checks a pull request must
+  pass, the contributor agreement for outside contributions, and squash
+  merging. The pull request template is shorter and asks for the same things
+  ([#15](https://github.com/vedika-io/xalen-ephemeris/issues/15)).
+
+Thanks to Semak12345: both documents were added as proposed by
+Semak12345 in #42 and #43.
+
+## [0.7.0] - 2026-11-07
+
+The first release since 0.6.0. It carries three fixes sent in by outside
+contributors, replaces every piece of compiled-in data that carried a licence
+condition with in-house data built from open sources, and is published to
+crates.io, PyPI and npm.
+
+**Thank you** to [Kunal Roy Choudhury](https://github.com/kunalgoesbyken) for
+the lunar and solar eclipse fixes
+([#58](https://github.com/vedika-io/xalen-ephemeris/pull/58),
+[#60](https://github.com/vedika-io/xalen-ephemeris/pull/60)) and to
+[Vidy Atreya Uppaluru](https://github.com/vauppaluru-ctrl) for the D24 fix
+([#44](https://github.com/vedika-io/xalen-ephemeris/pull/44)).
+
+**Upgrading from 0.6.0.** The star list and the ΔT uncertainty table in 0.6.0
+came from sources with licence conditions that do not fit Apache-2.0 (see
+*Changed*). 0.7.0 is the first release whose compiled-in data is free of them.
+Breaking changes are listed under *Removed (breaking)*; in addition
+`LunarEclipse` has three new public fields, so code that builds the struct by
+hand needs them.
+
+### Fixed
+- **Lunar eclipses** are found and classified from Earth's umbral and penumbral
+  shadow cones (Danjon) instead of thresholds on the Moon's latitude at Full
+  Moon. Over 1900–2100 the threshold test gave the wrong type for 60 of 457
+  eclipses, reported 19 that do not happen (e.g. 2005-03-25) and missed
+  1958-04-04; it now matches pyswisseph for all 457. `jd_maximum` is greatest
+  eclipse rather than the Full Moon instant (previously ~9 min off).
+  `LunarEclipse` gains `umbral_magnitude`, `penumbral_magnitude` and
+  `contacts` (P1, U1, U2, U3, U4, P4).
+  ([#57](https://github.com/vedika-io/xalen-ephemeris/issues/57),
+  [#58](https://github.com/vedika-io/xalen-ephemeris/pull/58))
+- **Solar eclipses** whose central line misses the Earth while the umbra or
+  antumbra still touches it (non-central total and annular eclipses) were
+  reported as partial. Eight eclipses of 1901–2100 that NASA lists as total or
+  annular are now classified correctly, with a cross-check test against NASA's
+  list. ([#59](https://github.com/vedika-io/xalen-ephemeris/issues/59),
+  [#60](https://github.com/vedika-io/xalen-ephemeris/pull/60))
+- **D24 (Chaturvimsamsa)** put planets in even signs into the wrong sign. The
+  count now starts from Leo for odd signs and from Cancer for even signs, as in
+  the classical rule. ([#44](https://github.com/vedika-io/xalen-ephemeris/pull/44))
+- **Western wheel chart** rendered the zodiac ring and houses clockwise — the
+  reverse of the standard Western natal-wheel orientation. Longitude now maps to
+  screen angle counter-clockwise (`180 − asc + lon`) so the Ascendant is on the
+  left and houses advance correctly. North/South Indian charts unaffected.
+  ([#35](https://github.com/vedika-io/xalen-ephemeris/issues/35))
+
+### Changed
+- **True Chitra ayanamsa** now reads the Spica anchor from `xalen-star-anchors`
+  instead of `xalen_stars::find_by_name`, so the ayanamsa no longer depends on
+  `xalen-stars`. The anchor is now derived from the IAU-CSN position and the
+  Bright Star Catalogue proper motion (it equals the new list's Spica row). The
+  anchor moves by −0.004″ in longitude and +0.011″ in latitude at J2000; its
+  latitude proper motion changes from −45.228 to −41.208 mas/yr (−8.0″ in
+  latitude at year 0, +4.0″ at year 3000). The True Chitra ayanamsa itself shifts
+  by −0.004″ at J2000, +0.012″ at year 0 and +0.013″ at year 3000, and still
+  matches Swiss within the unchanged tolerances.
+- **The default star list is now the in-house Bright Star Catalogue list of
+  9,096 stars** (was the 8,870-star Hipparcos-derived list). The Hipparcos data
+  is CC BY-NC, so it could not be published; the new list is built from the Yale
+  Bright Star Catalogue and the IAU Catalog of Star Names, so every published
+  crate is free of non-commercial star data by default and keeps a full-size
+  list. `find_by_name`, `find_conjunctions*`, `nakshatra_yogatara`,
+  `expanded_star_count` and `swe_fixstar_ut` / `swe_fixstar_mag` read it.
+  Measured against live Swiss `fixstar2` at J2000: the 43 IAU-named oracle stars
+  are within 0.245″ (median 0.026″). Stars without an IAU name use the Bright
+  Star Catalogue position (RA to 0.1 s, Dec to 1″): against the Hipparcos-derived
+  positions the median separation is 0.64″, 95% are within 2.3″. Seven stars at
+  seven epochs from 1000 to 3000 differ from live Swiss by up to 20.6″ (median
+  0.72″; the Hipparcos-derived data reached about 4″), because the Bright Star
+  Catalogue proper motions are the older FK5 values.
+- Six Swiss reference rows of the star tests (Zuben Eschamali, Zuben Elgenubi,
+  Lambda Orionis, Hyadum II, Bharani 41, Al Jabhah) were found to be 1.3″ to 27″
+  from live Swiss output and were re-recorded from it.
+- `swe_fixstar_ut` and `swe_fixstar_mag` always work; there is no longer a
+  "feature disabled" error path.
+- `xalen-western`'s star table is no longer feature-gated. It is regenerated
+  from the Bright Star Catalogue and the IAU-CSN and now has **503** entries (was
+  506). Barnard's Star, Proxima Centauri, Wolf 359 and Omega Centauri, which are
+  not in the Bright Star Catalogue, are sourced from the Gliese & Jahreiss CNS3
+  catalogue and Harris (1996); seven entries are second components or carry
+  Latin-letter designations and point at their Bright Star Catalogue record.
+  Three entries (A Velorum, Q Velorum, Zeta Puppis2) could not be identified
+  from the allowed sources and were removed instead of keeping unsourced
+  values. About 150 entries had a position more than 5′ from the star they name;
+  those are corrected.
+- `xalen-stars` README corrected to state the catalogue **data** in
+  `xalen-stars-hip-data` is CC BY-NC (not Apache-2.0).
+- **ΔT uncertainty envelope** (`delta_t_with_uncertainty`, `to_tt_with_sigma`,
+  `jd_tt_with_sigma`) was rebuilt from public-domain sources only: NASA's
+  "Uncertainty in Delta T" page (Morrison & Stephenson parabola, Huber bound)
+  and the error column of USNO's `historic_deltat.data`, with a 0.11 s floor.
+  It replaces a lookup table taken from a source whose licence is not compatible
+  with Apache-2.0; upgrade from 0.6.0 if you need a clean licence chain. The ΔT
+  values and the SMH2016 spline are unchanged. Reported σ in seconds, old → new:
+  −2000 1080 → 3732, −720 180 → 516, AD 0 90 → 265, 1000 15 → 54, 1700 5 → 12,
+  1800 0.5 → 3.5, 1900 0.1 → 0.22, 2000 0.1 → 0.11. Years after 2016 are
+  unchanged.
+- `NOTICE` now carries the SOFA Software License statement for the IAU 2000B
+  nutation routine, and `CREDITS.md` gains a contributors section.
+- README, the binding READMEs and the migration guides state where each
+  package is published (crates.io, PyPI `xalen`, npm `@xalen/wasm`); they had
+  said the packages were not published.
 
 ### Added
 - **`xalen-cloud`** crate — a local-first interpretation shim. The chart is
@@ -23,45 +355,66 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   remote endpoints are validated (`from_calendar` and `RemoteInterpreter::new`
   return `Result`; bearer tokens are refused over plain `http://`).
 - **`xalen-stars-hip-data`** crate — the Hipparcos-derived fixed-star catalogue
-  (8,870 stars, CDS I/239, © ESA 1997) is now isolated in its own package,
-  licensed **CC BY-NC 3.0 IGO** (non-commercial) with a `LICENSE` file and
-  `publish = false`. It is consumed by `xalen-stars` only via the optional,
-  default-on `hip-catalog` feature.
-- **`xalen-star-anchors`** crate (Apache-2.0) — commercial-OK single-star
-  reference anchors (Spica) for star-anchored sidereal frames, so the ayanamsa
-  no longer depends on the non-commercial catalogue.
-- **`hip-catalog` cargo feature** (default-on) across `xalen-stars`,
-  `xalen-western`, the bindings (`xalen-ffi/-node/-python/-wasm`), the umbrella
-  crate and `xalen-validation`. Commercial builds use `--no-default-features` to
-  link **none** of the non-commercial fixed-star data.
-- **`commercial-clean` CI workflow** asserting no NC data in `--no-default-features`
-  builds (`cargo tree` absence + `nm`/`strings` symbol scan + parity tests), and a
-  bit-exact Spica anchor regression test.
+  (8,870 stars, CDS I/239, © ESA 1997) lives in its own package, licensed
+  **CC BY-NC 3.0 IGO** (non-commercial) with a `LICENSE` file and
+  `publish = false`. It is an optional, unpublished add-on that depends on
+  `xalen-stars`; no published crate depends on it.
+- **`xalen-star-anchors`** crate (Apache-2.0) — single-star reference anchors
+  (Spica) for star-anchored sidereal frames, so the ayanamsa does not depend on
+  a star list.
+- **`commercial-clean` CI workflow** asserting that no published crate, built
+  with default features, depends on `xalen-stars-hip-data` (`cargo tree`
+  absence + `nm`/`strings` symbol scan), and a bit-exact Spica anchor regression
+  test.
+- **`BrightStar`, `BRIGHT_CATALOG`, `BRIGHT_STAR_COUNT`, `find_bright_by_hr`,
+  `find_bright_by_hd`, `find_bright_by_name`** in `xalen-stars` — the in-house
+  fixed-star list: all 9,096 stars of the Yale Bright Star Catalogue, 5th rev.
+  ed. (Hoffleit & Warren 1991, CDS V/50), with the proper names, constellations
+  and 6-decimal J2000 positions of the 338 IAU-named stars taken from the IAU
+  Catalog of Star Names (IAU-CSN, CC-BY). `BrightStar` carries the
+  epoch-propagation methods (`longitude_at_epoch`, `latitude_at_epoch`,
+  `ecliptic_at_epoch`, `longitude_at_jd`, `to_fixed_star`) as inherent methods.
+  Generated by `tools/gen-star-catalog/gen_bright_catalog.py`; the table is
+  behind the default-on `bright-catalog` feature, which is a size switch only.
+- `xalen-stars` `precessed_ecliptic_of_date` is now public.
+- `tools/gen-star-catalog/regen_western_stars.py` rewrites the numeric columns
+  of the `xalen-western` star table from the same two sources.
+- **Python wheels for Linux and Intel Macs.** PyPI now carries `cp38-abi3`
+  wheels for Linux x86_64 and aarch64 (manylinux2014) and macOS x86_64, next to
+  macOS arm64; 0.6.0 had a macOS arm64 wheel only. Other platforms still build
+  from the sdist.
+- `scripts/build-release-artifacts.sh` builds the Python wheels, the sdist and
+  the `@xalen/wasm` package on one Linux host and smoke-tests them.
 
-### Changed
-- **True Chitra ayanamsa** now reads the Spica anchor from `xalen-star-anchors`
-  instead of `xalen_stars::find_by_name`; output is byte-identical and remains
-  Swiss-validated, but the ayanamsa no longer depends on `xalen-stars`.
-- `xalen-stars`' `RECONCILED_CATALOG` falls back to the curated Apache catalogue
-  when `hip-catalog` is disabled; `swe_fixstar_*` return an explicit
-  "feature disabled" error in that configuration.
-- `xalen-western`'s 506-star fixed-star module is gated behind `hip-catalog`.
-- `xalen-stars` README corrected to state the catalogue **data** is CC BY-NC
-  (not Apache-2.0).
+### Removed (breaking)
+- The **`hip-catalog` cargo feature** is removed from `xalen-stars`,
+  `xalen-ephem`, `xalen-western`, `xalen-ffi`, `xalen-node`, `xalen-python`,
+  `xalen-wasm`, `xalen-validation` and the umbrella crate. `xalen-stars` now has
+  the default-on `bright-catalog` feature instead; the other crates have no star
+  feature and use `xalen-stars` with its defaults.
+- `xalen-stars` no longer exports `GENERATED_CATALOG`, `GENERATED_STAR_COUNT`,
+  `GeneratedStar`, `GeneratedStarExt`, `find_generated_by_hip` and
+  `find_generated_by_name`. They moved to the unpublished `xalen-stars-hip-data`
+  crate, which now depends on `xalen-stars` (together with
+  `find_conjunctions_expanded` for Hipparcos stars). The `xalen-stars`
+  replacements are `BRIGHT_CATALOG`, `BRIGHT_STAR_COUNT`, `BrightStar` and
+  `find_bright_by_hr` / `find_bright_by_hd` / `find_bright_by_name`.
+- `xalen_stars::find_conjunctions_expanded` returns `(&BrightStar, f64)` instead
+  of `(&GeneratedStar, f64)`.
+- The `xalen-stars` dependency on `xalen-stars-hip-data` is removed.
 
-### Fixed
-- **Western wheel chart** rendered the zodiac ring and houses clockwise — the
-  reverse of the standard Western natal-wheel orientation. Longitude now maps to
-  screen angle counter-clockwise (`180 − asc + lon`) so the Ascendant is on the
-  left and houses advance correctly. North/South Indian charts unaffected.
-  ([#35](https://github.com/vedika-io/xalen-ephemeris/issues/35))
+### Security
+- Bump `pyo3` from 0.28 to **0.29** in the Python binding to clear
+  RUSTSEC-2026-0176 and RUSTSEC-2026-0177 (fixed in pyo3 ≥ 0.29.0). Migrated the
+  two deprecated `Bound::downcast` calls to `Bound::cast` (pyo3 0.29 API).
 
 ## [0.6.0] - 2026-06-02
 
 This entry consolidates Wave B (accuracy / breadth) and Wave C (bindings parity +
 new computational surfaces) on top of the 0.4.3 licensing-hygiene cleanup. All
-figures below are reproducible from this repo's test suite; nothing here is
-published to crates.io / PyPI / npm yet (publishing is gated — see *Distribution*).
+figures below are reproducible from this repo's test suite. (0.6.0 was published
+to crates.io, PyPI and npm on 2 June 2026; the *Distribution* note below
+describes the state before that.)
 
 ### Added
 

@@ -22,6 +22,9 @@ members = [
     "crates/xalen-iching",
     "crates/xalen-chart",
     "crates/xalen-cloud",
+    "crates/xalen-cli",
+    "crates/xalen-relationship",
+    "crates/xalen-maps",
     "validation",
 ]
 # xalen-python is a PyO3 extension-module — its cdylib needs Python at link
@@ -36,10 +39,10 @@ default-members = [
     "crates/xalen-houses",
     "crates/xalen-ayanamsa",
     "crates/xalen-stars",
-    # xalen-stars-hip-data is intentionally NOT a default-member: the NC data
-    # crate must not be compiled by a bare `cargo build` (esp.
-    # `--no-default-features`). It stays a `members` entry and is built on demand
-    # as a dependency of xalen-stars when the `hip-catalog` feature is enabled.
+    # xalen-stars-hip-data (optional, unpublished, non-commercial Hipparcos
+    # add-on) is intentionally NOT a default-member. It stays a `members` entry
+    # so the workspace test run still covers it; no published crate depends on
+    # it.
     "crates/xalen-star-anchors",
     "crates/xalen-vedic",
     "crates/xalen-western",
@@ -53,11 +56,14 @@ default-members = [
     "crates/xalen-iching",
     "crates/xalen-chart",
     "crates/xalen-cloud",
+    "crates/xalen-cli",
+    "crates/xalen-relationship",
+    "crates/xalen-maps",
     "validation",
 ]
 
 [workspace.package]
-version = "0.6.0"
+version = "0.7.0"
 edition = "2024"
 rust-version = "1.85"
 license = "Apache-2.0"
@@ -96,38 +102,31 @@ categories.workspace = true
 # workspace-root crate, so it would otherwise package every root file).
 exclude = [
     "playground/",
+    ".github/",
+    ".githooks/",
+    "scripts/",
+    "tools/",
+    # Reads the binding crates' sources, which are not in this package.
+    "tests/binding_ids.rs",
 ]
 
 [dependencies]
-xalen-time = { path = "crates/xalen-time", version = "0.6.0" }
-xalen-coords = { path = "crates/xalen-coords", version = "0.6.0" }
-xalen-ephem = { path = "crates/xalen-ephem", version = "0.6.0", default-features = false }
-xalen-houses = { path = "crates/xalen-houses", version = "0.6.0" }
-xalen-ayanamsa = { path = "crates/xalen-ayanamsa", version = "0.6.0" }
-xalen-vedic = { path = "crates/xalen-vedic", version = "0.6.0" }
-xalen-western = { path = "crates/xalen-western", version = "0.6.0", default-features = false }
-xalen-stars = { path = "crates/xalen-stars", version = "0.6.0", default-features = false }
-xalen-chinese = { path = "crates/xalen-chinese", version = "0.6.0" }
-xalen-numerology = { path = "crates/xalen-numerology", version = "0.6.0" }
-xalen-lalkitab = { path = "crates/xalen-lalkitab", version = "0.6.0" }
-xalen-iching = { path = "crates/xalen-iching", version = "0.6.0" }
-xalen-world = { path = "crates/xalen-world", version = "0.6.0" }
-xalen-chart = { path = "crates/xalen-chart", version = "0.6.0" }
-
-[features]
-# Default-on passthrough for the non-commercial Hipparcos fixed-star catalog, so
-# even the umbrella crate links none of it under `--no-default-features`.
-default = ["hip-catalog"]
-hip-catalog = [
-    "xalen-stars/hip-catalog",
-    "xalen-western/hip-catalog",
-    "xalen-ephem/hip-catalog",
-]
-
-# The fixed-star example reads the gated catalog, so it only builds with the data.
-[[example]]
-name = "fixed_stars"
-required-features = ["hip-catalog"]
+xalen-time = { path = "crates/xalen-time", version = "0.7.0" }
+xalen-coords = { path = "crates/xalen-coords", version = "0.7.0" }
+xalen-ephem = { path = "crates/xalen-ephem", version = "0.7.0" }
+xalen-houses = { path = "crates/xalen-houses", version = "0.7.0" }
+xalen-ayanamsa = { path = "crates/xalen-ayanamsa", version = "0.7.0" }
+xalen-vedic = { path = "crates/xalen-vedic", version = "0.7.0" }
+xalen-western = { path = "crates/xalen-western", version = "0.7.0" }
+xalen-stars = { path = "crates/xalen-stars", version = "0.7.0" }
+xalen-chinese = { path = "crates/xalen-chinese", version = "0.7.0" }
+xalen-numerology = { path = "crates/xalen-numerology", version = "0.7.0" }
+xalen-lalkitab = { path = "crates/xalen-lalkitab", version = "0.7.0" }
+xalen-iching = { path = "crates/xalen-iching", version = "0.7.0" }
+xalen-world = { path = "crates/xalen-world", version = "0.7.0" }
+xalen-chart = { path = "crates/xalen-chart", version = "0.7.0" }
+xalen-relationship = { path = "crates/xalen-relationship", version = "0.7.0" }
+xalen-maps = { path = "crates/xalen-maps", version = "0.7.0" }
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }

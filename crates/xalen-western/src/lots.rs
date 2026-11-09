@@ -982,7 +982,7 @@ mod tests {
         for sun in (0..360).step_by(30) {
             for moon in (0..360).step_by(30) {
                 let lot = part_of_fortune(100.0, sun as f64, moon as f64, true);
-                assert!(lot >= 0.0 && lot < 360.0, "Lot out of range: {lot}");
+                assert!((0.0..360.0).contains(&lot), "Lot out of range: {lot}");
             }
         }
     }
@@ -1022,7 +1022,7 @@ mod tests {
         for (i, lot) in ALL_LOTS.iter().enumerate() {
             let deg = compute_lot_from_positions(lot, &pos, true);
             assert!(
-                deg >= 0.0 && deg < 360.0,
+                (0.0..360.0).contains(&deg),
                 "Lot {} ({}) out of range: {deg}",
                 i,
                 lot.name
@@ -1030,7 +1030,7 @@ mod tests {
             if lot.night.is_some() {
                 let deg_n = compute_lot_from_positions(lot, &pos, false);
                 assert!(
-                    deg_n >= 0.0 && deg_n < 360.0,
+                    (0.0..360.0).contains(&deg_n),
                     "Lot {} ({}) night out of range: {deg_n}",
                     i,
                     lot.name

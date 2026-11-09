@@ -1,22 +1,61 @@
-# XALEN Ephemeris
+<h1 align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/xalen-ephemeris-logo-dark.svg">
+    <img src="docs/assets/xalen-ephemeris-logo.svg" width="280" alt="XALEN Ephemeris">
+  </picture>
+</h1>
 
-**A pure-Rust astronomical ephemeris for astrology — JPL-class planet accuracy, zero `unsafe` core, Apache-2.0.**
+<p align="center">
+  <b>A pure-Rust astronomical ephemeris for astrology — validated against JPL DE440, zero <code>unsafe</code> core, Apache-2.0.</b>
+</p>
 
-[![Crates.io](https://img.shields.io/crates/v/xalen-ephemeris.svg)](https://crates.io/crates/xalen-ephemeris)
-[![docs.rs](https://img.shields.io/docsrs/xalen-ephemeris)](https://docs.rs/xalen-ephemeris)
-[![CI](https://github.com/vedika-io/xalen-ephemeris/actions/workflows/ci.yml/badge.svg)](https://github.com/vedika-io/xalen-ephemeris/actions/workflows/ci.yml)
-[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+<p align="center">
+  <a href="https://crates.io/crates/xalen-ephemeris"><img alt="crates.io" src="https://img.shields.io/crates/v/xalen-ephemeris.svg"></a>
+  <a href="https://docs.rs/xalen-ephemeris"><img alt="docs.rs" src="https://img.shields.io/docsrs/xalen-ephemeris"></a>
+  <a href="https://pypi.org/project/xalen/"><img alt="PyPI" src="https://img.shields.io/pypi/v/xalen.svg"></a>
+  <a href="https://www.npmjs.com/package/@xalen/wasm"><img alt="npm" src="https://img.shields.io/npm/v/@xalen/wasm.svg"></a>
+  <a href="LICENSE"><img alt="License: Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-blue.svg"></a>
+</p>
 
-> **Publish status:** the Rust crates, the PyPI `xalen` wheel, and the npm `xalen` (native) / `xalen-ephemeris` (WASM) packages are **not published to their registries yet** — the Crates.io / docs.rs registry badges above are placeholders until first release. Build from source per the per-binding READMEs (`crates/xalen-python`, `crates/xalen-node`, `crates/xalen-wasm`).
+<p align="center">
+  <a href="#get-started">Get started</a> ·
+  <a href="#what-you-get">Features</a> ·
+  <a href="#accuracy">Accuracy</a> ·
+  <a href="docs/COMPARISON.md">Comparison</a> ·
+  <a href="https://docs.rs/xalen-ephemeris">API docs</a>
+</p>
 
-> **Validated against the references that matter** — JPL Horizons **DE440** (NASA's
-> definitive ephemeris), the real DE440 binary kernel, **Swiss Ephemeris**, and the
-> public calculators (astro.com, AstroSage, Drik Panchang, Prokerala, Jagannatha
-> Hora). **Sun + Mercury–Saturn sub-arcsecond** vs DE440 (Sun 0.21″, Mercury–Saturn
-> ≤ 0.76″; Uranus/Neptune ~1.8–2.5″, Pluto arcminute-class in-window). Analytical
-> **Moon RMS ~2.8″ / max ~12″** vs pyswisseph (AD 1600–2100); the DE440 kernel takes
-> the Moon **sub-arcsecond**. Pure Rust, zero `unsafe` in the core, thread-safe,
-> Apache-2.0. Full report → [docs/ACCURACY.md](docs/ACCURACY.md).
+XALEN Ephemeris computes planet positions, houses and ayanamsas, and the
+techniques built on them for 12+ astrology traditions (Vedic, Western, Chinese
+and more), from one pure-Rust core with Python, Node.js, WebAssembly and C
+bindings and a command-line tool. The analytical engine needs no data files and
+is sub-arcsecond against JPL DE440 for the Sun and Mercury to Saturn; load the
+DE440 kernel and the Moon is sub-arcsecond too. It is validated against JPL
+Horizons, Swiss Ephemeris and the public calculators, is thread-safe, has no
+`unsafe` in the core crates, and is licensed Apache-2.0.
+
+<table>
+  <tr>
+    <td width="42%" align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/chart-wheel-dark.svg"><img alt="Sidereal birth chart wheel for 15 August 1947, 00:00 IST, Delhi, with Placidus houses" src="docs/assets/chart-wheel.svg"></picture></td>
+    <td width="58%" align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/map-dark.svg"><img alt="Astrocartography lines of the seven classical planets for the same moment over a world map" src="docs/assets/map.svg"></picture></td>
+  </tr>
+  <tr>
+    <td><sub><b>Chart wheel.</b> 15 August 1947, 00:00 IST (UTC+05:30), Delhi (28.6139° N, 77.209° E, built-in city table), sidereal Lahiri, Placidus houses: <code>xalen chart --date 1947-08-15T00:00:00+05:30 --place delhi --sidereal --house-system placidus --bodies sun,moon,mercury,venus,mars,jupiter,saturn,uranus,neptune,pluto,rahu,ketu --json</code></sub></td>
+    <td><sub><b>Astrocartography.</b> The same moment: MC, IC, ascendant and descendant lines of the Sun to Saturn, their zenith points, and the three parans nearest Delhi's latitude: <code>xalen map --date 1947-08-15T00:00:00+05:30 --bodies sun,moon,mercury,venus,mars,jupiter,saturn --geojson --parans</code></sub></td>
+  </tr>
+</table>
+
+<p align="center">
+  <img alt="The xalen positions command printing sidereal positions with nakshatra and pada" src="docs/assets/terminal.svg" width="800">
+</p>
+
+<sub>Every figure on this page is drawn from a real run by
+[`scripts/readme-figures/generate.py`](scripts/readme-figures/generate.py);
+run it from the repository root to reproduce them.</sub>
+
+## Get started
+
+**Rust** — `cargo add xalen-ephemeris`
 
 ```rust
 use xalen_ephem::{Almanac, Body};
@@ -31,263 +70,153 @@ let sid = (pos.longitude.to_degrees() - Ayanamsa::Lahiri.compute_deg(jd.as_f64()
 println!("{}", Nakshatra::from_longitude_deg(sid)); // Swati
 ```
 
----
+The umbrella crate re-exports every sub-crate (`xalen_ephemeris::ephem`,
+`::vedic`, `::time`, …); individual crates give a smaller footprint
+([docs/CRATES.md](docs/CRATES.md)). Run `cargo run --example basic_chart` (also
+`vedic_chart`, `western_chart`, `chinese_bazi`); more code is in
+[docs/FEATURES.md](docs/FEATURES.md#more-code).
 
-## What You Get
+**Python** — `pip install xalen`
 
-- **50 ayanamsa systems** -- Lahiri, KP Krishnamurti, Raman, Fagan-Bradley, True Chitrapaksha, True Revati, Surya Siddhanta, all Galactic Center variants, Babylonian (Kugler), all Swiss Ephemeris IDs (0-46), plus a fully custom variant with user-defined epoch, value, and precession rate
+```python
+import xalen
 
-- **23 house systems** -- Placidus, Koch, Campanus, Regiomontanus, Whole Sign, Equal, Porphyry, Morinus, Alcabitius, Topocentric (Polich-Page), Meridian, Vehlow, Sripati, Krusinski-Pisa, Sunshine (Makransky & Treindl), Pullen Sinusoidal (Delta & Ratio), Carter Poli-Equatorial, APC, Zariel, Alcabitius Classic -- with automatic Porphyry fallback at polar latitudes. (Gauquelin sectors is an experimental placeholder that currently returns Placidus cusps, not a true Gauquelin division.)
+jd = xalen.julian_day(1990, 6, 15, 10.5)                            # 1990-06-15 10:30 UT
+moon_sid = xalen.planet_position(jd, 1, sidereal=True, ayanamsa=0)  # Moon, Lahiri
+nak = xalen.nakshatra(moon_sid["longitude"])
+print(nak["name"], nak["pada"])
+```
 
-- **12+ astrology traditions** -- Vedic/Jyotish (dasha, shadbala, KP, Jaimini, Tajaka, panchang with tithi/nakshatra/yoga/karana transition times, compatibility, 16 divisional charts, yoga, dosha), Western (aspects, dignities, 97 Arabic Lots, Hellenistic, Uranian, Cosmobiology, progressions, exact solar/lunar returns by iterative refinement, declination aspects + antiscia, harmonics, horary), Chinese (BaZi, Zi Wei Dou Shu, Feng Shui Flying Stars, Qi Men Dun Jia [experimental]), Lal Kitab, I Ching (64 hexagrams + all 384 line texts, verbatim public-domain Legge SBE XVI), Numerology, Korean Saju, Japanese Nine Star Ki, Burmese Mahabote (day-sign profile only), Mayan, Aztec, Tibetan, Persian/Zoroastrian, Egyptian, Celtic
+`import xalen.swe as swe` is a near-drop-in for `import swisseph as swe` for the
+common calls; see [crates/xalen-python](crates/xalen-python/README.md).
 
-- **506 built-in fixed stars** (in `xalen-western`) with proper motion and precession correction (all mag < 3.0, Behenian, Royal, Nakshatra yogatara, IAU-named to mag ~5). The `xalen-stars` crate adds **8,870 compiled-in Hipparcos stars** (every Hipparcos record at Vmag ≤ 6.5, propagated J1991.25 → J2000.0, zero data files) on top of a 108-star curated core catalog — and still supports loading the full 118,218-star Hipparcos catalog from CSV at runtime
+**Node.js** — `npm install @xalen/ephemeris` (published from 0.8; until then build from source, see [crates/xalen-node](crates/xalen-node/README.md))
 
-- **Solar and lunar eclipse engine** -- rigorous Besselian elements (Explanatory Supplement §11; Meeus Ch. 54) for global type / γ / greatest-eclipse, plus a per-observer local-circumstances layer (magnitude, obscuration, C1–C4 contact times); lunar eclipse classification (total / partial / penumbral) via Meeus Ch. 55. Global type validated against NASA for 2017-08-21 and 2024-04-08
+```js
+const xalen = require('@xalen/ephemeris');
+const p = xalen.planetPosition('sun', 2451545.0);  // J2000
+console.log(p.longitude, p.isRetrograde);
+```
 
-- **Black Moon Lilith** -- both **mean** lunar apogee and **True (osculating)** Lilith (Swiss `SE_OSCU_APOG`), Chiron, True Node, Mean Node
+**Browser / WASM** — `npm install @xalen/wasm`
 
-- **Velocity / daily motion** for every body, with `is_retrograde()`,
-  **topocentric positions** (diurnal parallax) for an observer's exact location,
-  and **equatorial RA/Dec, heliocentric, and rectangular XYZ** output alongside
-  the geocentric ecliptic place
+```js
+import init, { XalenWasm } from "@xalen/wasm";
+await init();
+const w = new XalenWasm();
+// Full Vedic chart for Pune (18.52 N, 73.85 E) at J2000, Lahiri ayanamsa (id 0).
+const chart = JSON.parse(w.fullChartJson(2451545.0, 18.52, 73.85, 0));
+```
 
-- **Time systems** -- UT1 / TT / TDB Julian Day types, UTC↔TAI with the full
-  leap-second table, and a genuine Stephenson–Morrison–Hohenkerk 2016 ΔT spline
-  with a published per-epoch σ envelope
-
-- **15 asteroids** -- the big 4 (Ceres, Pallas, Juno, Vesta), Hygeia, Astraea, Psyche, Eros, Lilith (1181), centaurs (Pholus, Nessus), and TNOs (Eris, Sedna, Makemake, Haumea), plus an external element loader for any asteroid with known orbital elements
-
-- **SVG chart rendering** -- North Indian diamond, South Indian box, and Western wheel charts, zero external dependencies
-
-- **City geocoding** for 130+ cities with latitude, longitude, and timezone
-
-- **NAIF DE440 SPK reader** -- reads real JPL `.bsp` binary files for extended validity range and JPL-grade accuracy; the analytical engine (VSOP87A + ELP2000-82 + IAU 2000B nutation + full IAU 2006/P03 rotation) works standalone with zero data files: **Sun + Mercury–Saturn sub-arcsecond** vs JPL DE440 (Sun 0.21", ≤0.76"), Uranus/Neptune ~1.8–2.5", **Moon RMS ~2.8" / max ~12"** vs pyswisseph (AD 1600–2100; an earlier build mis-applied the planet annual-aberration term to the geocentric Moon for a ~11–31" residual — that bug is fixed, see ACCURACY.md), and Pluto arcminute-class in-window (published Goffin-fit bound ~1′; the committed golden test asserts a 600″/10′ regression ceiling vs DE440 — no test asserts a tighter figure). **Load the DE440 kernel for JPL-grade sub-arcsecond on the Sun, planets and Moon, plus full-range Pluto.** Both engines apply the same apparent-place chain (full-rotation precession + nutation; planets/Sun get 2-pass annual aberration, the geocentric Moon gets geocentric light-time but NOT annual aberration). Numbers reproducible from this repo via `cargo test -p xalen-ephem --test accuracy_vs_de440` (with a `de440s.bsp` kernel present)
-
-- **19 languages** -- English, Hindi, Sanskrit, Tamil, Telugu, Kannada, Malayalam, Bengali, Gujarati, Marathi, Punjabi, Odia, Spanish, Portuguese, French, German, Japanese, Thai, Indonesian -- for planet names, signs, nakshatras, weekdays
-
-- **Language bindings** -- Node.js (napi-rs), Python (PyO3), WASM (wasm-bindgen), and C FFI (`extern "C"`)
-
----
-
-## Installation
-
-> **Availability note:** crates.io currently serves the **0.3.1** line (leaf
-> crates). The 0.4.x / 0.5.x releases described in this README are **not yet
-> published to crates.io** — publishing is in progress. Until it lands, either
-> pin `0.3` or depend on this repository directly with a `git`/`path` dependency.
-> The Node.js (`xalen`, npm) and Python (`xalen`, PyPI) packages are **not yet
-> published**; see *Language Bindings* below for building from source.
+**Command line** — `cargo install xalen-cli`
 
 ```bash
-# crates.io (currently serves the 0.3.1 line):
-cargo add xalen-ephemeris
+# Sidereal (Lahiri) positions with nakshatra and pada
+xalen positions --date 2026-11-07T00:00:00Z --sidereal --bodies sun,moon
+
+# Solar eclipses of 2024 as JSON (the 8 April total eclipse is the first)
+xalen eclipses --from 2024-01-01 --to 2024-12-31 --type solar --json
 ```
 
-Or pick individual crates for a smaller footprint (pin to the latest published
-version):
+Positions, charts, panchang, dasha, fixed stars, eclipses, rise and set times,
+aspects, time conversions, astrocartography maps, synastry, composite, Davison
+and relocated charts, as a table or with `--json`; offline, no data files. See
+[crates/xalen-cli](crates/xalen-cli/README.md) for every command.
 
-```toml
-[dependencies]
-xalen-ephem = "0.3"         # planetary engine
-xalen-vedic = "0.3"         # Vedic astrology
-xalen-houses = "0.3"        # house systems
-xalen-ayanamsa = "0.3"      # ayanamsa / sidereal conversion
-xalen-time = "0.3"          # Julian Day, delta-T, calendars
-```
+## What you get
 
-## Quick Start
+<table>
+  <tr>
+    <td width="50%" valign="top"><b>Vedic / Jyotish</b><br>Dasha, shadbala, KP, Jaimini, Tajaka, panchang with tithi / nakshatra / yoga / karana transition times, compatibility, 16 divisional charts, yoga, dosha; <b>50 ayanamsa systems</b>, among them every Swiss Ephemeris ID (0-46) and a custom one.</td>
+    <td width="50%" valign="top"><b>Western</b><br>Aspects, dignities, 97 Arabic Lots, Hellenistic, Uranian, Cosmobiology, progressions, exact solar and lunar returns, declination aspects and antiscia, harmonics, horary; <b>23 house systems</b> with Porphyry fallback at polar latitudes.</td>
+  </tr>
+  <tr>
+    <td valign="top"><b>Chinese and world traditions</b><br>BaZi, Zi Wei Dou Shu, Feng Shui Flying Stars, Qi Men Dun Jia (experimental), Lal Kitab, I Ching (all 384 Legge line texts), numerology, Korean Saju, Nine Star Ki, Burmese Mahabote (day-sign profile only), Mayan, Aztec, Tibetan, Persian, Egyptian, Celtic.</td>
+    <td valign="top"><b>Relationships and astrocartography</b><br>Synastry (aspect grid, house overlays), composite (Hand) and Davison charts, relocated charts; MC, IC, ascendant and descendant lines and zenith points for each body (Lewis), and parans (Brady).</td>
+  </tr>
+  <tr>
+    <td valign="top"><b>Sky</b><br>9,096 Bright Star Catalogue stars and 503 named fixed stars with proper motion; 15 asteroids; Chiron, mean and true node, mean and true Black Moon Lilith; solar eclipses from Besselian elements with local C1–C4 contacts, lunar eclipses with umbral and penumbral magnitudes.</td>
+    <td valign="top"><b>Engine and time</b><br>VSOP87A, ELP2000-82, IAU 2006/P03 precession and IAU 2000B nutation, a NAIF DE440 SPK reader; daily motion and retrograde flags, topocentric, equatorial, heliocentric and XYZ output; UT1 / TT / TDB, leap seconds, Stephenson–Morrison–Hohenkerk 2016 ΔT.</td>
+  </tr>
+  <tr>
+    <td valign="top"><b>Output</b><br>SVG charts (North Indian diamond, South Indian box, Western wheel) with no external dependencies; names in 19 languages; geocoding for 130+ cities.</td>
+    <td valign="top"><b>Bindings</b><br>Python (PyO3), Node.js (napi-rs), WebAssembly (wasm-bindgen) and C (<code>extern "C"</code>), each returning the full six-component position and speed with a retrograde flag.</td>
+  </tr>
+</table>
 
-### Vedic chart: Sun and Moon with nakshatra and rashi
-
-With only `xalen-ephemeris` added, every sub-crate is reachable through the
-umbrella re-exports (`xalen_ephemeris::ephem`, `::vedic`, `::time`, …):
-
-```rust,no_run
-use xalen_ephemeris::ayanamsa::Ayanamsa;
-use xalen_ephemeris::coords::RAD_TO_DEG;
-use xalen_ephemeris::ephem::{Almanac, Body};
-use xalen_ephemeris::time::{calendar_to_jd, CalendarSystem, JulianDay};
-use xalen_ephemeris::vedic::nakshatra::Nakshatra;
-use xalen_ephemeris::vedic::rashi::Rashi;
-
-fn main() {
-    // 15 August 1947, 00:00 IST (UTC+5:30) -- Indian Independence
-    let jd = calendar_to_jd(1947, 8, 15, 0.0 - 5.5, CalendarSystem::default());
-
-    let almanac = Almanac::default_vedic();
-    let aya_deg = Ayanamsa::Lahiri.compute_deg(jd.as_f64());
-
-    for &body in &[Body::Sun, Body::Moon] {
-        let pos = almanac.geocentric_ecliptic(body, jd).unwrap();
-        let sid = (pos.longitude * RAD_TO_DEG - aya_deg).rem_euclid(360.0);
-
-        let rashi = Rashi::from_longitude_deg(sid);
-        let nak = Nakshatra::from_longitude_deg(sid);
-        let pada = Nakshatra::pada(sid);
-
-        println!("{body}: {sid:.2} deg -- {rashi}, {nak} (pada {pada})");
-    }
-}
-```
-
-### Western chart: aspects and dignities
-
-```rust
-use xalen_ephemeris::western::aspects::{find_all_aspects, AspectType};
-use xalen_ephemeris::western::dignity::essential_dignity_score;
-```
-
-### More examples
-
-```bash
-cargo run --example basic_chart      # Sun/Moon + nakshatra + rashi
-cargo run --example vedic_chart      # Full Vedic chart with dasha, shadbala, panchang
-cargo run --example western_chart    # Aspects, dignities, Arabic Lots
-cargo run --example chinese_bazi     # BaZi Four Pillars with Wu Xing
-```
-
----
+The complete list, with every caveat, is in [docs/FEATURES.md](docs/FEATURES.md).
 
 ## Accuracy
 
-| Theory | Bodies | Accuracy | Data Files Needed? |
-|--------|--------|----------|--------------------|
-| VSOP87A + IAU 2000B nutation | Sun | **0.21"** (vs JPL DE440) | No (analytical) |
-| VSOP87A + IAU 2000B nutation | Mercury -- Saturn | **0.21--0.76"** (vs JPL DE440, 20k charts) | No (analytical) |
-| VSOP87A + IAU 2000B nutation | Uranus / Neptune | 1.78" / 2.53" (vs JPL DE440) | No (analytical) |
-| ELP2000-82 (Chapront-Touzé & Chapront; abridged 60+60 terms per Meeus Ch.47) + Δψ + geocentric light-time | Moon | **RMS ~2.8" / max ~12"** (vs pyswisseph 2.10.03, AD 1600--2100; truncation-limited, not aberration) | No (analytical) |
-| Goffin (1989) DE200 fit (43 terms per Meeus Ch.37) | Pluto | arcminute-class in-window; golden test asserts ≤600″/10′ vs DE440 (no tighter figure asserted) | No (valid 1885--2099; DE440 for full range) |
-| JPL DE440 | Sun + planets / Pluto | sub-arcsecond apparent (raw geometry sub-mas; 2-pass body light-time) | Yes (binary `.bsp`) |
-| JPL DE440 | Moon | sub-arcsecond apparent (raw geometry sub-mas; geocentric light-time, no annual aberration) | Yes (binary `.bsp`) |
-| IAU 2006 | Precession | ~0.3 mas/century | No |
-| IAU 2000B | Nutation | ~1 mas | No |
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/accuracy-dark.svg">
+    <img alt="Bar chart of the analytical engine's error per body in arcseconds on a log scale" src="docs/assets/accuracy.svg" width="800">
+  </picture>
+</p>
 
-For most astrological applications, the analytical theories (VSOP87A, ELP2000-82)
-provide more than enough precision -- they require zero external data files and
-work entirely from compiled-in polynomial series; the analytical Moon now lands
-within RMS ~2.8" of Swiss Ephemeris across four centuries. Load DE440 when you
-need JPL-grade sub-arcsecond precision on the Moon and outer bodies, full-range
-Pluto, or primary directions to the minute.
+Cross-checked against JPL Horizons DE440, the real DE440 binary kernel, the
+official VSOP87 check file, Swiss Ephemeris and the public calculators
+(astro.com, AstroSage, Drik Panchang, Prokerala, Jagannatha Hora). Figures from
+[docs/ACCURACY.md](docs/ACCURACY.md):
 
-**Sub-arcsecond Moon with zero manual kernel handling.** Enable the optional
-`kernel-autodownload` feature and call `De440Provider::from_auto_cache()`; the
-public NASA NAIF `de440s.bsp` kernel (~32 MB) is fetched once into the OS cache
-directory, verified, and reused thereafter. The feature is off by default so the
-base crate stays offline and data-file-free:
+| What | Measured | Against |
+|------|----------|---------|
+| Sun | **~0.21″** | JPL DE440, 20,000 charts |
+| Mercury – Saturn | **≤ 0.76″** | JPL DE440, 20,000 charts |
+| Uranus / Neptune | 1.78″ / 2.53″ | JPL DE440, 20,000 charts |
+| Pluto (Goffin fit, 1885–2099) | ~3.2″ measured in-window; published Goffin bound ~1 arcminute | JPL DE440 |
+| Moon (ELP2000-82, 60+60 terms) | RMS ~2.8″ (max ~12″) over AD 1600–2100 | pyswisseph 2.10.03 |
+| Sun, Moon, planets with the DE440 kernel | sub-arcsecond apparent | JPL DE440 |
+| Ayanamsas | 46 of 47 SE systems < 1″, one documented exception ≤ 2″ | Swiss Ephemeris |
+| House systems | 18 of 19 comparable systems < 0.01° | Swiss Ephemeris |
+| Lunar eclipses 1900–2100 | all 457 found, same type, no extra ones | pyswisseph 2.10.03 |
 
-```toml
-[dependencies]
-xalen-ephem = { version = "0.6", features = ["kernel-autodownload"] }
-```
+The DE440 kernel is optional: enable the `kernel-autodownload` feature and call
+`De440Provider::from_auto_cache()` to fetch NASA's `de440s.bsp` once and reuse
+it. How XALEN compares with Swiss Ephemeris, pyswisseph and other Rust crates is
+in [docs/COMPARISON.md](docs/COMPARISON.md); moving from Swiss Ephemeris is
+covered in [docs/MIGRATING_FROM_SWISS_EPH.md](docs/MIGRATING_FROM_SWISS_EPH.md).
 
-```rust
-use xalen_ephem::De440Provider;
-// First call fetches + caches de440s.bsp; later calls reuse it (no network).
-let provider = De440Provider::from_auto_cache()?;
-// Apparent Moon (and all kernel bodies) now sub-arcsecond.
-```
-
-Eclipse output now includes both a
-global-circumstances classifier (type / Besselian γ / greatest eclipse; the
-global figure is a diameter-ratio coverage proxy, not a true magnitude) and a
-Besselian local-circumstances engine that does provide a real per-observer
-magnitude, obscuration, and C1–C4 contact times.
-
----
-
-## Crate Map
-
-| Crate | Purpose |
-|-------|---------|
-| [`xalen-ephem`](crates/xalen-ephem) | Planetary engine: VSOP87A, ELP2000-82, DE440 reader, Pluto, Chiron, lunar nodes, asteroids, eclipses |
-| [`xalen-time`](crates/xalen-time) | Julian Day types (TT/UT1/TDB), delta-T models, calendar conversions |
-| [`xalen-coords`](crates/xalen-coords) | Coordinate transforms, IAU 2006 precession, IAU 2000B nutation, obliquity |
-| [`xalen-houses`](crates/xalen-houses) | 23 house systems with Ascendant, MC, Vertex, polar fallback, city geocoding |
-| [`xalen-ayanamsa`](crates/xalen-ayanamsa) | 50 ayanamsa systems for tropical-to-sidereal conversion |
-| [`xalen-stars`](crates/xalen-stars) | 8,870 compiled-in Hipparcos stars (Vmag ≤ 6.5) + 108-star curated core + runtime CSV loader for the full 118,218-star catalog, proper motion, conjunction search (the 506-star astrology catalog lives in `xalen-western`) |
-| [`xalen-vedic`](crates/xalen-vedic) | Vedic astrology: dasha, shadbala, KP, Jaimini, Tajaka, ashtakavarga, panchang, compatibility, yoga, dosha, upagraha, transit |
-| [`xalen-western`](crates/xalen-western) | Western astrology: aspects, dignities, Arabic Lots, Hellenistic, Uranian, Cosmobiology, returns, progressions, harmonics, horary |
-| [`xalen-chinese`](crates/xalen-chinese) | BaZi, Zi Wei Dou Shu, Feng Shui (Flying Stars, Ba Zhai); Qi Men Dun Jia (experimental — authoritative reference data + a simplified chart assembly, not an authoritative reading) |
-| [`xalen-lalkitab`](crates/xalen-lalkitab) | Lal Kitab: planet-house effects, debts, dormancy, remedies |
-| [`xalen-iching`](crates/xalen-iching) | I Ching: 64 hexagrams, 8 trigrams, all 384 Legge line texts, date casting |
-| [`xalen-numerology`](crates/xalen-numerology) | Pythagorean and Chaldean numerology |
-| [`xalen-world`](crates/xalen-world) | Mayan, Aztec, Tibetan, Persian, Egyptian, Celtic, Korean Saju, Nine Star Ki; Burmese Mahabote (day-sign / ruling-planet profile only — not the full 7-house square) |
-| [`xalen-chart`](crates/xalen-chart) | SVG chart rendering: North Indian, South Indian, Western wheel |
-| [`xalen-ffi`](crates/xalen-ffi) | C FFI exports (`extern "C"` with `repr(C)` structs) |
-| [`xalen-wasm`](crates/xalen-wasm) | WASM bindings via wasm-bindgen |
-| [`xalen-python`](crates/xalen-python) | Python bindings via PyO3 |
-| [`xalen-node`](crates/xalen-node) | Node.js bindings via napi-rs |
-
-## Language Bindings
+## Bindings
 
 | Language | Crate | Mechanism | Status |
 |----------|-------|-----------|--------|
-| **Rust** | `xalen-ephemeris` (umbrella) | Native (crates.io: 0.3.1 line published; 0.4.x+ not yet) | Published (0.3.1) |
-| **C / C++** | `xalen-ffi` | `extern "C"` + `repr(C)` structs | Source-stable; not yet on crates.io past 0.3.1 |
-| **Python** | `xalen-python` | PyO3 — build with `maturin develop` | Alpha; **not yet on PyPI** (`pip install xalen` is forthcoming) |
-| **Node.js** | `xalen-node` | napi-rs native addon — build with `napi build` | Alpha; **not yet on npm** (`npm install xalen` is forthcoming) |
-| **Browser / WASM** | `xalen-wasm` | wasm-bindgen, build with `wasm-pack build` | Alpha; build from source |
+| **Rust** | `xalen-ephemeris` (umbrella) | Native | On crates.io |
+| **C / C++** | `xalen-ffi` | `extern "C"` + `repr(C)` structs | Source-stable; on crates.io |
+| **Python** | `xalen-python` | PyO3 | Alpha; on PyPI as `xalen` (`pip install xalen`) |
+| **Node.js** | `xalen-node` | napi-rs native addon, prebuilt for Linux x64 and arm64, macOS x64 and arm64, and Windows x64 | Alpha; on npm as `@xalen/ephemeris` with each release from 0.8, build from source until then |
+| **Browser / WASM** | `xalen-wasm` | wasm-bindgen | Alpha; on npm as `@xalen/wasm` |
 
-> The `pip install xalen` / `npm install xalen` commands in the migration guides
-> describe the *intended* published interface and are **not live yet**. There is
-> an unrelated `xalen` package on PyPI (a separate XALEN SDK) — it is **not** these
-> ephemeris bindings. Until the bindings are published, build them from this
-> repository with the commands above.
-
-Core computation crates compile to `wasm32-unknown-unknown` without modification.
-
-All four bindings expose the full `(lon, lat, dist, lon_speed, lat_speed,
-dist_speed)` 6-tuple plus a retrograde flag, matching what
-`swe.calc_ut(..., FLG_SPEED)` returns. The Python binding additionally ships an
-`xalen.swe` submodule (`import xalen.swe as swe`) intended as a near-drop-in
-substitute for `import swisseph as swe` for the common `calc_ut` / `fixstar2`
-calls — a search-and-replace migration path, not a 1:1 reimplementation of every
-pyswisseph entry point.
-
----
+The integer IDs the bindings take are in [docs/BINDING_IDS.md](docs/BINDING_IDS.md);
+the crate map and binding details are in [docs/CRATES.md](docs/CRATES.md).
 
 ## Architecture
 
-- **Pure Rust** -- no C FFI dependencies in any core crate
-- **No `unsafe` in core crates** -- only `xalen-ffi` uses `unsafe` (required for `extern "C"`)
-- **Zero global state** -- all computation through owned or `Arc<T>` references
-- **Thread-safe** -- `Almanac` and all position types are `Send + Sync`
-- **WASM-compatible** -- core crates target `wasm32-unknown-unknown`
-- **Provider-layered** -- stack DE440 on top of VSOP87 with automatic body/epoch fallback
-- **Serde-ready** -- all data types derive `Serialize` / `Deserialize`
-
----
+Pure Rust with no C FFI dependencies in any core crate, and no `unsafe` in library
+code outside `xalen-ffi` (which needs it for `extern "C"`). No global state: all computation
+goes through owned or `Arc<T>` references, and `Almanac` and all position types
+are `Send + Sync`. Core crates target `wasm32-unknown-unknown`, DE440 stacks on
+top of VSOP87 with automatic body and epoch fallback, and all data types derive
+`Serialize` / `Deserialize`.
 
 ## Building
 
 ```bash
-# Build the full workspace
 cargo build --release
-
-# Run all tests. `cargo test --workspace` reports 2,199 passing across the
-# library and integration suites, 0 failures. Plain `cargo test` runs the
-# workspace default-members (which exclude the PyO3 extension-module crate
-# xalen-python, tested separately via maturin — see below).
-cargo test
-# The Python bindings are tested via maturin:  cd crates/xalen-python && maturin develop && pytest
-
-# Build WASM
-cd crates/xalen-wasm && wasm-pack build --target web
-
-# Run benchmarks
-cargo bench
+cargo test                 # workspace default members; xalen-python is tested with maturin
+bash scripts/gate.sh       # the full pre-merge gate: fmt, clippy, tests, docs, accuracy harness
 ```
 
-## Project Stats
+The workflow, toolchain and every check are in [CONTRIBUTING.md](CONTRIBUTING.md);
+the binding, WASM and benchmark builds are in [docs/CRATES.md](docs/CRATES.md#building).
 
-- over 70,000 lines of Rust
-- 18 crates (14 core + 4 binding/rendering crates)
-- 2,199 tests passing (`cargo test --workspace`, library + integration suites), 0 failures
-- 150+ source files
-- Zero `unsafe` in core crates
+## Project stats
 
----
+- 24 crates in `crates/`, plus the umbrella crate and the `validation/` runner
+- over 130,000 lines of Rust in 234 files, 168 of them library sources
+- over 2,400 tests passing, 0 failures (`cargo test --workspace --exclude xalen-python`)
+- zero `unsafe` in the core crates' library code; only `xalen-ffi` uses it, for `extern "C"`
 
 ## License
 
@@ -298,8 +227,8 @@ Copyright 2024-2026 XALEN Technology Pvt Ltd.
 ```
 
 For commercial licensing inquiries, contact [hello@xalen.io](mailto:hello@xalen.io).
-
----
+The XALEN name and logo are trademarks of XALEN Technology Pvt Ltd and are
+governed by [TRADEMARK.md](TRADEMARK.md), not by the Apache licence.
 
 ## Enterprise
 
@@ -310,27 +239,20 @@ certified-accuracy reports, white-label, or on-premise support**, see
 open-source core stays Apache-2.0; Enterprise only adds services and optional
 proprietary modules on top.
 
----
-
 ## Contributing
 
-Contributions are welcome. Please open an issue before starting work on
-significant changes.
+Questions, bug reports and feature requests: see [SUPPORT.md](SUPPORT.md).
 
-**Before submitting a pull request:**
+Contributions are welcome; please open an issue before starting significant
+work. The path from issue to merged pull request (branch names, commit style,
+checks, and the [contributor licence agreement](CLA.md)) is in
+[CONTRIBUTING.md](CONTRIBUTING.md). In short: run `cargo test` and
+`cargo clippy --workspace --exclude xalen-python -- -D warnings`, follow
+`rustfmt` defaults, give every new astrological formula at least one
+known-answer test against a published reference, and cite the textbook,
+chapter and verse or page in code comments (Wikipedia and blog posts are not
+acceptable sources for astrological algorithms).
 
-1. Run `cargo test` and `cargo clippy --workspace --exclude xalen-python -- -D warnings` -- both must pass
-2. Add tests for new computations -- every astrological formula needs at least
-   one known-answer test case against a published reference
-3. Follow `rustfmt` defaults
-4. Cite sources in code comments: textbook name, chapter, verse/page number.
-   Wikipedia and blog posts are not acceptable sources for astrological
-   algorithms
-
-**Areas where contributions are especially welcome:**
-
-- Expanded fixed star catalog
-- DE441 reader support
-- Additional world tradition systems
-- Documentation and examples
-- Cross-validation test vectors against Swiss Ephemeris or JPL Horizons
+Especially welcome: an expanded fixed star catalog, DE441 reader support, more
+world tradition systems, documentation and examples, and cross-validation test
+vectors against Swiss Ephemeris or JPL Horizons.

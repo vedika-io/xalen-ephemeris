@@ -3,27 +3,30 @@ name = "xalen-stars-hip-data"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
-# DATA LICENSE — deliberately NOT the workspace Apache-2.0 license.
+# DATA LICENSE: deliberately NOT the workspace Apache-2.0 license.
 #
 # This crate embeds the Hipparcos Main Catalogue (CDS I/239, hip_main.dat,
-# (C) ESA 1997), which CDS distributes under CC BY-NC (non-commercial). The
-# compilation of catalogue records is the restricted asset, so this crate must
-# NOT be linked into any commercial / paid build. It is consumed ONLY behind
-# the `xalen-stars` `hip-catalog` feature (default-on for the open library,
-# OFF for commercial builds). See NOTICE and crates/xalen-stars-hip-data/LICENSE.
+# (C) ESA 1997), which ESA publishes under CC BY-NC 3.0 IGO (non-commercial).
+# The compilation of catalogue records is the restricted asset, so this crate
+# must NOT be linked into any commercial / paid build.
 #
-# The exact SPDX choice (CC-BY-NC-3.0-IGO vs the CDS terms) is pending counsel
-# review — ASK-SENIOR. The metadata is corrected here so the package no longer
-# misrepresents NC data as Apache-2.0.
+# It is an OPTIONAL, UNPUBLISHED add-on. No published XALEN crate depends on it:
+# the default star list (`xalen-stars` `BRIGHT_CATALOG`) is built from the Yale
+# Bright Star Catalogue and the IAU Catalog of Star Names instead. This crate
+# depends on `xalen-stars` (not the other way round), keeps the Hipparcos
+# helpers and the Hipparcos-based cross-validation tests, and stays a workspace
+# member so the workspace test run covers it. See NOTICE and
+# crates/xalen-stars-hip-data/LICENSE.
 license = "CC-BY-NC-3.0-IGO"
 repository.workspace = true
-description = "Hipparcos-derived fixed-star catalog DATA (CC BY-NC, non-commercial) for XALEN Ephemeris — gated off commercial builds via the xalen-stars `hip-catalog` feature"
+description = "Optional Hipparcos-derived fixed-star catalog DATA (CC BY-NC, non-commercial) for XALEN Ephemeris; unpublished add-on, not used by any published crate"
 keywords = ["hipparcos", "star-catalog", "astronomy"]
 categories = ["science"]
 # Never auto-publish NC data to crates.io.
 publish = false
 
 [dependencies]
+xalen-stars = { version = "0.7.0", path = "../xalen-stars" }
 serde.workspace = true
 
 [lints]

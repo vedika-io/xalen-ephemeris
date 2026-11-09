@@ -1,6 +1,6 @@
 {
   "name": "@xalen/ephemeris",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Node.js bindings for XALEN Ephemeris — pure-Rust astronomical & astrological computation (VSOP87 planets, Vedic/KP, houses, ayanamsa, panchang, numerology)",
   "license": "Apache-2.0",
   "author": "XALEN Technology Pvt Ltd",
@@ -35,10 +35,10 @@
   "scripts": {
     "build": "napi build --platform --release",
     "build:debug": "napi build --platform",
-    "test": "node --test __test__/"
+    "test": "node --test __test__/smoke.test.mjs __test__/platform-matrix.test.mjs"
   },
   "devDependencies": {
-    "@napi-rs/cli": "^3.0.0"
+    "@napi-rs/cli": "^3.10.12"
   },
-  "files": ["index.js", "index.d.ts", "*.node", "README.md", "LICENSE"]
+  "files": ["index.js", "index.d.ts", "README.md", "LICENSE"]
 }

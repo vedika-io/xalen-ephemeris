@@ -32,14 +32,14 @@ ephemeris/astrology libraries it is most often weighed against:
 |---|---|---|---|---|---|
 | **Language / core** | Pure Rust, zero `unsafe` in core¹ | C | C (wrapped for Python) | Pure Rust | Pure Rust |
 | **License** | **Apache-2.0** | AGPL-3.0 **or** paid commercial | AGPL-3.0 (inherits Swiss) | MIT/Apache (permissive) | MIT |
-| **Data files at runtime** | **None** — VSOP87/ELP/IAU theory + 8,870 stars compiled in; DE440 kernel optional | Requires `.se1` files (or Moshier fallback) for full precision | Same as Swiss | None | None |
+| **Data files at runtime** | **None** — VSOP87/ELP/IAU theory + 9,096 stars compiled in; DE440 kernel optional | Requires `.se1` files (or Moshier fallback) for full precision | Same as Swiss | None | None |
 | **Thread-safe** | Yes — `Almanac` is `Send + Sync`, zero global state | Process-global state (`swe_set_*`) — not thread-safe | Same as Swiss | n/a (stateless calls) | n/a (stateless calls) |
 | **WASM** | Yes — core crates build `wasm32-unknown-unknown` | No (C, file I/O) | No | Likely (pure Rust) — untested here | Likely (pure Rust) — untested here |
 | **Sun + Mercury–Saturn accuracy** | sub-arcsecond vs DE440 (0.1–1.1″, §3) | sub-arcsecond (reads JPL kernel) | same as Swiss | Meeus-grade (≈arcsec–arcmin, body-dependent) | textbook-grade (arcmin-class) |
 | **Moon accuracy (analytical)** | RMS ~2.8″ / max ~12″ (truncated ELP); ~sub-arcsec with DE440 kernel | ~few arcsec (full ELP / Moshier); sub-arcsec with kernel | same as Swiss | Meeus low-order (arcmin-class) | textbook-grade |
 | **House systems** | **23** (19 comparable systems within 0.01°, 18 tight; §5) | 23 | 23 (via Swiss) | None | A handful (textbook examples) |
 | **Ayanamsa systems** | **50 named** (all 47 Swiss IDs 0–46 + 3 non-SE systems) + Custom, §4 | ~47 predefined + custom | same as Swiss | None | None |
-| **Fixed stars (built-in)** | **8,870** compiled-in (Hipparcos Vmag ≤ 6.5) + 506 astrology catalog | 6,000+ via `sefstars.txt` data file | same as Swiss | None | None |
+| **Fixed stars (built-in)** | **9,096** compiled-in (Yale Bright Star Catalogue; the 43 IAU-named oracle stars are within 0.245″ of Swiss at J2000) + 503 astrology catalog | 6,000+ via `sefstars.txt` data file | same as Swiss | None | None |
 | **Vedic / Jyotish** | Deep: dasha, panchang, shadbala, KP, Jaimini, Tajaka, ashtakavarga, D-2…D-60, yogas/doshas (§6) | **None** (positions only) | None | None | None |
 | **Western technique layer** | Aspects, dignities, 97 Arabic Lots, returns, progressions, harmonics, horary | None (positions only) | None | None | None |
 | **World systems** | BaZi, Zi Wei, Saju, Mayan, Aztec, I-Ching, Tibetan, Nine Star Ki, Mahabote (day-sign profile), Qi Men (experimental), Persian, Egyptian, Celtic (§7) | None | None | None | None |
@@ -255,11 +255,11 @@ separate third-party wrapper per language, and pyswisseph is Python-only:
 
 | Binding | Crate | Mechanism | Status |
 |---|---|---|---|
-| Rust | `xalen-ephemeris` (umbrella) | native | Published on crates.io (0.3.1 line; 0.4.x+ not yet) |
-| C / C++ | `xalen-ffi` | `extern "C"` + `repr(C)` | Source-stable; crates.io 0.3.1 line |
-| Python | `xalen-python` | PyO3 — `maturin develop` | Alpha; **not yet on PyPI** (`pip install xalen` forthcoming) |
-| Node.js | `xalen-node` | napi-rs native addon — `napi build` | Alpha; **not yet on npm** (`npm install xalen` forthcoming) |
-| Browser / WASM | `xalen-wasm` | wasm-bindgen — `wasm-pack build` | Alpha; build from source |
+| Rust | `xalen-ephemeris` (umbrella) | native | On crates.io |
+| C / C++ | `xalen-ffi` | `extern "C"` + `repr(C)` | Source-stable; on crates.io |
+| Python | `xalen-python` | PyO3 | Alpha; on PyPI as `xalen` (`pip install xalen`) |
+| Node.js | `xalen-node` | napi-rs native addon, prebuilt for Linux, macOS and Windows x64 | Alpha; on npm as `@xalen/ephemeris` with each release from 0.8, build from source until then |
+| Browser / WASM | `xalen-wasm` | wasm-bindgen | Alpha; on npm as `@xalen/wasm` |
 
 **Migration path.** XALEN provides a Swiss-Ephemeris-compatible shim so existing
 code can move with minimal edits:
@@ -267,9 +267,10 @@ code can move with minimal edits:
 - Rust: `xalen_ephem::compat` exposes `swe_calc_ut(jd, SE_SUN, SEFLG_SWIEPH)`
   with the familiar `xx[0..6]` array semantics
   (`docs/MIGRATING_FROM_SWISS_EPH.md`).
-- Node: `npm install xalen` as a drop-in for the `sweph` package — no `node-gyp`,
-  no C compiler, no `.se1` files (`docs/SWEPH_NPM_REPLACEMENT.md`). **Forthcoming:**
-  the npm package is not published yet; build the napi-rs addon from source for now.
+- Node: `npm install @xalen/ephemeris` as a drop-in for the `sweph` package — no
+  `node-gyp`, no C compiler, no `.se1` files (`docs/SWEPH_NPM_REPLACEMENT.md`).
+  The package is published with each release from 0.8; until then build the
+  napi-rs addon from source.
 
 **Honest scope of the C-FFI surface:** the stable `extern "C"` layer
 (`crates/xalen-ffi`) intentionally exposes a *subset* of the full Rust API — **17

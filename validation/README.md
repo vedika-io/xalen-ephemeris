@@ -11,7 +11,7 @@ Two parts:
 | File | Role |
 |------|------|
 | `oracle_pyswisseph.py` | Deterministically samples N random `(jd, lat, lon)` charts and writes one Swiss-Ephemeris reference record per line (JSON Lines). |
-| `src/main.rs` (`xalen-validation` bin crate) | Reads the oracle file, recomputes the same quantities with the pure-Rust XALEN crates, and prints per-body max / mean / RMS absolute delta (arcsec), the worst offender, the `<1″` subset fraction, and an overall PASS/FAIL against a configurable degree threshold. |
+| `src/main.rs` (`xalen-validation` bin crate) | Reads the oracle file, recomputes the same quantities with the pure-Rust XALEN crates, and prints per-body max / p99 / mean / RMS absolute delta (arcsec), the worst offender, the `<1″` subset fraction, and an overall PASS/FAIL against a configurable degree threshold. |
 
 ## Quantities compared, per chart
 
@@ -68,7 +68,54 @@ Both the generator and the runner are fully deterministic for a fixed
 * positional `ORACLE.jsonl` (or `-` for stdin).
 * `--threshold-deg D` — per-quantity max-error bound for the PASS/FAIL verdict
   (default `0.1`, the legacy bound). The report also always shows the tighter
-  `<1″` subset fraction.
+  `<1″` subset fraction. D must be finite, non-negative, and representable in
+  arcseconds; zero requests exact agreement.
+
+### Input integrity and exit status
+
+The runner requires at least one complete chart in the format emitted by the
+generator: all 14 supported bodies, all four supported ayanamsas, and exactly
+12 house cusps. Unknown quantity names, invalid geographic coordinates,
+non-finite values or computed results, malformed JSON, and file read errors
+stop validation with a diagnostic. Blank lines are allowed. When `_meta` is
+present, it must be on the first chart and its positive `n` must match the
+number of charts read. This detects a truncated generator stream, even if it
+ends between otherwise valid records. Without `_meta`, only the supplied
+records can be checked; completeness against an intended count is unknown.
+
+* Exit **0**: every evaluated gated sample is within the requested bound.
+* Exit **1**: a valid comparison exceeds the bound.
+* Exit **2**: invalid arguments, input, or a computation failure; no PASS is
+  printed for the partial run.
+
+An epoch outside a body's calculation coverage is an explicit exclusion, not
+a computation failure. The default 1500–2400 span exceeds the analytic Pluto
+series' coverage. The report lists these excluded counts, and refuses a
+verdict if a body has no comparable samples at all. The per-quantity counts
+therefore matter: PASS does not mean every body was compared at every epoch.
+Other computation errors abort validation.
+
+This validates the comparison evidence; it does not change the astronomical
+calculations or the informational-only quantities. House comparisons retain
+the existing `|latitude| <= 60°` limit, with exclusions now reported explicitly.
+
+## Run by the gate
+
+The `harness` stage of `scripts/gate.sh`, which the maintainers run on their
+AWS CI for every pull request, runs this harness as the last stage: it installs
+`pyswisseph` into a temporary directory, generates an oracle of N charts (seed
+42), pipes it into `xalen-validation`, and fails the gate if any gated quantity
+is more than 0.1 degree from the oracle. N defaults to 2000. For a larger run:
+
+```bash
+bash scripts/gate.sh --harness-n 20000
+GATE_HARNESS_N=20000 bash scripts/gate.sh     # same thing
+GATE_HARNESS_SEED=7 bash scripts/gate.sh      # a different sample
+bash scripts/gate.sh --skip harness          # every other stage
+```
+
+The oracle is a run-time test dependency only; nothing from `pyswisseph` is
+committed.
 
 ## Backend honesty (Moshier vs DE440)
 
@@ -120,10 +167,10 @@ streamed; standalone it processes well over 100k charts/second.
 
 ## Interpreting the output
 
-The runner prints, per quantity, `count`, `mean(″)`, `rms(″)`, `max(″)`, the
+The runner prints, per quantity, `count`, `mean(″)`, `rms(″)`, `p99(″)` (read from a log-spaced histogram, so it can sit up to about 2.3% above the true percentile but never above the max), `max(″)`, the
 `<1″%` subset, and the worst chart `(jd, lat, lon)`. A `<-- OVER` flag marks any
-quantity with a sample beyond the 0.1° legacy bound. The final line is `PASS`
-(exit 0) or `FAIL` (exit 1).
+quantity with a sample beyond the 0.1° legacy bound. A valid run's final line
+is `PASS` (exit 0) or `FAIL` (exit 1); invalid evidence exits 2 as described above.
 
 What the rows mean, and the honest expectation with a Moshier oracle over the
 default 1500–2400 span:

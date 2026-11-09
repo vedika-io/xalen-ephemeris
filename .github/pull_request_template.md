@@ -1,31 +1,31 @@
+<!-- Title: type(scope): subject, for example fix(houses): ... (see CONTRIBUTING.md) -->
+
 ## Summary
 
-<!-- What does this PR change, and why? -->
+<!-- What changes and why, in a few sentences. -->
 
-## Related issue
+Closes #
 
-<!-- e.g. Closes #123 -->
+## Verification
 
-## Type of change
+<!-- What you ran and what it printed (passed / failed counts). -->
 
-- [ ] Bug fix
-- [ ] New feature / tradition / house system
-- [ ] Accuracy / correctness fix
-- [ ] Documentation
-- [ ] Performance
-- [ ] Refactor / internal
+- [ ] `cargo fmt --all --check`
+- [ ] `cargo clippy --workspace --exclude xalen-python -- -D warnings`
+- [ ] `cargo test --workspace --exclude xalen-python`
+- [ ] `cargo doc --no-deps --workspace --exclude xalen-python`
+- [ ] or the complete gate, which runs all of the above plus the release-config tests, the attribution and commercial-clean policy checks, `cargo audit`, the DE440 cross-validation, the WASM, Python and Node binding builds and the accuracy harness: `bash scripts/gate.sh` (paste its summary)
+- [ ] New or changed behaviour has a test; a fix has a test that fails without it
+- [ ] Numeric changes are checked against a reference (Swiss Ephemeris, JPL DE440, IAU SOFA or the cited text) with the measured difference stated; no claim beyond what a committed test shows
 
-## Checklist
+## Breaking changes
 
-- [ ] `cargo test --workspace --exclude xalen-python` passes
-- [ ] `cargo clippy --workspace --exclude xalen-python -- -D warnings` is clean
-- [ ] `cargo fmt --all --check` is clean
-- [ ] New or changed behaviour has tests
-- [ ] For any astronomy/astrology math: cross-validated against an authoritative reference (Swiss Ephemeris, JPL DE440, IAU SOFA, or the cited classical text) with the measured error stated
-- [ ] Docs updated (rustdoc + `ACCURACY.md` / README where relevant)
-- [ ] **No accuracy overclaims** — every "matches X" / "accurate to Y" claim is backed by a committed test. The project's rule is that XALEN **matches** reference ephemerides, never claims to **beat** them.
+<!-- None, or what callers must change. -->
 
-## Accuracy / reference notes
+## Docs updated
 
-<!-- If this touches positions, houses, ayanamsa, dasha, etc.: what did you validate
-     against, and what was the measured error? -->
+- [ ] rustdoc for new or changed public items
+- [ ] `CHANGELOG.md` under `[Unreleased]`
+- [ ] README or `docs/` where relevant (`scripts/regen-binding-ids.sh` if a binding ID changed)
+
+<!-- Outside contributors: sign the CLA by posting the comment in CLA.md section 6 on this pull request. -->

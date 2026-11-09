@@ -746,7 +746,7 @@ mod tests {
     fn wu_xing_ju_is_2_to_6() {
         let ju = wu_xing_ju(HeavenlyStem::Jia, EarthlyBranch::Zi);
         let v = ju.value();
-        assert!(v >= 2 && v <= 6, "Wu Xing Ju should be 2-6, got {v}");
+        assert!((2..=6).contains(&v), "Wu Xing Ju should be 2-6, got {v}");
     }
 
     #[test]

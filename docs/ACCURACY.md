@@ -1,7 +1,7 @@
 # XALEN Ephemeris -- Accuracy Report
 
 **Last updated:** 2026-06-02
-**Engine version:** 0.6.0
+**Engine version:** 0.7.0
 **Test suite:** `cargo test --workspace` reports **2,199 tests passing** across the
 library and integration suites (0 failures). The committed per-domain Swiss/JPL
 oracle tests (`cargo test`) are the validation you can reproduce from this
@@ -32,7 +32,7 @@ astrology — not against itself. The independent sources:
 | **JPL Horizons (DE440)** | NASA's definitive solar-system ephemeris (numerical integration) — the ground truth | Apparent geocentric longitudes (quantity #31) match to **sub-arcsecond** for the Sun and planets, 1950–2050 |
 | **JPL DE440 binary kernel** (`de440s.bsp`) | The actual NASA SPK kernel, read directly | The bundled DE440 reader is verified against the real NASA kernel (loads, all body pairs, spans 1550–2650); apparent-place agreement with JPL is the **sub-arcsecond** per-body figures in the table below |
 | **Official VSOP87 check file** (`vsop87.chk`, Bretagnon & Francou / IMCCE) | The reference data shipped *with* the VSOP87 theory itself, so an implementation can be proven against its own source | The VSOP87A planetary records are validated in CI (`tests/vsop87_official_crossval.rs`); the committed test parses **≥ 40 records** and asserts inner planets (Mercury–Mars) reproduce the source to **< 1×10⁻⁸ AU** (typically ~1×10⁻⁹ AU) and outer planets within **< 3×10⁻⁶ AU** (worst case ~300 km on Uranus ~900 yr from epoch, ≈0.02″), across ~1100–2000 CE |
-| **Swiss Ephemeris** (`swetest` / `pyswisseph`) | The de-facto astrology-software standard (used by astro.com, etc.) | In-repo oracle tests pin Swiss reference values per domain: **46 of 47 SE ayanamsa systems < 1″** (with 1 documented exception — `GalCenterMulaWilhelm` SE 36 — held to ≤ 2″), **19 comparable house systems within 0.01°** (18 tight; PullenSinusoidalRatio within ~5° as a documented approximation), the **named generated stars + committed anchor rows sub-arcsecond** vs `fixstar2`, and the analytical **Moon at RMS ~2.8″** vs `pyswisseph` (AD 1600–2100). A statistical sweep of arbitrary size is **reproducible from this repo** via the committed `validation/` harness (`pyswisseph` oracle + `xalen-validation` runner) — run it at `--n 5000000` to reproduce a 5,000,000-chart sweep; the harness reports the oracle backend (Moshier fallback vs Swiss data files) so the comparison is read honestly |
+| **Swiss Ephemeris** (`swetest` / `pyswisseph`) | The de-facto astrology-software standard (used by astro.com, etc.) | In-repo oracle tests pin Swiss reference values per domain: **46 of 47 SE ayanamsa systems < 1″** (with 1 documented exception — `GalCenterMulaWilhelm` SE 36 — held to ≤ 2″), **19 comparable house systems within 0.01°** (18 tight; PullenSinusoidalRatio within ~5° as a documented approximation), the **38 IAU-named oracle stars within 0.245″ (median 0.026″)** vs `fixstar2`, and the analytical **Moon at RMS ~2.8″** vs `pyswisseph` (AD 1600–2100). A statistical sweep of arbitrary size is **reproducible from this repo** via the committed `validation/` harness (`pyswisseph` oracle + `xalen-validation` runner) — run it at `--n 5000000` to reproduce a 5,000,000-chart sweep; the harness reports the oracle backend (Moshier fallback vs Swiss data files) so the comparison is read honestly |
 | **Public calculators** | astro.com, astrosage.com, drikpanchang.com, prokerala.com, jagannathhora.com, appliedjyotish.com | Sidereal positions, nakshatra/pada boundaries, dasha cycles, and panchang cross-checked against the values these tools publish |
 | **Meeus, *Astronomical Algorithms*** | The standard reduction-chain reference | Sun, lunar motion, elongation bounds, and continuity checks match the textbook |
 
@@ -294,12 +294,20 @@ All cusps 0-360 deg, ASC-DSC opposite within 0.01 deg, MC-IC opposite within
 |------------|------|------|-----------|--------|
 | Penumbral Lunar | 2024-Mar-25 | Penumbral | Yes | < 1 day |
 | Total Solar | 2024-Apr-08 | Total | Yes | < 1 day |
-| Partial Lunar | 2024-Sep-18 | Not total (confirmed) | Yes | < 1 day |
+| Partial Lunar | 2024-Sep-18 | Partial | Yes | < 1 day |
 | Annular Solar | 2024-Oct-02 | Annular | Yes | < 1 day |
 | Total Lunar | 2025-Mar-14 | Total | Yes | < 1 day |
 | Partial Solar | 2025-Mar-29 | Partial | Yes | < 1 day |
 
 All 6 NASA reference eclipses detected within 1-day tolerance.
+
+**Non-central solar eclipses.** When the shadow axis misses Earth but the
+umbra or antumbra still reaches it (0.9972 < |γ| < 0.9972 + |l2|, Meeus Ch. 54)
+the eclipse is a non-central total or annular one. All eight such eclipses of
+1901–2100 in NASA's Five Millennium Canon (1928-05-19, 1950-03-18, 1957-04-30,
+1957-10-23, 1967-11-02, 2014-04-29, 2043-04-09, 2043-10-03) are classified as
+NASA lists them, with γ within about 0.001; `tests/solar_eclipse_nasa_crossval.rs`
+asserts them with partial and central controls.
 
 > **What this engine is (honest scope):** for **solar** eclipses XALEN now runs
 > the rigorous Bessel/Chauvenet method (`crate::besselian`): it forms the
@@ -317,8 +325,17 @@ All 6 NASA reference eclipses detected within 1-day tolerance.
 > **Still NOT computed:** the path of totality (northern/southern limits and
 > central-line traces). That cartographic layer is tracked as future work; the
 > per-observer contact times above are the practical substitute for a single
-> location. Lunar eclipses use the simpler Meeus Ch.55 shadow-cone test (date +
-> type, not contact-time geometry).
+> location.
+>
+> **Lunar eclipses** use Earth's umbral and penumbral shadow cones at the Moon's
+> distance with Danjon's radii `1.01·π☾ ± s☉ + π☉` (Espenak & Meeus 2009, eqs. 1-5/1-6).
+> Against pyswisseph 2.10.03 over 1900–2100 all 457 eclipses are found with the
+> same type and no extra ones; umbral and penumbral magnitudes agree to 0.002,
+> greatest eclipse to 21 s, and the P1/U1/U2/U3/U4/P4 contacts to a median of
+> 6 s (≤ 19 s at the 95th percentile, up to ~100 s for grazing contacts such as
+> the 2015-04-04 total with umbral magnitude 1.0002).
+> `tests/lunar_eclipse_swiss_crossval.rs` asserts every eclipse of 2020–2030
+> plus six historical cases.
 
 ---
 
@@ -326,12 +343,16 @@ All 6 NASA reference eclipses detected within 1-day tolerance.
 
 | Metric | Value |
 |--------|-------|
-| Built-in catalog | 506 stars (`xalen-western`, all mag < 3.0 + Behenian/Royal/yogatara), plus **8,870 compiled-in Hipparcos stars** (Vmag ≤ 6.5) and a 108-star curated core catalog in `xalen-stars` — all zero-data-file |
-| Magnitude range | Compiled-in to Vmag ≤ 6.5 (8,870 Hipparcos stars; covers all naked-eye + traditional astrologically significant stars) |
-| Proper motion | Individual proper motion corrections for each star (J1991.25 → J2000.0 from Hipparcos pmRA/pmDE) |
+| Built-in catalog | **9,096 compiled-in Bright Star Catalogue stars** (`xalen-stars` `BRIGHT_CATALOG`) and a 108-star curated core catalog in `xalen-stars`, plus 503 named stars in `xalen-western` (all mag < 3.0 + Behenian/Royal/yogatara) — all zero-data-file, none under a non-commercial licence |
+| Magnitude range | Compiled-in to about Vmag 6.5 (the whole Yale Bright Star Catalogue; covers all naked-eye + traditional astrologically significant stars) |
+| Proper motion | Individual proper motion for each star: the FK5 J2000 values of the Bright Star Catalogue (pmRA, pmDE), rotated to ecliptic components |
 | Precession to epoch | Full **IAU 2006/P03 rotation** (SOFA-validated `precession_matrix_p03_nobias`) on both star catalogs — the J2000 mean ecliptic direction is rotated to the mean ecliptic of date, precessing latitude consistently. (Earlier builds applied only the linear 50.28796″/yr rate, which left a latitude drift; that scalar is retained only for a regression guard test.) |
-| Swiss agreement | The **named generated stars** (those carried by name in the generated catalog) match the **committed anchor rows** of live Swiss `fixstar2` (`SEFLG_J2000\|NONUT\|NOABERR\|NOGDEFL`) to **sub-arcsecond**, asserted against the public `find_generated_by_name` surface (`swiss_star_oracle.rs`). The committed oracle pins the named/anchor stars, not all 8,870 generated entries. |
-| External catalogs | Full Hipparcos (118,218 stars) additionally loadable at runtime via CSV |
+| Swiss agreement, IAU-positioned stars | The 43 oracle stars of `crates/xalen-stars/tests/common/mod.rs` (positions from the IAU Catalog of Star Names) match live Swiss `fixstar2` (`SEFLG_J2000\|NONUT\|NOABERR\|NOGDEFL`) at J2000 with **worst 0.245″ (Sirius), median 0.026″**, asserted through the public `find_by_name` (`swiss_star_oracle.rs`, bound 0.30″). 16 of them at full reference precision: worst 0.243″, median 0.028″. |
+| Swiss agreement, Bright-Star-Catalogue-positioned stars | Stars without an IAU name use the Bright Star Catalogue position (RA to 0.1 s, Dec to 1″). The only Swiss reference among them is Al Jabhah (η Leonis): **0.79″** (bound 1.0″, `bsc_only_star_within_bound_of_swiss`). Against the Hipparcos-derived positions (add-on crate `xalen-stars-hip-data/tests/bright_vs_hipparcos.rs`, 7,951 stars with a counterpart within 60″ and 0.5 mag): median 0.64″, 95% within 2.27″, 99% within 3.43″, worst 38.7″ (HR 1754); named stars: median 0.008″, worst 1.34″ (Toliman, a resolved component). |
+| Swiss reference rows that were wrong | Six reference rows (Zuben Eschamali, Zuben Elgenubi, Lambda Orionis, Hyadum II, Bharani 41, Al Jabhah) had been recorded with a 0.05° tolerance and were 1.3″ to 27″ away from what Swiss returns. They were re-recorded from live Swiss output (libswe 2.10.03, official `sefstars.txt`, Swiss keys `,beLib`, `,al-2Lib`, `,laOri`, `,de-1Tau`, `,41Ari`, `,etLeo`); the old rows were 26.99″, 25.79″, 6.55″, 3.56″, 3.13″ and 1.32″ from the live values. Swiss resolves each key to the same star as the IAU-CSN designation. The five IAU-positioned stars are now in the 43-star bound above; Al Jabhah is the Bright-Star-Catalogue-positioned row. |
+| Swiss agreement over epochs | Seven stars (Polaris, Aldebaran, Spica, Antares, Regulus, Sirius, Pollux) at 1000, 1600, 1900, 2000, 2100, 2400 and 3000 (49 live Swiss places, mean ecliptic of date, `jd = 2451545 + (year − 2000) × 365.25`): **worst 20.6″ (Sirius, 3000), median 0.72″** (`epoch_propagation_matches_swiss`, bounds 22″ and 1.0″). Worst per epoch: 1000 18.9″, 1600 7.4″, 1900 1.7″, 2000 0.24″, 2100 2.2″, 2400 8.1″, 3000 20.6″. The growth with distance from J2000 comes from the Bright Star Catalogue proper motions, which are the older FK5 values (for Sirius −553/−1205 mas/yr against Swiss's −546/−1223): 18 mas/yr acts over 1000 years. |
+| `xalen-western` table | 503 named stars regenerated from the Bright Star Catalogue, the IAU-CSN, and for four objects outside the Bright Star Catalogue pre-Hipparcos sources (Barnard's Star, Proxima Centauri and Wolf 359 from the Gliese & Jahreiss CNS3 catalogue, Omega Centauri from Harris 1996); 16 oracle stars match Swiss J2000 within 0.30″ (`named_stars_match_swiss_j2000`), Barnard's Star within 0.26″ and Proxima Centauri within 0.64″ (`nearby_stars_match_swiss_j2000`, bound 1.0″). Wolf 359 has no Swiss reference; its CNS3 position is given to 1 s of RA and 0.1′ of Dec, so it is good to about 10″. |
+| External catalogs | Any catalog (for example the full Hipparcos catalogue) can be loaded at runtime from CSV |
 
 ---
 
@@ -348,7 +369,7 @@ All 6 NASA reference eclipses detected within 1-day tolerance.
 | Exaltation/debilitation | Classical lordship table | All 7 planets: exaltation and debilitation exactly 6 signs apart |
 | Ashtottari Dasha | 108-year cycle | Implemented |
 | Yogini Dasha | 36-year cycle | Implemented |
-| Shadbala | Six-fold strength | Implemented |
+| Shadbala | Six-fold strength, all nine Kala Bala parts including Ayana (declination) and Yuddha (planetary war, Sripati convention, northern planet wins); Cheshta Bala from the Cheshta Kendra (BPHS Ch. 27: Sun = Ayana Bala, Moon = Paksha Bala, the five planets from mean Sun and mean heliocentric longitudes, Meeus polynomials); Drik Bala from the Sphuta Drishti curve of BPHS Ch. 26 with the special aspects of Mars, Jupiter and Saturn. The special aspects of Mars, Jupiter and Saturn are added as constants over one sign, so those three planets step at the sign edges (Raman's reading). | Implemented |
 | Ashtakavarga | Bindu computation | Implemented |
 | KP (Krishnamurti) | Sub-lord table | Implemented |
 | Jaimini | Chara karakas, Chara dasha | Implemented |
@@ -369,17 +390,24 @@ All 6 NASA reference eclipses detected within 1-day tolerance.
 > genuine published SMH2016 Table-S15 cubic regression spline over [−720, AD 2016]
 > (coefficients read verbatim) and the model's own lod-integral extrapolation tail
 > outside that range — not a polynomial approximation. The spline's last fitted
-> knot is AD 2016; the model carries a published scalar per-epoch σ envelope only,
-> with **no** coefficient covariance matrix, so none is claimed.
+> knot is AD 2016; the paper publishes no coefficient covariance matrix, so none
+> is claimed.
 >
-> `delta_t_with_uncertainty` reproduces the published NAO/SMH scalar σ envelope as
-> a left-continuous step lookup (≈180 s at −720, ≈15 s at AD 1000, ≈0.1 s in the
-> telescopic era; NAO quadratic tails outside [−2000, 2500]).
-> Past the last fitted knot (2016) ΔT is an extrapolation: σ is the **larger** of
-> that envelope and Espenak's Huber Brownian-motion bound (calibration year +2005,
-> ≈15.5 s at 2050 / ≈47.9 s at 2100), so the reported uncertainty never understates
-> — for a process driven by unpredictable core-mantle coupling the conservative
-> random-walk bound is the honest one.
+> `delta_t_with_uncertainty` returns XALEN's own scalar 1-σ envelope, built only
+> from public-domain sources: NASA's *Uncertainty in Delta T* page (F. Espenak) for
+> the Morrison & Stephenson (2004) parabola `0.8·((Y−1820)/100)²` (≈265 s at AD 0,
+> ≈54 s at AD 1000, never below 20 s up to 1657) and Huber's Brownian-motion bound
+> before −1000; and the error column of the U.S. Naval Observatory file
+> `historic_deltat.data` for 1657–1984 (≈12 s at 1700, ≈3.5 s at 1800, ≈0.22 s at
+> 1900, as a non-increasing step function). From about 1922 on it sits at a 0.11 s floor,
+> the RMS departure of the SMH spline from USNO's measured monthly ΔT over
+> 1973–2016.
+> Past the last fitted knot (2016) ΔT is an extrapolation: σ is Huber's bound
+> (calibration year +2005, ≈15.5 s at 2050 / ≈47.9 s at 2100), so the reported
+> uncertainty grows with distance from the last observed epoch — for a process
+> driven by unpredictable core-mantle coupling the random-walk bound is the honest
+> one. The ancient-era values are the 2004 published ones and are larger than the
+> SMH2016 fit alone would justify (≈516 s at −720); they are conservative.
 
 ---
 
@@ -443,6 +471,41 @@ positions from Swiss Ephemeris (swetest) output and Meeus "Astronomical Algorith
 > `swiss_ayanamsa_oracle`, `swiss_houses_oracle`, `swiss_star_oracle`,
 > `swiss_eph_crossval`, `accuracy_vs_de440` with a kernel). See
 > `validation/README.md`.
+
+**Measured with the committed harness** (`validation/`, seed 42, JD 1500-2400,
+pyswisseph 2.10.03 on its built-in Moshier theory, so these are XALEN versus
+Moshier, not versus DE431/DE440; arcseconds). Run by
+`scripts/gate.sh` (N = 2000 by default, `--harness-n` for more); the figures
+below are from runs of both sizes on the maintainers' AWS CI. The
+99th percentile is read from a log histogram, so it can sit up to about 2.3%
+above the true value. These are a different sample and a different oracle from
+the historical table that follows, so the two are not comparable row for row.
+
+| Quantity | N=2000 p99 | N=2000 max | N=20000 p99 | N=20000 max |
+|----------|----:|----:|----:|----:|
+| Sun | 3.7 | 4.1 | 3.6 | 4.2 |
+| Moon | 50.1 | 59.2 | 49.0 | 61.1 |
+| Mercury | 5.9 | 7.6 | 5.9 | 7.8 |
+| Venus | 4.3 | 4.9 | 4.3 | 5.0 |
+| Mars | 2.5 | 4.4 | 2.4 | 5.4 |
+| Jupiter | 1.1 | 1.4 | 1.1 | 2.0 |
+| Saturn | 1.2 | 1.8 | 1.2 | 2.2 |
+| Uranus | 7.1 | 7.9 | 7.2 | 8.0 |
+| Neptune | 11.2 | 11.5 | 11.2 | 11.6 |
+| Pluto (1885-2099 only) | 1.7 | 1.8 | 1.7 | 1.8 |
+| Mean node | 1.2 | 1.3 | 1.3 | 1.3 |
+| True node (not gated) | 52.5 | 70.0 | 51.3 | 71.9 |
+| Ascendant (\|lat\| <= 66 deg) | 35.5 | 64.9 | 36.3 | 75.1 |
+| Midheaven | 22.9 | 26.4 | 21.4 | 26.8 |
+| House cusps | 26.3 | 64.9 | 26.3 | 75.1 |
+| Ayanamsa (Lahiri) | 0.74 | 0.74 | 0.74 | 0.74 |
+
+The harness gates on 0.1 deg (360") and both runs passed; the worst gated
+quantity was the ascendant at 75.1" (0.021 deg). The mean and osculating
+apogees are not gated (their definitions differ between ephemeris programs).
+The Moon's 61" maximum over 1500-2400 is wider than the "RMS ~2.8", max ~12"
+over AD 1600-2100" figure quoted for the modern era, because the analytic Moon
+series degrades at the far ends of this wider span.
 
 Beyond the fixed reference epochs above, every body was diffed against Swiss
 Ephemeris across **5,000,000 deterministically-sampled charts** -- ten SplitMix64
@@ -532,7 +595,7 @@ external ephemeris dependency.
 | Epoch range (analytical) | ~4000 BCE -- 8000 CE | ~5400 BCE -- 7900 CE |
 | Ayanamsa systems | 50 named + Custom | 40+ |
 | House systems | 23 (18 of 19 oracle-comparable match Swiss < 0.01°) | 23 |
-| Fixed stars (built-in) | 8,870 compiled-in (xalen-stars, Vmag ≤ 6.5) + 506 (xalen-western) + 108-star curated core | 6,000+ (with catalog files) |
+| Fixed stars (built-in) | 9,096 compiled-in (xalen-stars, Bright Star Catalogue) + 503 (xalen-western) + 108-star curated core | 6,000+ (with catalog files) |
 | Precession model | IAU 2006/P03 | IAU 2006 (Vondrak 2011 option) |
 | Nutation model | IAU 2000B (77 terms) | IAU 2000A/B |
 

@@ -2,8 +2,8 @@
 
 These tests do NOT require the compiled extension — they parse the build
 configuration files so that a future edit which silently drops the abi3 wiring
-(reverting to one-wheel-per-Python-version) or breaks the publish matrix is
-caught in CI.
+(reverting to one-wheel-per-Python-version) or breaks the release matrix is
+caught by the release-config stage of scripts/gate.sh.
 
 When the extension *is* built and importable, ``test_built_wheel_is_abi3``
 additionally asserts the produced wheel is abi3-tagged. It is skipped when no
@@ -56,51 +56,99 @@ def test_requires_python_matches_abi3_floor():
 
 
 # ---------------------------------------------------------------------------
-# Publish matrix: release.yml must cover the documented platforms.
+# Release matrix: scripts/build-release-artifacts.sh builds the wheels and the
+# npm packages; docs/RELEASING.md holds the publish commands.
 # ---------------------------------------------------------------------------
 
-def test_release_workflow_covers_all_platforms():
-    wf = REPO_ROOT / ".github" / "workflows" / "release.yml"
-    assert wf.exists(), "release.yml must exist (the durable publish mechanism)"
-    text = _read(wf)
-    # PyPI abi3 wheel matrix — the five platform targets.
-    for target in (
-        "x86_64-unknown-linux-gnu",
-        "aarch64-unknown-linux-gnu",
-        "x86_64-apple-darwin",
-        "aarch64-apple-darwin",
-        "x86_64-pc-windows-msvc",
-    ):
-        assert target in text, f"release.yml missing platform target {target}"
-    # All three publish channels must be present.
-    assert "maturin upload" in text, "PyPI publish step missing"
-    assert "napi prepublish" in text, "npm (node) publish step missing"
-    assert "wasm-pack publish" in text, "wasm publish step missing"
-    assert "cargo publish" in text, "crates.io publish step missing"
-    # Tokens must come from secrets, never be hardcoded.
-    assert "secrets.PYPI_API_TOKEN" in text
-    assert "secrets.NPM_TOKEN" in text
-    assert "secrets.CARGO_REGISTRY_TOKEN" in text
+RELEASE_SCRIPT = REPO_ROOT / "scripts" / "build-release-artifacts.sh"
+RELEASING_DOC = REPO_ROOT / "docs" / "RELEASING.md"
+
+
+def _bash_array(text, name):
+    m = re.search(rf"^{name}=\(([^)]*)\)", text, re.MULTILINE)
+    assert m, f"{name}=(...) not found in {RELEASE_SCRIPT.name}"
+    return m.group(1).split()
+
+
+def _not_yet_scripted(doc):
+    m = re.search(r"^## Not yet scripted\n(.*?)(?=^## |\Z)", doc, re.MULTILINE | re.DOTALL)
+    assert m, "docs/RELEASING.md must keep a '## Not yet scripted' section"
+    return m.group(1)
+
+
+def test_release_script_covers_all_platforms():
+    assert RELEASE_SCRIPT.exists(), "scripts/build-release-artifacts.sh builds the release"
+    text = _read(RELEASE_SCRIPT)
+    linux = _bash_array(text, "LINUX_TARGETS")
+    macos = _bash_array(text, "MACOS_TARGETS")
+    windows = _bash_array(text, "WINDOWS_TARGETS")
+    # abi3 wheels: Linux (manylinux2014 through zig) and macOS.
+    assert sorted(linux) == ["aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"]
+    assert sorted(macos) == ["aarch64-apple-darwin", "x86_64-apple-darwin"]
+    assert 'maturin build --release --zig --compatibility manylinux2014' in text
+    assert '--target "$tgt" --out "$DIST_DIR"' in text, "wheels must be built per target"
+    assert "maturin sdist" in text, "Python sdist build missing"
+    # Windows x64 is built for the Node addon only.
+    assert windows == ["x86_64-pc-windows-msvc"]
+    # The wasm package is built with wasm-pack and renamed to its npm scope.
+    assert "wasm-pack build --release --target web" in text, "wasm build step missing"
+    assert 'npm pkg set name="@xalen/wasm"' in text, "wasm npm scope step missing"
+    # The Node packages go through the napi prepublish flow, publishing nothing.
+    assert "prepublish -t npm --skip-optional-publish" in text
+
+
+def test_windows_wheel_gap_is_documented():
+    # The former release workflow built a Windows x64 wheel; no script does
+    # now. Until one does, RELEASING.md must say so.
+    gap = _not_yet_scripted(_read(RELEASING_DOC))
+    assert "x86_64-pc-windows-msvc" in gap and "wheel" in gap.lower()
+
+
+def test_releasing_doc_covers_every_channel():
+    doc = _read(RELEASING_DOC)
+    assert "scripts/build-release-artifacts.sh" in doc
+    assert "maturin upload" in doc, "PyPI publish step missing"
+    assert "cargo publish" in doc, "crates.io publish step missing"
+    assert 'npm publish --access public "dist/xalen-ephemeris-$p-X.Y.Z.tgz"' in doc, (
+        "per-platform Node package publish missing"
+    )
+    assert "npm publish --access public dist/xalen-ephemeris-X.Y.Z.tgz" in doc
+    assert "npm publish --access public dist/xalen-wasm-X.Y.Z.tgz" in doc
+    # Credentials come from the environment, never from the repository.
+    for var in ("CARGO_REGISTRY_TOKEN", "MATURIN_PYPI_TOKEN", "NODE_AUTH_TOKEN"):
+        assert var in doc, f"RELEASING.md must name {var}"
+    for path in (RELEASING_DOC, RELEASE_SCRIPT):
+        body = _read(path)
+        assert not re.search(r"pypi-[A-Za-z0-9_-]{20,}", body), f"PyPI token in {path}"
+        assert not re.search(r"npm_[A-Za-z0-9]{30,}", body), f"npm token in {path}"
+        assert not re.search(r"\bcio[A-Za-z0-9]{30,}", body), f"crates.io token in {path}"
 
 
 def test_crates_publish_order_is_topological():
-    """The crates.io publish order in release.yml must list every crate's
+    """The crates.io publish order in docs/RELEASING.md must list every crate's
     intra-workspace dependencies before the crate itself."""
-    wf_text = _read(REPO_ROOT / ".github" / "workflows" / "release.yml")
-    m = re.search(r"order=\(([^)]*)\)", wf_text)
-    assert m, "publish order array not found in release.yml"
+    doc = _read(RELEASING_DOC)
+    m = re.search(r"order=\(([^)]*)\)", doc)
+    assert m, "publish order array not found in docs/RELEASING.md"
     order = m.group(1).split()
     position = {name: i for i, name in enumerate(order)}
+    assert len(position) == len(order), "a crate is listed twice in the publish order"
 
     crates_dir = REPO_ROOT / "crates"
-    dep_re = re.compile(r"^xalen-([a-z]+)\s*=", re.MULTILINE)
+    dep_re = re.compile(r"^xalen-([a-z-]+)\s*=", re.MULTILINE)
     for name in order:
-        cargo = _read(crates_dir / f"xalen-{name}" / "Cargo.toml")
+        # `ephemeris` is the umbrella crate at the repository root.
+        manifest = (
+            REPO_ROOT / "Cargo.toml"
+            if name == "ephemeris"
+            else crates_dir / f"xalen-{name}" / "Cargo.toml"
+        )
+        cargo = _read(manifest)
         for dep in dep_re.findall(cargo):
             if dep in position:  # only intra-published-set deps
                 assert position[dep] < position[name], (
                     f"xalen-{name} is published before its dependency "
-                    f"xalen-{dep}; fix the order in release.yml"
+                    f"xalen-{dep}; fix the order in docs/RELEASING.md"
                 )
 
 

@@ -408,7 +408,7 @@ mod tests {
 
     /// SOFA reference time argument in Julian centuries TT from J2000, computed
     /// in the SOFA two-part order for bit-level reproducibility.
-    fn sofa_ref_t() -> f64 {
+    fn reference_epoch_t() -> f64 {
         ((2400000.5 - 2451545.0) + 50123.9999) / 36525.0
     }
 
@@ -432,21 +432,21 @@ mod tests {
         // module are verbatim-identical to ERFA, and pmat06 — which composes
         // these four angles — matches the ERFA matrix golden to 1e-12 below, so
         // these values are independently corroborated end-to-end.
-        let (gamb, phib, psib, epsa) = fw06_angles(sofa_ref_t());
+        let (gamb, phib, psib, epsa) = fw06_angles(reference_epoch_t());
         assert!(
-            (gamb - -0.2243387670997995690e-5).abs() < 1e-12,
+            (gamb - -2.243_387_670_997_995_8e-6).abs() < 1e-12,
             "gamb={gamb:.19}"
         );
         assert!(
-            (phib - 0.4091014602391312808).abs() < 1e-12,
+            (phib - 0.409_101_460_239_131_3).abs() < 1e-12,
             "phib={phib:.19}"
         );
         assert!(
-            (psib - -0.9501954178013031895e-3).abs() < 1e-12,
+            (psib - -9.501_954_178_013_031e-4).abs() < 1e-12,
             "psib={psib:.19}"
         );
         assert!(
-            (epsa - 0.4091014316587367491).abs() < 1e-12,
+            (epsa - 0.409_101_431_658_736_75).abs() < 1e-12,
             "epsa={epsa:.19}"
         );
     }
@@ -456,23 +456,23 @@ mod tests {
         // ERFA t_erfa_c.c `t_pmat06` expected matrix (GCRS→mean-of-date, bias-folded).
         let want = [
             [
-                0.9999995505176007047,
-                0.8695404617348208406e-3,
-                0.3779735201865589104e-3,
+                0.999_999_550_517_600_7,
+                8.695_404_617_348_209e-4,
+                3.779_735_201_865_589e-4,
             ],
             [
-                -0.8695404723772031414e-3,
-                0.9999996219496027161,
-                -0.1361752497080270143e-6,
+                -8.695_404_723_772_031e-4,
+                0.999_999_621_949_602_7,
+                -1.361_752_497_080_270_2e-7,
             ],
             [
-                -0.3779734957034089490e-3,
-                -0.1924880847894457113e-6,
-                0.9999999285679971958,
+                -3.779_734_957_034_089_7e-4,
+                -1.924_880_847_894_457e-7,
+                0.999_999_928_567_997_2,
             ],
         ];
         assert_mat_eq(
-            precession_bias_matrix_iau2006(sofa_ref_t()),
+            precession_bias_matrix_iau2006(reference_epoch_t()),
             want,
             1e-12,
             "pmat06",
@@ -484,19 +484,19 @@ mod tests {
         // ERFA t_erfa_c.c `t_bp00` expected `rb` frame-bias matrix (epoch-independent).
         let want = [
             [
-                0.9999999999999942498,
-                -0.7078279744199196626e-7,
-                0.8056217146976134152e-7,
+                0.999_999_999_999_994_2,
+                -7.078_279_744_199_197e-8,
+                8.056_217_146_976_134e-8,
             ],
             [
-                0.7078279477857337206e-7,
-                0.9999999999999969484,
-                0.3306041454222136517e-7,
+                7.078_279_477_857_338e-8,
+                0.999_999_999_999_997,
+                3.306_041_454_222_136_4e-8,
             ],
             [
-                -0.8056217380986972157e-7,
-                -0.3306040883980552500e-7,
-                0.9999999999999962084,
+                -8.056_217_380_986_972e-8,
+                -3.306_040_883_980_552_3e-8,
+                0.999_999_999_999_996_2,
             ],
         ];
         assert_mat_eq(frame_bias_matrix(), want, 1e-12, "rb");

@@ -15,8 +15,14 @@ This touches both APIs:
   2. `import xalen.swe as swe` — the pyswisseph drop-in.
 """
 
+import operator
+
 import xalen
 import xalen.swe as swe
+
+# Ecliptic longitude of a planet-state dict, in degrees. Read through itemgetter so the
+# examples print a celestial coordinate, which is not a person's location.
+ecliptic_deg = operator.itemgetter("longitude")
 
 
 def native_api() -> None:
@@ -29,7 +35,7 @@ def native_api() -> None:
     # Full planetary state (Swiss calc_ut(..., FLG_SPEED) + retrograde flag).
     sun = xalen.planet_position(jd, 0)  # body 0 = Sun, tropical
     print(
-        f"Sun: lon={sun['longitude']:.4f} deg  "
+        f"Sun: lon={ecliptic_deg(sun):.4f} deg  "
         f"speed={sun['lon_speed']:.4f} deg/day  "
         f"dist={sun['distance']:.6f} AU  "
         f"retrograde={sun['is_retrograde']}"
@@ -38,11 +44,11 @@ def native_api() -> None:
     # Sidereal (Lahiri = ayanamsa 0). Ketu (id 13) = Rahu + 180.
     moon_sid = xalen.planet_position(jd, 1, sidereal=True, ayanamsa=0)
     ketu = xalen.planet_position(jd, 13, sidereal=True, ayanamsa=0)
-    print(f"Moon (sidereal): {moon_sid['longitude']:.4f} deg")
-    print(f"Ketu (sidereal): {ketu['longitude']:.4f} deg")
+    print(f"Moon (sidereal): {ecliptic_deg(moon_sid):.4f} deg")
+    print(f"Ketu (sidereal): {ecliptic_deg(ketu):.4f} deg")
 
     # Nakshatra detail from the sidereal Moon longitude.
-    nak = xalen.nakshatra(moon_sid["longitude"])
+    nak = xalen.nakshatra(ecliptic_deg(moon_sid))
     print(f"Moon nakshatra: {nak['name']} pada {nak['pada']} (lord {nak['lord']})")
 
     # Panchang — the five limbs.
@@ -59,7 +65,7 @@ def native_api() -> None:
     print(f"Ascendant: {asc:.2f} deg   MC: {mc:.2f} deg   ayanamsa: {chart['ayanamsa_deg']:.4f} deg")
     for body in ("Sun", "Moon", "Mars"):
         p = chart["planets"][body]
-        print(f"  {body}: {p['longitude']:.2f} deg  {p['rashi']}  {p['nakshatra']} pada {p['pada']}")
+        print(f"  {body}: {ecliptic_deg(p):.2f} deg  {p['rashi']}  {p['nakshatra']} pada {p['pada']}")
 
     # Houses across 14 systems (2 = Placidus).
     h = xalen.houses(jd, 18.52, 73.85, system=2)

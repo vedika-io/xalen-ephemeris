@@ -58,7 +58,9 @@ impl HouseCusps {
     /// and every angle (ASC, MC, IC, DSC, Vertex and the four auxiliary
     /// ascendants) is shifted by `−ayanamsa` and re-normalized to `[0, 2π)`,
     /// exactly as Swiss Ephemeris does for `swe_houses_ex(..., SEFLG_SIDEREAL)`.
-    /// `system` and `fallback_used` are preserved.
+    /// `system` and `fallback_used` are preserved. For [`HouseSystem::WholeSign`]
+    /// the cusps are rebuilt from the sidereal ascendant, so they stay on
+    /// 30-degree sign boundaries of the sidereal zodiac.
     ///
     /// Validated against pyswisseph 2.10.03: tropical cusps/angles minus the
     /// Lahiri ayanamsa reproduce `swe.houses_ex(jd, lat, lon, b'P',
@@ -69,6 +71,14 @@ impl HouseCusps {
         let mut cusps = [0.0; 12];
         for (i, c) in cusps.iter_mut().enumerate() {
             *c = shift(self.cusps[i]);
+        }
+        // Whole Sign cusps sit on sign boundaries of the zodiac they are
+        // quoted in. Shifting the tropical boundaries would leave them
+        // `ayanamsa` degrees off the sidereal sign boundaries, so snap the
+        // SIDEREAL ascendant instead (as Swiss does in sidereal mode). Equal
+        // and Vehlow cusps are offsets of the ascendant and shift correctly.
+        if self.system == HouseSystem::WholeSign {
+            cusps = whole_sign_cusps(shift(self.ascendant));
         }
         HouseCusps {
             system: self.system,
@@ -93,7 +103,7 @@ impl HouseCusps {
             let start = self.cusps[i];
             let end = self.cusps[(i + 1) % 12];
             if end > start {
-                if lon >= start && lon < end {
+                if (start..end).contains(&lon) {
                     return i + 1;
                 }
             } else {
@@ -235,6 +245,48 @@ pub fn compute_houses_from_ramc(
         polar_ascendant_munkasey: aux.polar_ascendant_munkasey,
         fallback_used,
     }
+}
+
+/// Compute house cusps and angles on the **true equinox of date** — the frame
+/// Swiss Ephemeris `swe_houses` uses and the frame of the apparent positions
+/// that the `Almanac` of `xalen-ephem` returns.
+///
+/// [`compute_houses`] derives its RAMC from Greenwich *Mean* Sidereal Time and
+/// takes the obliquity from the caller. That is a consistent but mean-equinox
+/// frame, about 0.0036 degrees away from apparent planetary longitudes. This
+/// function instead:
+///
+/// 1. converts `jd_ut1` to Terrestrial Time with the
+///    Stephenson-Morrison-Hohenkerk (2016) ΔT model, the same one the default
+///    `Almanac` uses;
+/// 2. takes the true obliquity `ε = mean_obliquity(T) + Δε` (IAU 2006 mean
+///    obliquity, IAU 2000B nutation in obliquity);
+/// 3. takes the RAMC from Greenwich *Apparent* Sidereal Time plus the east
+///    longitude of `location` (Meeus, *Astronomical Algorithms*, 2nd ed.,
+///    ch. 12), and
+/// 4. hands both to [`compute_houses_from_ramc`].
+///
+/// `jd_ut1` is a UT1 Julian Day. The result is in radians like every
+/// [`HouseCusps`]. [`compute_houses`] is unchanged.
+///
+/// ```
+/// use xalen_houses::{compute_houses_true, GeoLocation, HouseSystem};
+///
+/// let pune = GeoLocation::new(18.52, 73.85);
+/// let h = compute_houses_true(2_451_545.0, &pune, HouseSystem::Placidus);
+/// assert!((0.0..std::f64::consts::TAU).contains(&h.ascendant));
+/// assert!((h.mc - h.ic).abs() > 3.0); // IC is opposite the MC
+/// ```
+pub fn compute_houses_true(jd_ut1: f64, location: &GeoLocation, system: HouseSystem) -> HouseCusps {
+    use xalen_time::JulianDay;
+    let jd_tt = xalen_time::JdUT1(jd_ut1)
+        .to_tt(&xalen_time::DeltaTModel::StephensonMorrisonHohenkerk2016)
+        .as_f64();
+    let t_tt = (jd_tt - 2_451_545.0) / 36525.0;
+    let epsilon =
+        xalen_coords::mean_obliquity(t_tt) + xalen_coords::nutation_2000b(t_tt).delta_epsilon;
+    let ramc_deg = (xalen_coords::gast_deg(jd_ut1, t_tt) + location.lon_deg()).rem_euclid(360.0);
+    compute_houses_from_ramc(ramc_deg.to_radians(), location, epsilon, system)
 }
 
 /// The four auxiliary ascendant points Swiss Ephemeris exposes in
@@ -1844,6 +1896,29 @@ mod tests {
         GeoLocation::new(18.52, 73.85)
     } // Pune
 
+    /// `compute_houses_true` differs from the mean-equinox `compute_houses` only
+    /// by the equation of the equinoxes (about 0.0036 degrees at J2000) and the
+    /// nutation in obliquity. The exact match against Swiss `swe_houses` is the
+    /// integration test `houses_true_matches_swe_houses` in `xalen-ephem`.
+    #[test]
+    fn compute_houses_true_is_a_small_nutation_offset_from_mean() {
+        let jd = 2_451_545.0;
+        let loc = test_location();
+        let eps_mean = xalen_coords::mean_obliquity(0.0);
+        let mean = compute_houses(jd, &loc, eps_mean, HouseSystem::Placidus);
+        let apparent = compute_houses_true(jd, &loc, HouseSystem::Placidus);
+        let d_mc = ((apparent.mc - mean.mc).to_degrees() + 180.0).rem_euclid(360.0) - 180.0;
+        assert!(
+            d_mc.abs() > 1e-4 && d_mc.abs() < 0.02,
+            "MC offset {d_mc} deg should be the ~0.0036 deg equation of the equinoxes"
+        );
+        let d_asc =
+            ((apparent.ascendant - mean.ascendant).to_degrees() + 180.0).rem_euclid(360.0) - 180.0;
+        assert!(d_asc.abs() < 0.02, "ASC offset {d_asc} deg");
+        assert!(((apparent.ic - apparent.mc).rem_euclid(TAU) - PI).abs() < 1e-12);
+        assert!(!apparent.fallback_used);
+    }
+
     /// Morinus cusps are equatorial points (declination 0) projected onto the
     /// ecliptic. For a point at right ascension A on the equator the longitude
     /// satisfies `tan λ = tan A · cos ε`. With RAMC chosen so that cusp[9]
@@ -1954,7 +2029,7 @@ mod tests {
         for i in 0..12 {
             let deg = h.cusp_deg(i);
             assert!(
-                deg >= 0.0 && deg < 360.0,
+                (0.0..360.0).contains(&deg),
                 "Cusp {} out of range: {deg}°",
                 i + 1
             );
@@ -2090,7 +2165,7 @@ mod tests {
         for i in 0..12 {
             let deg = h.cusps[i].to_degrees().rem_euclid(360.0);
             assert!(
-                deg >= 0.0 && deg < 360.0,
+                (0.0..360.0).contains(&deg),
                 "Campanus cusp {} out of range: {deg}",
                 i + 1
             );
@@ -2271,7 +2346,7 @@ mod tests {
         for i in 0..12 {
             let deg = h.cusp_deg(i);
             assert!(
-                deg >= 0.0 && deg < 360.0,
+                (0.0..360.0).contains(&deg),
                 "Koch cusp {} out of range at Pune: {deg}°",
                 i + 1
             );
@@ -2352,7 +2427,7 @@ mod tests {
         for i in 0..12 {
             let deg = h.cusp_deg(i);
             assert!(
-                deg >= 0.0 && deg < 360.0,
+                (0.0..360.0).contains(&deg),
                 "Alcabitius cusp {} out of range at Pune: {deg}°",
                 i + 1
             );
@@ -2451,7 +2526,7 @@ mod tests {
         for i in 0..12 {
             let deg = h.cusp_deg(i);
             assert!(
-                deg >= 0.0 && deg < 360.0,
+                (0.0..360.0).contains(&deg),
                 "Topocentric cusp {} out of range at Pune: {deg}°",
                 i + 1
             );
@@ -2563,7 +2638,7 @@ mod tests {
         for i in 0..12 {
             let deg = h.cusp_deg(i);
             assert!(
-                deg >= 0.0 && deg < 360.0,
+                (0.0..360.0).contains(&deg),
                 "Meridian cusp {} out of range: {deg}°",
                 i + 1
             );
@@ -3925,7 +4000,7 @@ mod tests {
                 ] {
                     assert!(!v.is_nan(), "{system} {label} asc NaN at lat={lat}");
                     assert!(
-                        v >= 0.0 && v < TAU,
+                        (0.0..TAU).contains(&v),
                         "{system} {label} asc out of [0, 2π) at lat={lat}: {v}"
                     );
                 }
@@ -4207,5 +4282,57 @@ mod tests {
             total += step;
         }
         assert!((total - 360.0).abs() < 1e-6, "polar arcs sum to 360°");
+    }
+
+    /// Sidereal Whole Sign cusps are the sign boundaries of the SIDEREAL
+    /// zodiac, and the ascendant lies in house 1. Before the fix the tropical
+    /// boundaries were shifted by the ayanamsa and landed off the boundaries.
+    #[test]
+    fn sidereal_whole_sign_cusps_are_sign_boundaries() {
+        let epsilon = 23.4393_f64.to_radians();
+        let ayanamsa = 24.2_f64.to_radians();
+        for jd in [2451545.0, 2461351.5, 2447965.77] {
+            let h = compute_houses_sidereal(
+                jd,
+                &test_location(),
+                epsilon,
+                ayanamsa,
+                HouseSystem::WholeSign,
+            );
+            for (i, cusp) in h.cusps.iter().enumerate() {
+                let deg = cusp.to_degrees().rem_euclid(360.0);
+                let off = (deg / 30.0 - (deg / 30.0).round()).abs() * 30.0;
+                assert!(off < 1e-9, "cusp {} = {deg} is not a multiple of 30", i + 1);
+            }
+            let asc = h.ascendant.to_degrees().rem_euclid(360.0);
+            assert!((asc - h.cusp_deg(0)).rem_euclid(360.0) < 30.0);
+            assert_eq!(h.planet_in_house(h.ascendant), 1);
+            // A planet in the ascendant's sidereal sign is in house 1.
+            let sign_start = (asc / 30.0).floor() * 30.0;
+            assert_eq!(h.planet_in_house((sign_start + 0.001).to_radians()), 1);
+            assert_eq!(h.planet_in_house((sign_start + 29.999).to_radians()), 1);
+            assert_eq!(h.planet_in_house((sign_start + 30.001).to_radians()), 2);
+        }
+    }
+
+    /// Sidereal Equal cusps are the sidereal ascendant plus 30 degrees times
+    /// the house index.
+    #[test]
+    fn sidereal_equal_cusps_are_ascendant_plus_thirty_steps() {
+        let epsilon = 23.4393_f64.to_radians();
+        let ayanamsa = 24.2_f64.to_radians();
+        let h = compute_houses_sidereal(
+            2461351.5,
+            &test_location(),
+            epsilon,
+            ayanamsa,
+            HouseSystem::Equal,
+        );
+        let asc = h.ascendant.to_degrees().rem_euclid(360.0);
+        for i in 0..12 {
+            let expected = (asc + 30.0 * i as f64).rem_euclid(360.0);
+            let d = (h.cusp_deg(i) - expected).rem_euclid(360.0);
+            assert!(d.min(360.0 - d) < 1e-9, "cusp {} off by {d}", i + 1);
+        }
     }
 }

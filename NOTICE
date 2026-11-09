@@ -26,22 +26,48 @@ Third-Party Acknowledgments:
 - DE440 ephemeris data: NASA/JPL (Jet Propulsion Laboratory)
 - IAU 2006 precession: N. Capitaine, P.T. Wallace, J. Chapront (2003)
 - IAU 2000B nutation: D.D. McCarthy, G. Petit (IERS TN 32)
-- Delta-T model: F.R. Stephenson, L.V. Morrison, C.Y. Hohenkerk (2016)
-- Fixed-star catalog: The Hipparcos and Tycho Catalogues, (C) ESA 1997
-  (ESA SP-1200), distributed by CDS Strasbourg as catalogue I/239. The
-  expanded fixed-star catalog (Vmag <= 6.5) is generated directly from
-  I/239 hip_main.dat (positions, magnitudes, proper motions).
-- Fixed-star traditional names: IAU Catalog of Star Names (IAU-CSN),
+- Delta-T model: F.R. Stephenson, L.V. Morrison, C.Y. Hohenkerk (2016),
+  Proc. R. Soc. A 472:20160404 and its electronic supplementary material
+  (spline coefficients, Table S15), used under Creative Commons Attribution 4.0
+  (https://creativecommons.org/licenses/by/4.0/); the original authors and
+  source are credited here. The coefficient values are unchanged.
+- Delta-T uncertainty envelope: formulas from NASA, "Uncertainty in Delta T"
+  (F. Espenak, NASA/GSFC, https://eclipse.gsfc.nasa.gov/SEhelp/uncertainty2004.html;
+  Morrison & Stephenson 2004, Huber 2000) and the error column of the U.S. Naval
+  Observatory file historic_deltat.data (McCarthy & Babcock 1986,
+  https://maia.usno.navy.mil/ser7/historic_deltat.data). The NASA page and the
+  USNO file are U.S. Government material, not protected by copyright; the
+  formulas are published mathematics.
+- Fixed-star catalog: Hoffleit D., Warren Jr W.H., The Bright Star Catalogue,
+  5th Revised Ed. (Preliminary Version), Astronomical Data Center,
+  NSSDC/ADC (1991), distributed by CDS Strasbourg as catalogue V/50. The
+  fixed-star list in xalen-stars (9,096 stars) is generated from it
+  (identification, magnitudes, proper motions, positions).
+- Fixed-star names and positions: IAU Catalog of Star Names (IAU-CSN),
   IAU Division C Working Group on Star Names (WGSN), used under
-  Creative Commons Attribution; names carried onto HIP identifiers.
-- Star identities additionally cross-checked against the CDS/SIMBAD
-  Astronomical Database, Strasbourg.
+  Creative Commons Attribution; proper names, constellations and J2000
+  positions of the named stars.
+- Western fixed-star table (xalen-western): Gliese W., Jahreiss H.,
+  Preliminary Version of the Third Catalogue of Nearby Stars (CNS3),
+  Astron. Rechen-Institut Heidelberg (1991), CDS catalogue V/70A (magnitude and
+  proper motion of Barnard's Star, Proxima Centauri and Wolf 359; position of
+  Wolf 359); Harris W.E., A Catalog of Parameters for Globular Clusters in the
+  Milky Way, Astron. J. 112, 1487 (1996), CDS catalogue VII/195 (position and
+  magnitude of Omega Centauri).
+- Hipparcos: The Hipparcos and Tycho Catalogues, (C) ESA 1997 (ESA SP-1200),
+  CDS catalogue I/239, published under CC BY-NC 3.0 IGO (non-commercial).
+  The Hipparcos-derived data is now only in the optional, unpublished
+  crates/xalen-stars-hip-data crate (publish = false, its own non-commercial
+  LICENSE). No published XALEN crate depends on it, and it is not part of the
+  default star list.
 - I-Ching (Yi King) text: James Legge, Sacred Books of the East Vol. XVI (1882), public domain.
 
-NOTE ON COMMERCIAL SCOPE: A 'comprehensive' COMMERCIAL claim over the
-Hipparcos-derived catalog still requires CDS/ESA license clearance for
-redistribution. This release ships under the attribution above; the
-clearance gate is tracked in docs and is NOT yet resolved.
+NOTE ON COMMERCIAL SCOPE: the published crates carry no CC BY-NC data. The
+only non-commercial star data in the repository is the Hipparcos-derived
+catalogue in crates/xalen-stars-hip-data, which is unpublished and must not be
+linked into a commercial build. The `commercial-clean` stage of `scripts/gate.sh`
+(`scripts/repo-policy/check-commercial-clean.sh`) checks that no published crate
+depends on it.
 
 ---
 
@@ -81,6 +107,58 @@ distributed under the BSD 3-Clause License below.
   POSSIBILITY OF SUCH DAMAGE.
 
   ERFA upstream: https://github.com/liberfa/erfa
+
+---
+
+IAU SOFA (Standards of Fundamental Astronomy) — SOFA Software License
+
+The IAU 2000B nutation routine in crates/xalen-coords (nutation.rs,
+nutation_2000b) follows the SOFA routine nut00b in its series layout and in
+its treatment of the out-of-phase terms, and
+crates/xalen-coords/tests/sofa_reference_crossval.rs uses reference values
+taken from the SOFA validation suite (t_sofa_c.c). In respect of that
+material this software
+
+  (i)  uses routines and computations derived from software provided by SOFA
+       under license; and
+  (ii) does not itself constitute software provided by and/or endorsed by
+       SOFA.
+
+How it is based upon and differs from the original SOFA software: the code is
+written in Rust rather than C or Fortran; nutation_2000b takes Julian
+centuries TT from J2000.0 as a single argument instead of a two-part Julian
+Date; it returns a NutationResult struct (nutation in longitude and in
+obliquity, radians); and it is not an intact copy of any SOFA source file.
+No routine name in this project uses the "iau" or "sofa" prefix.
+
+SOFA requires the following conditions of its license to be reproduced intact
+in any source distribution of a derived work:
+
+     a) Your work shall be marked or carry a statement that it
+        (i) uses routines and computations derived by you from
+        software provided by SOFA under license to you; and
+        (ii) does not itself constitute software provided by and/or
+        endorsed by SOFA.
+
+     b) The source code of your derived work must contain descriptions
+        of how the derived work is based upon, contains and/or differs
+        from the original SOFA software.
+
+     c) The names of all routines in your derived work shall not
+        include the prefix "iau" or "sofa" or trivial modifications
+        thereof such as changes of case.
+
+     d) The origin of the SOFA components of your derived work must
+        not be misrepresented;  you must not claim that you wrote the
+        original software, nor file a patent application for SOFA
+        software or algorithms embedded in the SOFA software.
+
+     e) These requirements must be reproduced intact in any source
+        distribution and shall apply to anyone to whom you have
+        granted a further right to modify the source code of your
+        derived work.
+
+  SOFA upstream: https://www.iausofa.org
 
 ---
 

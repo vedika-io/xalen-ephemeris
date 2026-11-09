@@ -318,7 +318,7 @@ fn rahu_ketu_opposite() {
         .geocentric_longitude_deg(Body::MeanNode, JdUT1(JD_J2000))
         .unwrap();
     let ketu = (rahu + 180.0).rem_euclid(360.0);
-    assert!(rahu >= 0.0 && rahu < 360.0);
+    assert!((0.0..360.0).contains(&rahu));
     assert!((angle_delta(rahu, ketu) - 180.0).abs() < 0.01);
 }
 
@@ -342,7 +342,7 @@ fn houses_pune_placidus() {
     for i in 0..12 {
         let c = h.cusp_deg(i);
         assert!(
-            c >= 0.0 && c < 360.0 && !c.is_nan(),
+            (0.0..360.0).contains(&c) && !c.is_nan(),
             "Cusp {} invalid",
             i + 1
         );

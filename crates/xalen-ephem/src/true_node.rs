@@ -127,7 +127,7 @@ mod tests {
         for offset in [0.0, 365.25, 3652.5, -3652.5] {
             let lon = mean_lunar_node(JdTT(2451545.0 + offset));
             assert!(
-                lon >= 0.0 && lon < std::f64::consts::TAU,
+                (0.0..std::f64::consts::TAU).contains(&lon),
                 "mean node should be in [0, 2pi), got {lon}"
             );
         }
@@ -198,7 +198,7 @@ mod tests {
     #[test]
     fn true_node_always_valid_range() {
         let lon = true_lunar_node(JdTT(2451545.0)).unwrap();
-        assert!(lon >= 0.0 && lon < std::f64::consts::TAU);
+        assert!((0.0..std::f64::consts::TAU).contains(&lon));
     }
 
     #[test]
@@ -229,7 +229,7 @@ mod tests {
             let rahu = true_lunar_node(JdTT(2451545.0 + offset)).unwrap();
             let ketu = south_node(rahu);
             assert!(
-                ketu >= 0.0 && ketu < std::f64::consts::TAU,
+                (0.0..std::f64::consts::TAU).contains(&ketu),
                 "Ketu should be in [0, 2pi), got {ketu}"
             );
         }

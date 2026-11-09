@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# Enable once per clone: git config core.hooksPath .githooks
+exec "$(git rev-parse --show-toplevel)/scripts/repo-policy/check-attribution.sh" "$1"

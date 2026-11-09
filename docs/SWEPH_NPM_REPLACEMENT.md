@@ -13,24 +13,23 @@ most-used `sweph` functions and shows the exact XALEN replacement.
 
 ## Installation
 
-> **Status — forthcoming:** the `xalen` npm package is **not yet published**.
-> The `npm install xalen` command below describes the intended published
-> interface. Until it ships, build the napi-rs addon from this repository
+> **Status:** the `@xalen/ephemeris` npm package is published with each release
+> from 0.8, with prebuilt binaries for Linux x64/arm64, macOS x64/arm64 and
+> Windows x64.
+> Until that release, build the napi-rs addon from this repository
 > (`cd crates/xalen-node && napi build --release`) and `require()` the local
-> build. The prebuilt-binary matrix described here is the planned release target,
-> not a current guarantee.
+> build.
 
 ```bash
 # Remove sweph
 npm uninstall sweph
 
-# Install XALEN (forthcoming — not yet on npm)
-npm install xalen
+# Install XALEN (on npm from the 0.8 release)
+npm install @xalen/ephemeris
 ```
 
-No `node-gyp`, no Python, no C compiler needed once published: the npm package is
-planned to ship prebuilt binaries for Linux x64/arm64, macOS x64/arm64, and
-Windows x64.
+No `node-gyp`, no Python, no C compiler needed once published: the npm package
+ships prebuilt binaries for Linux x64/arm64, macOS x64/arm64 and Windows x64.
 
 ---
 
@@ -38,7 +37,7 @@ Windows x64.
 
 ```diff
 - const sweph = require('sweph');
-+ const xalen = require('xalen');
++ const xalen = require('@xalen/ephemeris');
 ```
 
 ---
@@ -60,7 +59,7 @@ const distance  = result.distance;
 ### XALEN
 
 ```js
-const xalen = require('xalen');
+const xalen = require('@xalen/ephemeris');
 
 // By name (returns tropical longitude in degrees)
 const longitude = xalen.planetLongitude('Sun', jd);
@@ -89,6 +88,7 @@ const longitude2 = xalen.planetLongitudeById(0, jd);
 | -- (Ketu) | -- | -- | 13 |
 
 > **Important:** Pluto is ID 11 (not 9) in XALEN. Mean Node is 9 (not 10).
+> All binding IDs are listed in [BINDING_IDS.md](BINDING_IDS.md).
 
 ---
 
@@ -345,7 +345,7 @@ sweph.swe_close();
 ### After (XALEN)
 
 ```js
-const xalen = require('xalen');
+const xalen = require('@xalen/ephemeris');
 
 // No init needed -- no ephe path, no sid mode, no close
 

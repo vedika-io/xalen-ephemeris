@@ -575,7 +575,7 @@ mod tests {
             for j in 0..12 {
                 let p = chara_dasha_period(Rashi::from_index(i), Rashi::from_index(j));
                 assert!(
-                    p >= 1 && p <= 12,
+                    (1..=12).contains(&p),
                     "Period must be 1-12, got {p} for signs {i},{j}"
                 );
             }
@@ -805,7 +805,7 @@ mod tests {
         let periods = narayana_dasha(0, &planets, 2451545.0, 120);
         let total: f64 = periods.iter().map(|p| p.years).sum();
         assert!(
-            total >= 12.0 && total <= 144.0,
+            (12.0..=144.0).contains(&total),
             "Narayana total should be 12-144 years, got {total}"
         );
     }
@@ -829,7 +829,7 @@ mod tests {
         let total_without: f64 = without.iter().map(|p| p.years).sum();
         let total_with: f64 = with.iter().map(|p| p.years).sum();
         // Not guaranteed to differ for every config, but verify both are valid
-        assert!(total_with >= 12.0 && total_with <= 144.0);
-        assert!(total_without >= 12.0 && total_without <= 144.0);
+        assert!((12.0..=144.0).contains(&total_with));
+        assert!((12.0..=144.0).contains(&total_without));
     }
 }

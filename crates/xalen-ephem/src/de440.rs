@@ -1194,16 +1194,15 @@ impl De440Reader {
 
         let denum_le = read_i32_le(2840);
         let denum_be = read_i32_be(2840);
-        let is_little_endian;
-        if (400..=500).contains(&denum_le) {
-            is_little_endian = true;
+        let is_little_endian = if (400..=500).contains(&denum_le) {
+            true
         } else if (400..=500).contains(&denum_be) {
-            is_little_endian = false;
+            false
         } else {
             return Err(EphemerisError::InvalidFormat(format!(
                 "cannot detect endianness: DENUM candidates LE={denum_le}, BE={denum_be}"
             )));
-        }
+        };
 
         let read_f64 = |off: usize| -> f64 {
             let b: [u8; 8] = buf[off..off + 8].try_into().unwrap();
@@ -2883,7 +2882,7 @@ mod tests {
         let dir = std::env::temp_dir().join("xalen_de440_test");
         let _ = std::fs::create_dir_all(&dir);
         let path = dir.join("truncated.bin");
-        std::fs::write(&path, &[0u8; 100]).unwrap();
+        std::fs::write(&path, [0u8; 100]).unwrap();
         let result = De440Reader::from_file(&path);
         assert!(result.is_err(), "should reject truncated file");
         let _ = std::fs::remove_file(&path);
@@ -2894,7 +2893,7 @@ mod tests {
         let dir = std::env::temp_dir().join("xalen_de440_test");
         let _ = std::fs::create_dir_all(&dir);
         let path = dir.join("garbage.bin");
-        std::fs::write(&path, &[0u8; 8192]).unwrap();
+        std::fs::write(&path, [0u8; 8192]).unwrap();
         let result = De440Reader::from_file(&path);
         assert!(result.is_err(), "should reject file with invalid format");
     }
@@ -3247,12 +3246,12 @@ mod tests {
         ];
 
         for &body in &bodies {
-            let de440_pos = de440.geocentric_ecliptic(body, jd).expect(&format!(
-                "DE440 geocentric for {body} at J2000 should succeed"
-            ));
-            let vsop_pos = vsop.geocentric_ecliptic(body, jd).expect(&format!(
-                "VSOP87 geocentric for {body} at J2000 should succeed"
-            ));
+            let de440_pos = de440
+                .geocentric_ecliptic(body, jd)
+                .unwrap_or_else(|_| panic!("DE440 geocentric for {body} at J2000 should succeed"));
+            let vsop_pos = vsop
+                .geocentric_ecliptic(body, jd)
+                .unwrap_or_else(|_| panic!("VSOP87 geocentric for {body} at J2000 should succeed"));
 
             let de440_lon_deg = de440_pos.longitude.to_degrees().rem_euclid(360.0);
             let vsop_lon_deg = vsop_pos.longitude.to_degrees().rem_euclid(360.0);
@@ -3307,7 +3306,7 @@ mod tests {
     // Pluto coverage: De440Provider maps NAIF 9 and serves Pluto across the
     // kernel's full span, including epochs the analytical Pluto series does
     // not (pre-1885 / post-2099). Kernel-gated: skips if /tmp/de440s.bsp is
-    // absent so CI without a kernel still passes.
+    // absent so a test run without the kernel still passes.
     // -----------------------------------------------------------------------
 
     #[test]

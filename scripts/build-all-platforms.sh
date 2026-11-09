@@ -4,7 +4,8 @@
 # Produces, into the repository:
 #   dist/                              — Python abi3 wheels + sdist (one wheel
 #                                        per platform, valid for CPython >= 3.8)
-#   crates/xalen-node/npm/<triple>/    — per-platform Node N-API .node addons
+#   dist/                              — npm tarballs of the Node addon (one per
+#                                        platform plus the loader), Linux host only
 #   crates/xalen-wasm/pkg/             — platform-independent WebAssembly package
 #
 # Targets attempted:
@@ -15,18 +16,17 @@
 #   Windows x86_64  (cargo-zigbuild / cargo-xwin, GNU)
 #
 # What CANNOT be cross-built reliably from a macOS host even with zig/docker is
-# noted at each step and is instead covered by .github/workflows/release.yml on
-# native runners (the durable, per-release mechanism). This script is for local
-# matrix verification and for producing artifacts on demand; CI is the source of
-# truth for published artifacts.
+# noted at each step. This script is for local matrix verification and for
+# producing artifacts on demand. Published artifacts come from
+# scripts/build-release-artifacts.sh on a Linux host; docs/RELEASING.md has the
+# release steps and lists what no script builds yet.
 #
-# Prerequisites the orchestrator must install first (printed by --check):
+# Prerequisites to install first (printed by --check):
 #   rustup target add x86_64-apple-darwin \
 #                     x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu \
 #                     x86_64-pc-windows-gnu wasm32-unknown-unknown
 #   pip install cargo-zigbuild        # provides `cargo zigbuild` (uses zig as linker)
 #   cargo install wasm-pack           # or: npm i -g wasm-pack
-#   npm install                       # inside crates/xalen-node (napi CLI)
 #
 # Usage:
 #   scripts/build-all-platforms.sh            # build everything possible on this host
@@ -44,7 +44,6 @@ set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST_DIR="$REPO_ROOT/dist"
-NODE_DIR="$REPO_ROOT/crates/xalen-node"
 WASM_DIR="$REPO_ROOT/crates/xalen-wasm"
 PY_MANIFEST="$REPO_ROOT/crates/xalen-python/Cargo.toml"
 
@@ -53,20 +52,6 @@ HOST_ARCH="$(uname -m)" # arm64 | x86_64 | aarch64
 
 # Python abi3 wheels: ONE wheel per platform serves all CPython >= 3.8.
 PY_TARGETS=(
-  "aarch64-apple-darwin"
-  "x86_64-apple-darwin"
-  "x86_64-unknown-linux-gnu"
-  "aarch64-unknown-linux-gnu"
-  "x86_64-pc-windows-gnu"
-)
-
-# Node N-API addons. The first four triples match package.json `napi.targets`
-# and are the publishable set. The Windows local cross-build targets the *-gnu
-# triple (zig can produce it; cargo-xwin/MSVC cannot run on a macOS host), which
-# is a LOCAL VERIFICATION artifact only — the published Windows addon is the
-# MSVC build produced by .github/workflows/release.yml on a native windows
-# runner (package.json lists x86_64-pc-windows-msvc).
-NODE_TARGETS=(
   "aarch64-apple-darwin"
   "x86_64-apple-darwin"
   "x86_64-unknown-linux-gnu"
@@ -92,7 +77,6 @@ Run these once on the build host before invoking this script:
                     x86_64-pc-windows-gnu wasm32-unknown-unknown
   pip install cargo-zigbuild
   cargo install wasm-pack          # or npm i -g wasm-pack
-  ( cd crates/xalen-node && npm install )
 
 zig itself is used by cargo-zigbuild as the cross-linker (no separate install
 beyond `pip install cargo-zigbuild`, which expects `zig` on PATH).
@@ -127,7 +111,7 @@ build_python() {
     case "$tgt" in
       *-apple-darwin)
         if [ "$HOST_OS" != "Darwin" ]; then
-          skip "wheel $tgt (Apple targets need a macOS host or CI macOS runner)"
+          skip "wheel $tgt (Apple targets need a macOS host)"
           continue
         fi
         ;;
@@ -135,7 +119,7 @@ build_python() {
         if [ "$use_zig" -eq 1 ]; then
           zig_flag="--zig"
         else
-          skip "wheel $tgt (install cargo-zigbuild for cross-compile, or use CI)"
+          skip "wheel $tgt (install cargo-zigbuild for cross-compile)"
           continue
         fi
         ;;
@@ -153,54 +137,24 @@ build_python() {
 }
 
 # --- Node (napi-rs) --------------------------------------------------------
+# The publishable addons (Linux x64/arm64 through zig with a glibc 2.17 floor,
+# macOS arm64/x64 through rust-lld against a stub SDK, Windows x64 through
+# cargo-xwin) are built, checked and
+# packed by scripts/build-release-artifacts.sh on a Linux host. The old
+# per-target `napi build` loop that lived here needed a macOS host and an MSVC
+# runner, and its binaries were not the ones that get published.
 build_node() {
-  log "Node — N-API addons (.node) per platform"
-  ( cd "$NODE_DIR" && [ -d node_modules ] || npm install >/dev/null 2>&1 )
-
-  # Generate per-platform npm package dirs under crates/xalen-node/npm/<triple>/
-  ( cd "$NODE_DIR" && npx napi create-npm-dirs >/dev/null 2>&1 ) \
-    && ok "npm/<triple>/ package dirs created" \
-    || skip "create-npm-dirs (napi CLI) — non-fatal"
-
-  for tgt in "${NODE_TARGETS[@]}"; do
-    if ! have_target "$tgt"; then
-      skip "addon $tgt (run: rustup target add $tgt)"
-      continue
-    fi
-    local x_flag=""
-    case "$tgt" in
-      *-apple-darwin)
-        if [ "$HOST_OS" != "Darwin" ]; then
-          skip "addon $tgt (Apple targets need a macOS host or CI macOS runner)"
-          continue
-        fi
-        ;;
-      x86_64-unknown-linux-gnu|aarch64-unknown-linux-gnu|x86_64-pc-windows-gnu)
-        # napi --cross-compile uses cargo-zigbuild (non-Windows hosts) / cargo-xwin.
-        if command -v cargo-zigbuild >/dev/null 2>&1; then
-          x_flag="--cross-compile"
-        else
-          skip "addon $tgt (install cargo-zigbuild for --cross-compile, or use CI)"
-          continue
-        fi
-        ;;
-    esac
-    if ( cd "$NODE_DIR" && npx napi build --platform --release $x_flag \
-           --target "$tgt" --output-dir "." >/dev/null 2>&1 ); then
-      ok "addon $tgt"
-    else
-      err "addon $tgt build failed"
-      OVERALL_RC=1
-    fi
-  done
-
-  # Collect any built .node files into the per-triple npm dirs.
-  ( cd "$NODE_DIR" && npx napi artifacts --output-dir . --npm-dir npm >/dev/null 2>&1 ) \
-    && ok "addons collected into npm/<triple>/" \
-    || skip "napi artifacts (nothing to collect, or CI handles it)"
-
-  printf '   .node files in %s:\n' "$NODE_DIR"
-  ls -1 "$NODE_DIR"/*.node 2>/dev/null | sed 's/^/     /' || printf '     (none on this host)\n'
+  log "Node — N-API addons, packed as npm tarballs in dist/"
+  if [ "$HOST_OS" != "Linux" ]; then
+    skip "Node addons build on a Linux host: run scripts/build-release-artifacts.sh node there"
+    return
+  fi
+  if "$REPO_ROOT/scripts/build-release-artifacts.sh" node; then
+    ok "Node addons built and checked (see dist/)"
+  else
+    err "Node addons: scripts/build-release-artifacts.sh node failed"
+    OVERALL_RC=1
+  fi
 }
 
 # --- WASM (platform-independent) -------------------------------------------
@@ -241,8 +195,8 @@ main() {
   else
     err "one or more host-supported targets failed (see above)"
   fi
-  printf '   Targets that cannot be produced on this host are covered by\n'
-  printf '   .github/workflows/release.yml on native GitHub runners.\n'
+  printf '   Release artifacts come from scripts/build-release-artifacts.sh on a\n'
+  printf '   Linux host; see docs/RELEASING.md.\n'
   exit "$OVERALL_RC"
 }
 

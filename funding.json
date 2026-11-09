@@ -5,7 +5,7 @@
     "role": "steward",
     "name": "XALEN TECHNOLOGY PRIVATE LIMITED",
     "email": "abhishek@vedika.io",
-    "description": "Xalen Technology Private Limited is the Indian commercial sponsor and steward of Xalen Ephemeris. Abhishek Raj is the sole current human contributor and proposed maintainer lead. This request funds public numerical-computing maintenance, reference provenance, reproducible builds and contributor documentation. The outputs will be available without buying Vedika or GrahaGuru services. Company sponsorship is disclosed; no exclusive copyright assignment is asserted.",
+    "description": "Xalen Technology Private Limited is the Indian commercial sponsor and steward of Xalen Ephemeris. Abhishek Raj is the proposed maintainer lead. This request funds public numerical-computing maintenance, reference provenance, reproducible builds and contributor documentation. The outputs will be available without buying Vedika or GrahaGuru services. Company sponsorship is disclosed; no exclusive copyright assignment is asserted.",
     "webpageUrl": {
       "url": "https://github.com/vedika-io/xalen-ephemeris",
       "wellKnown": "https://github.com/vedika-io/xalen-ephemeris/blob/funding/foss-united-2026-10-18/.well-known/funding-manifest-urls"
