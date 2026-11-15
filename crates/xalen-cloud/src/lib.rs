@@ -380,17 +380,21 @@ impl InterpretationProvider for RemoteInterpreter {
                 "refusing to send a bearer token over non-https endpoint".into(),
             ));
         }
-        let agent = ureq::AgentBuilder::new().timeout(self.timeout).build();
+        let agent: ureq::Agent = ureq::Agent::config_builder()
+            .timeout_global(Some(self.timeout))
+            .build()
+            .into();
         let mut req = agent.post(&self.endpoint);
         if let Some(key) = &self.api_key {
-            req = req.set("Authorization", &format!("Bearer {key}"));
+            req = req.header("Authorization", &format!("Bearer {key}"));
         }
         let body = serde_json::to_value(request)
             .map_err(|e| CloudError::Interpretation(format!("serialize: {e}")))?;
         let resp = req
             .send_json(body)
             .map_err(|e| CloudError::Interpretation(format!("request: {e}")))?;
-        resp.into_json::<Interpretation>()
+        resp.into_body()
+            .read_json::<Interpretation>()
             .map_err(|e| CloudError::Interpretation(format!("decode: {e}")))
     }
 }

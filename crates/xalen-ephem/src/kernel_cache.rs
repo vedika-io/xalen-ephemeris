@@ -236,7 +236,8 @@ fn download(url: &str) -> Result<Vec<u8>, EphemerisError> {
     })?;
 
     let mut buf = Vec::new();
-    resp.into_reader()
+    resp.into_body()
+        .into_reader()
         .read_to_end(&mut buf)
         .map_err(EphemerisError::IoError)?;
     Ok(buf)
