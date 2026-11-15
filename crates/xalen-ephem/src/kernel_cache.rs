@@ -222,7 +222,7 @@ fn sha256_hex(bytes: &[u8]) -> String {
     use std::fmt::Write as _;
     let digest = Sha256::digest(bytes);
     let mut s = String::with_capacity(64);
-    for b in digest {
+    for b in digest.iter() {
         // Infallible: writing to a String never errors.
         let _ = write!(s, "{b:02x}");
     }

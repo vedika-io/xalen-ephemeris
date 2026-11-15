@@ -26,7 +26,7 @@ vsop87 = "3.0.0"
 #   sha2  — SHA-256 for optional kernel integrity verification.
 #   dirs  — resolve the per-OS cache directory for the kernel store.
 ureq = { version = "2.10", optional = true }
-sha2 = { version = "0.10", optional = true }
+sha2 = { version = "0.11", optional = true }
 dirs = { version = "5", optional = true }
 
 [features]
