@@ -372,16 +372,26 @@ impl RemoteInterpreter {
     }
 }
 
-/// The agent for interpretation requests. ureq 3's defaults differ from ureq 2,
-/// so they are pinned: the same overall timeout, no proxy taken from the
-/// environment, and no redirects (a redirect must not carry the bearer token to
-/// another host).
+/// Pins the settings ureq 3 would otherwise take from its own defaults, so the
+/// interpretation request behaves as it did with ureq 2: the same overall timeout,
+/// no proxy taken from the environment (ureq 3 reads `ALL_PROXY` and friends by
+/// default; ureq 2 did not) and at most 4 redirects (ureq 3 follows 10). A 301, 302
+/// or 303 on the POST is followed as a GET without the body, and ureq 3 does not
+/// forward the `Authorization` header to the redirect target.
 #[cfg(feature = "remote-http")]
-fn http_agent(timeout: std::time::Duration) -> ureq::Agent {
-    ureq::Agent::config_builder()
+fn pin_http_config(
+    builder: ureq::config::ConfigBuilder<ureq::typestate::AgentScope>,
+    timeout: std::time::Duration,
+) -> ureq::config::ConfigBuilder<ureq::typestate::AgentScope> {
+    builder
         .timeout_global(Some(timeout))
         .proxy(None)
-        .max_redirects(0)
+        .max_redirects(4)
+}
+
+#[cfg(feature = "remote-http")]
+fn http_agent(timeout: std::time::Duration) -> ureq::Agent {
+    pin_http_config(ureq::Agent::config_builder(), timeout)
         .build()
         .into()
 }
@@ -634,13 +644,64 @@ mod tests {
     #[cfg(feature = "remote-http")]
     #[test]
     fn http_agent_keeps_the_ureq2_behaviour() {
-        let agent = http_agent(std::time::Duration::from_secs(7));
-        let cfg = agent.config();
+        let cfg = http_agent(std::time::Duration::from_secs(7))
+            .config()
+            .clone();
         assert_eq!(
             cfg.timeouts().global,
             Some(std::time::Duration::from_secs(7))
         );
-        assert!(cfg.proxy().is_none());
-        assert_eq!(cfg.max_redirects(), 0);
+        assert_eq!(cfg.max_redirects(), 4);
+    }
+
+    #[cfg(feature = "remote-http")]
+    #[test]
+    fn http_config_drops_a_proxy_that_is_already_set() {
+        // A builder that already carries a proxy (as one built from ALL_PROXY would)
+        // must come out of the pinning with none; removing `.proxy(None)` fails this.
+        let with_proxy = || {
+            ureq::Agent::config_builder().proxy(Some(
+                ureq::Proxy::new("http://127.0.0.1:9").expect("proxy url"),
+            ))
+        };
+        assert!(with_proxy().build().proxy().is_some());
+        let pinned = pin_http_config(with_proxy(), std::time::Duration::from_secs(7)).build();
+        assert!(pinned.proxy().is_none(), "no proxy from the environment");
+    }
+
+    #[cfg(feature = "remote-http")]
+    #[test]
+    fn http_agent_follows_a_post_redirect_as_a_get_without_the_body() {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
+        let addr = listener.local_addr().expect("addr");
+        let server = std::thread::spawn(move || {
+            let mut requests = Vec::new();
+            for reply in [
+                "HTTP/1.1 302 Found\r\nLocation: /final\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}",
+            ] {
+                let (mut stream, _) = listener.accept().expect("accept");
+                let mut buf = [0u8; 4096];
+                let n = stream.read(&mut buf).expect("read");
+                requests.push(String::from_utf8_lossy(&buf[..n]).to_string());
+                stream.write_all(reply.as_bytes()).expect("write");
+            }
+            requests
+        });
+        let resp = http_agent(std::time::Duration::from_secs(5))
+            .post(&format!("http://{addr}/interpret"))
+            .header("Authorization", "Bearer secret-token")
+            .send_json(serde_json::json!({"q": 1}))
+            .expect("the redirect is followed");
+        assert_eq!(resp.status().as_u16(), 200);
+        let requests = server.join().expect("server");
+        assert!(requests[0].starts_with("POST /interpret"));
+        assert!(requests[0].contains("secret-token"));
+        assert!(requests[1].starts_with("GET /final"), "{}", requests[1]);
+        assert!(
+            !requests[1].to_lowercase().contains("authorization"),
+            "the bearer token must not follow the redirect"
+        );
     }
 }

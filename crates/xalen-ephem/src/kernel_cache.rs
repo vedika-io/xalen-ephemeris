@@ -229,16 +229,22 @@ fn sha256_hex(bytes: &[u8]) -> String {
     s
 }
 
-/// The agent used for kernel downloads. ureq 3's default agent differs from the
-/// ureq 2 one this module was written against, so each setting is pinned here:
-/// a 30 s connect timeout (ureq 3 has none), no proxy taken from the environment
-/// (ureq 3 reads `HTTPS_PROXY` and friends by default; ureq 2 did not) and at most
-/// 5 redirects (ureq 3 follows 10).
-fn download_agent() -> ureq::Agent {
-    ureq::Agent::config_builder()
+/// Pins the settings ureq 3 would otherwise take from its own defaults, so the
+/// kernel download behaves as it did with ureq 2: a 30 s connect timeout (ureq 3
+/// has none), no proxy taken from the environment (ureq 3 reads `ALL_PROXY` and
+/// friends by default; ureq 2 did not) and at most 4 redirects (ureq 3 follows 10).
+fn pin_download_config(
+    builder: ureq::config::ConfigBuilder<ureq::typestate::AgentScope>,
+) -> ureq::config::ConfigBuilder<ureq::typestate::AgentScope> {
+    builder
         .timeout_connect(Some(std::time::Duration::from_secs(30)))
         .proxy(None)
-        .max_redirects(5)
+        .max_redirects(4)
+}
+
+/// The agent used for kernel downloads.
+fn download_agent() -> ureq::Agent {
+    pin_download_config(ureq::Agent::config_builder())
         .build()
         .into()
 }
@@ -279,14 +285,26 @@ mod tests {
 
     #[test]
     fn download_agent_keeps_the_ureq2_behaviour() {
-        let agent = download_agent();
-        let cfg = agent.config();
+        let cfg = download_agent().config().clone();
         assert_eq!(
             cfg.timeouts().connect,
             Some(std::time::Duration::from_secs(30))
         );
-        assert!(cfg.proxy().is_none(), "no proxy from the environment");
-        assert_eq!(cfg.max_redirects(), 5);
+        assert_eq!(cfg.max_redirects(), 4);
+    }
+
+    #[test]
+    fn download_config_drops_a_proxy_that_is_already_set() {
+        // A builder that already carries a proxy (as one built from ALL_PROXY would)
+        // must come out of the pinning with none; removing `.proxy(None)` fails this.
+        let with_proxy = || {
+            ureq::Agent::config_builder().proxy(Some(
+                ureq::Proxy::new("http://127.0.0.1:9").expect("proxy url"),
+            ))
+        };
+        assert!(with_proxy().build().proxy().is_some());
+        let pinned = pin_download_config(with_proxy()).build();
+        assert!(pinned.proxy().is_none(), "no proxy from the environment");
     }
 
     #[test]
