@@ -17,6 +17,18 @@ rise/set/transit and eclipse search in the Python `swe` shim
 exception that `except swe.Error` can catch
 ([#48](https://github.com/vedika-io/xalen-ephemeris/issues/48)).
 
+### Changed
+- **Dependency bumps: `ureq` 3 and `sha2` 0.11; `Cargo.lock` is now committed.**
+  The kernel download (`xalen-ephem`, `kernel-autodownload`) and the remote
+  interpreter (`xalen-cloud`, `remote-http`) moved from `ureq` 2 to 3. Each agent
+  pins what ureq 3 changed so behaviour matches ureq 2: the kernel download keeps
+  a 30 s connect timeout, ignores proxy variables and follows at most 4
+  redirects; the interpretation request keeps its overall timeout, ignores proxy
+  variables and follows at most 4 redirects (a 301, 302 or 303 on the POST is
+  followed as a GET without the body, and the `Authorization` header is not sent
+  to the redirect target). The lock is resolved from crates published at least 14
+  days ago. `pyo3` stays at 0.29: 0.30 drops the `abi3-py38` feature.
+
 ### Added
 - **Parans in `xalen-maps` and `xalen map --parans`.** `parans(&map,
   &ParanOptions)` returns every crossing of one body's line with another's (a

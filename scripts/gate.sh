@@ -251,7 +251,7 @@ stage_commercial_clean() { bash scripts/repo-policy/check-commercial-clean.sh; }
 stage_audit() {
   cargo_tool cargo-audit cargo-audit || return 1
   cargo audit --version || return 1
-  # Cargo.lock is not committed; the earlier stages normally leave one behind.
+  # Cargo.lock is committed; the generate-lockfile fallback only covers a checkout without it.
   [ -f Cargo.lock ] || cargo generate-lockfile || return 1
   cargo audit
 }

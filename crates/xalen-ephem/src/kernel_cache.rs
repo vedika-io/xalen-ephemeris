@@ -112,10 +112,10 @@ impl KernelFetch {
         if let Some(dir) = &self.cache_dir {
             return Ok(dir.clone());
         }
-        if let Ok(dir) = std::env::var(CACHE_DIR_ENV) {
-            if !dir.is_empty() {
-                return Ok(PathBuf::from(dir));
-            }
+        if let Ok(dir) = std::env::var(CACHE_DIR_ENV)
+            && !dir.is_empty()
+        {
+            return Ok(PathBuf::from(dir));
         }
         let base = dirs::cache_dir().ok_or_else(|| {
             EphemerisError::ComputationFailed(
@@ -222,21 +222,44 @@ fn sha256_hex(bytes: &[u8]) -> String {
     use std::fmt::Write as _;
     let digest = Sha256::digest(bytes);
     let mut s = String::with_capacity(64);
-    for b in digest {
+    for b in digest.iter() {
         // Infallible: writing to a String never errors.
         let _ = write!(s, "{b:02x}");
     }
     s
 }
 
+/// Pins the settings ureq 3 would otherwise take from its own defaults, so the
+/// kernel download behaves as it did with ureq 2: a 30 s connect timeout (ureq 3
+/// has none), no proxy taken from the environment (ureq 3 reads `ALL_PROXY` and
+/// friends by default; ureq 2 did not) and at most 4 redirects (ureq 3 follows 10).
+fn pin_download_config(
+    builder: ureq::config::ConfigBuilder<ureq::typestate::AgentScope>,
+) -> ureq::config::ConfigBuilder<ureq::typestate::AgentScope> {
+    builder
+        .timeout_connect(Some(std::time::Duration::from_secs(30)))
+        .proxy(None)
+        .max_redirects(4)
+}
+
+/// The agent used for kernel downloads.
+fn download_agent() -> ureq::Agent {
+    pin_download_config(ureq::Agent::config_builder())
+        .build()
+        .into()
+}
+
 /// Blocking download of `url` into a byte buffer.
 fn download(url: &str) -> Result<Vec<u8>, EphemerisError> {
-    let resp = ureq::get(url).call().map_err(|e| {
+    let resp = download_agent().get(url).call().map_err(|e| {
         EphemerisError::ComputationFailed(format!("kernel download from {url} failed: {e}"))
     })?;
 
     let mut buf = Vec::new();
-    resp.into_reader()
+    // `into_reader` carries no size cap (ureq 3 caps only `read_to_vec` at 10 MB,
+    // and de440s.bsp is about 32 MB).
+    resp.into_body()
+        .into_reader()
         .read_to_end(&mut buf)
         .map_err(EphemerisError::IoError)?;
     Ok(buf)
@@ -259,6 +282,30 @@ pub fn ensure_de440s_kernel() -> Result<PathBuf, EphemerisError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn download_agent_keeps_the_ureq2_behaviour() {
+        let cfg = download_agent().config().clone();
+        assert_eq!(
+            cfg.timeouts().connect,
+            Some(std::time::Duration::from_secs(30))
+        );
+        assert_eq!(cfg.max_redirects(), 4);
+    }
+
+    #[test]
+    fn download_config_drops_a_proxy_that_is_already_set() {
+        // A builder that already carries a proxy (as one built from ALL_PROXY would)
+        // must come out of the pinning with none; removing `.proxy(None)` fails this.
+        let with_proxy = || {
+            ureq::Agent::config_builder().proxy(Some(
+                ureq::Proxy::new("http://127.0.0.1:9").expect("proxy url"),
+            ))
+        };
+        assert!(with_proxy().build().proxy().is_some());
+        let pinned = pin_download_config(with_proxy()).build();
+        assert!(pinned.proxy().is_none(), "no proxy from the environment");
+    }
 
     #[test]
     fn sha256_hex_is_lowercase_64_chars() {
