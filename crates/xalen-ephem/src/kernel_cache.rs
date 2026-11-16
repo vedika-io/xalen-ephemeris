@@ -222,7 +222,7 @@ fn sha256_hex(bytes: &[u8]) -> String {
     use std::fmt::Write as _;
     let digest = Sha256::digest(bytes);
     let mut s = String::with_capacity(64);
-    for b in digest {
+    for b in digest.iter() {
         // Infallible: writing to a String never errors.
         let _ = write!(s, "{b:02x}");
     }
@@ -236,7 +236,10 @@ fn download(url: &str) -> Result<Vec<u8>, EphemerisError> {
     })?;
 
     let mut buf = Vec::new();
-    resp.into_reader()
+    // `into_reader` carries no size cap (ureq 3 caps only `read_to_vec` at 10 MB,
+    // and de440s.bsp is about 32 MB).
+    resp.into_body()
+        .into_reader()
         .read_to_end(&mut buf)
         .map_err(EphemerisError::IoError)?;
     Ok(buf)
