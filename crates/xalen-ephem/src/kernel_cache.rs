@@ -112,10 +112,10 @@ impl KernelFetch {
         if let Some(dir) = &self.cache_dir {
             return Ok(dir.clone());
         }
-        if let Ok(dir) = std::env::var(CACHE_DIR_ENV) {
-            if !dir.is_empty() {
-                return Ok(PathBuf::from(dir));
-            }
+        if let Ok(dir) = std::env::var(CACHE_DIR_ENV)
+            && !dir.is_empty()
+        {
+            return Ok(PathBuf::from(dir));
         }
         let base = dirs::cache_dir().ok_or_else(|| {
             EphemerisError::ComputationFailed(
@@ -229,9 +229,23 @@ fn sha256_hex(bytes: &[u8]) -> String {
     s
 }
 
+/// The agent used for kernel downloads. ureq 3's default agent differs from the
+/// ureq 2 one this module was written against, so each setting is pinned here:
+/// a 30 s connect timeout (ureq 3 has none), no proxy taken from the environment
+/// (ureq 3 reads `HTTPS_PROXY` and friends by default; ureq 2 did not) and at most
+/// 5 redirects (ureq 3 follows 10).
+fn download_agent() -> ureq::Agent {
+    ureq::Agent::config_builder()
+        .timeout_connect(Some(std::time::Duration::from_secs(30)))
+        .proxy(None)
+        .max_redirects(5)
+        .build()
+        .into()
+}
+
 /// Blocking download of `url` into a byte buffer.
 fn download(url: &str) -> Result<Vec<u8>, EphemerisError> {
-    let resp = ureq::get(url).call().map_err(|e| {
+    let resp = download_agent().get(url).call().map_err(|e| {
         EphemerisError::ComputationFailed(format!("kernel download from {url} failed: {e}"))
     })?;
 
@@ -262,6 +276,18 @@ pub fn ensure_de440s_kernel() -> Result<PathBuf, EphemerisError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn download_agent_keeps_the_ureq2_behaviour() {
+        let agent = download_agent();
+        let cfg = agent.config();
+        assert_eq!(
+            cfg.timeouts().connect,
+            Some(std::time::Duration::from_secs(30))
+        );
+        assert!(cfg.proxy().is_none(), "no proxy from the environment");
+        assert_eq!(cfg.max_redirects(), 5);
+    }
 
     #[test]
     fn sha256_hex_is_lowercase_64_chars() {

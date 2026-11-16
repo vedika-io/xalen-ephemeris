@@ -372,6 +372,20 @@ impl RemoteInterpreter {
     }
 }
 
+/// The agent for interpretation requests. ureq 3's defaults differ from ureq 2,
+/// so they are pinned: the same overall timeout, no proxy taken from the
+/// environment, and no redirects (a redirect must not carry the bearer token to
+/// another host).
+#[cfg(feature = "remote-http")]
+fn http_agent(timeout: std::time::Duration) -> ureq::Agent {
+    ureq::Agent::config_builder()
+        .timeout_global(Some(timeout))
+        .proxy(None)
+        .max_redirects(0)
+        .build()
+        .into()
+}
+
 #[cfg(feature = "remote-http")]
 impl InterpretationProvider for RemoteInterpreter {
     fn interpret(&self, request: &InterpretationRequest) -> Result<Interpretation, CloudError> {
@@ -380,10 +394,7 @@ impl InterpretationProvider for RemoteInterpreter {
                 "refusing to send a bearer token over non-https endpoint".into(),
             ));
         }
-        let agent: ureq::Agent = ureq::Agent::config_builder()
-            .timeout_global(Some(self.timeout))
-            .build()
-            .into();
+        let agent = http_agent(self.timeout);
         let mut req = agent.post(&self.endpoint);
         if let Some(key) = &self.api_key {
             req = req.header("Authorization", &format!("Bearer {key}"));
@@ -618,5 +629,18 @@ mod tests {
         assert_eq!(a.name, b.name);
         assert!((a.longitude_deg - b.longitude_deg).abs() < 1e-9);
         assert_eq!(a.house, b.house);
+    }
+
+    #[cfg(feature = "remote-http")]
+    #[test]
+    fn http_agent_keeps_the_ureq2_behaviour() {
+        let agent = http_agent(std::time::Duration::from_secs(7));
+        let cfg = agent.config();
+        assert_eq!(
+            cfg.timeouts().global,
+            Some(std::time::Duration::from_secs(7))
+        );
+        assert!(cfg.proxy().is_none());
+        assert_eq!(cfg.max_redirects(), 0);
     }
 }
