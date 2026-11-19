@@ -1,20 +1,23 @@
 #!/usr/bin/env python3
-"""Tests for the two code paths of generate.py that the weekly public-repo scan (semgrep) flagged.
+"""Tests for the code paths of generate.py that the weekly public-repo scan flagged.
 
 Run from the repository root with the standard library only:
 
     python3 -m unittest discover -s scripts/readme-figures -p "test_*.py"
 
 generate.py only writes SVG text and downloads one pinned GeoJSON file. It never parses XML, so
-it must not import an xml module (semgrep use-defused-xml), and it must fetch the coastline over
-https only, never through urllib.request.urlopen, which also opens file:// and ftp:// URLs
-(semgrep dynamic-urllib-use-detected).
+it must not import an xml module (semgrep use-defused-xml). It fetches the coastline over https
+only, through an opener that has no file:// or ftp:// handler, and not through
+urllib.request.urlopen (semgrep dynamic-urllib-use-detected) or an http.client connection
+(semgrep httpsconnection-detected).
 """
 import ast
 import importlib.util
 import json
 import os
 import unittest
+import urllib.error
+import urllib.request
 from unittest import mock
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -29,41 +32,24 @@ def load_generate():
 
 
 class FakeResponse:
-    def __init__(self, status, body):
-        self.status = status
+    """A canned HTTP response usable as a context manager, like the one OpenerDirector.open returns."""
+
+    def __init__(self, body):
         self._body = body
 
     def read(self):
         return self._body
 
+    def __enter__(self):
+        return self
 
-class FakeConnection:
-    """Stands in for http.client.HTTPSConnection: records the request, returns a canned response."""
-
-    instances = []
-
-    def __init__(self, host, timeout=None, **kwargs):
-        self.host = host
-        self.timeout = timeout
-        self.requests = []
-        self.closed = False
-        self.response = FakeResponse(200, json.dumps({"type": "FeatureCollection", "features": []}).encode("utf-8"))
-        FakeConnection.instances.append(self)
-
-    def request(self, method, path, **kwargs):
-        self.requests.append((method, path))
-
-    def getresponse(self):
-        return self.response
-
-    def close(self):
-        self.closed = True
+    def __exit__(self, *exc):
+        return False
 
 
 class GenerateTests(unittest.TestCase):
     def setUp(self):
         self.gen = load_generate()
-        FakeConnection.instances = []
         with open(SOURCE, encoding="utf-8") as f:
             self.tree = ast.parse(f.read())
 
@@ -89,36 +75,33 @@ class GenerateTests(unittest.TestCase):
         self.assertEqual(self.gen.escape("&amp;"), "&amp;amp;")
         self.assertEqual(self.gen.escape("Whole Sign · Lahiri"), "Whole Sign · Lahiri")
 
+    def test_opener_handles_https_only(self):
+        opener = self.gen.https_only_opener()
+        kinds = {type(handler).__name__ for handler in opener.handlers}
+        self.assertIn("HTTPSHandler", kinds)
+        for forbidden in ("FileHandler", "FTPHandler", "DataHandler", "HTTPHandler"):
+            self.assertNotIn(forbidden, kinds)
+        # A non-https URL cannot be opened even when it reaches the opener directly.
+        with self.assertRaises(urllib.error.URLError):
+            opener.open("file:///etc/hostname")
+        # A non-2xx answer must raise HTTPError, so the error processor has to be present.
+        self.assertIn("HTTPErrorProcessor", kinds)
+
     def test_fetch_coastline_refuses_other_schemes(self):
         for url in ("file:///etc/passwd", "http://example.com/x.geojson", "ftp://example.com/x", "//example.com/x"):
             with self.assertRaises(ValueError, msg=url):
                 self.gen.fetch_coastline(url)
 
     def test_fetch_coastline_reads_pinned_https_url(self):
-        with mock.patch.object(self.gen.http.client, "HTTPSConnection", FakeConnection):
+        body = json.dumps({"type": "FeatureCollection", "features": []}).encode("utf-8")
+        with mock.patch.object(urllib.request.OpenerDirector, "open", return_value=FakeResponse(body)) as opened:
             coast = self.gen.fetch_coastline()
         self.assertEqual(coast, {"type": "FeatureCollection", "features": []})
-        conn = FakeConnection.instances[0]
-        self.assertEqual(conn.host, "raw.githubusercontent.com")
-        self.assertEqual(conn.timeout, 60)
-        self.assertEqual(
-            conn.requests,
-            [("GET", "/nvkelso/natural-earth-vector/ca96624a56bd078437bca8184e78163e5039ad19/geojson/ne_110m_coastline.geojson")],
+        opened.assert_called_once_with(
+            "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/"
+            "ca96624a56bd078437bca8184e78163e5039ad19/geojson/ne_110m_coastline.geojson",
+            timeout=60,
         )
-        self.assertTrue(conn.closed)
-
-    def test_fetch_coastline_fails_on_http_error(self):
-        with mock.patch.object(self.gen.http.client, "HTTPSConnection", FakeConnection):
-            original = FakeConnection.__init__
-
-            def init_404(conn, host, timeout=None, **kwargs):
-                original(conn, host, timeout=timeout, **kwargs)
-                conn.response = FakeResponse(404, b"Not Found")
-
-            with mock.patch.object(FakeConnection, "__init__", init_404):
-                with self.assertRaises(RuntimeError):
-                    self.gen.fetch_coastline()
-        self.assertTrue(FakeConnection.instances[0].closed)
 
 
 if __name__ == "__main__":
