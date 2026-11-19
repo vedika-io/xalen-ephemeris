@@ -17,6 +17,16 @@ rise/set/transit and eclipse search in the Python `swe` shim
 exception that `except swe.Error` can catch
 ([#48](https://github.com/vedika-io/xalen-ephemeris/issues/48)).
 
+### Documented
+- **High-latitude ascendant branch in `swe_houses_ex`.** Near the polar circle
+  the ecliptic meets the horizon twice and a chart can flip by 180 degrees.
+  XALEN returns the continuous rising intersection; Swiss Ephemeris switches to
+  the opposite one between 69.00 and 69.65 N (at 69.65 N, J2000, Lahiri,
+  Porphyry: 95.2301 vs 275.2299). The divergence is now documented on the
+  function, so a caller migrating from Swiss knows not to expect drop-in parity
+  at those latitudes
+  ([#92](https://github.com/vedika-io/xalen-ephemeris/issues/92)).
+
 ### Changed
 - **Dependency bumps: `ureq` 3 and `sha2` 0.11; `Cargo.lock` is now committed.**
   The kernel download (`xalen-ephem`, `kernel-autodownload`) and the remote
