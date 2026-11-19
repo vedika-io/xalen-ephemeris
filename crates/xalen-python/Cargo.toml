@@ -23,13 +23,14 @@ doctest = false
 # test binary cannot link. Made optional + default-off so the workspace tests
 # cleanly; CI/maturin opt in via `--features extension-module`.
 #
-# `abi3-py38` builds against the CPython stable ABI (PEP 384 / abi3) with a
-# minimum of Python 3.8. The result is a single forward-compatible wheel per
-# platform (tagged `cp38-abi3`) that imports unchanged on CPython 3.8 and every
-# later 3.x — instead of one wheel per interpreter minor version. This binding
+# `abi3-py39` builds against the CPython stable ABI (PEP 384 / abi3) with a
+# minimum of Python 3.9 (pyo3 0.30 dropped Python 3.8). The result is a single
+# forward-compatible wheel per platform (tagged `cp39-abi3`) that imports
+# unchanged on CPython 3.9 and every later 3.x — instead of one wheel per
+# interpreter minor version. This binding
 # only uses the stable-ABI subset (PyDict / PyList / PyAny via the Bound API),
 # so abi3 is sound here.
-pyo3 = { version = "0.29", features = ["abi3-py38"] }
+pyo3 = { version = "0.30", features = ["abi3-py39"] }
 xalen-ephem = { version = "0.7.0", path = "../xalen-ephem" }
 xalen-time = { version = "0.7.0", path = "../xalen-time" }
 xalen-ayanamsa = { version = "0.7.0", path = "../xalen-ayanamsa" }

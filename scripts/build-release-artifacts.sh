@@ -3,10 +3,10 @@
 # (x86_64 or aarch64). Nothing is published from here.
 #
 # Output, in dist/ at the repository root:
-#   xalen-<version>-cp38-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
-#   xalen-<version>-cp38-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl
-#   xalen-<version>-cp38-abi3-macosx_11_0_arm64.whl
-#   xalen-<version>-cp38-abi3-macosx_10_12_x86_64.whl
+#   xalen-<version>-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+#   xalen-<version>-cp39-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl
+#   xalen-<version>-cp39-abi3-macosx_11_0_arm64.whl
+#   xalen-<version>-cp39-abi3-macosx_10_12_x86_64.whl
 #   xalen-<version>.tar.gz        Python source distribution (any other platform)
 #   xalen-wasm-<version>.tgz      npm tarball of @xalen/wasm
 #   xalen-ephemeris-<version>.tgz npm tarball of @xalen/ephemeris (Node, loader only)

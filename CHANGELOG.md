@@ -27,7 +27,12 @@ exception that `except swe.Error` can catch
   variables and follows at most 4 redirects (a 301, 302 or 303 on the POST is
   followed as a GET without the body, and the `Authorization` header is not sent
   to the redirect target). The lock is resolved from crates published at least 14
-  days ago. `pyo3` stays at 0.29: 0.30 drops the `abi3-py38` feature.
+  days ago. `pyo3` stayed at 0.29 in that change: 0.30 drops the `abi3-py38` feature.
+
+- **`pyo3` 0.30 for the Python binding; Python 3.8 is no longer supported.**
+  pyo3 0.30 dropped Python 3.8 (end of life since October 2024), so the wheel
+  is now built with `abi3-py39` (tag `cp39-abi3`) and `requires-python` is
+  `>=3.9`. The accuracy suite output is unchanged by the bump.
 
 ### Added
 - **Parans in `xalen-maps` and `xalen map --parans`.** `parans(&map,
