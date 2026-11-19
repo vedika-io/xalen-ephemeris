@@ -17,6 +17,17 @@ rise/set/transit and eclipse search in the Python `swe` shim
 exception that `except swe.Error` can catch
 ([#48](https://github.com/vedika-io/xalen-ephemeris/issues/48)).
 
+### Fixed
+- **`swe_fixstar_ut` returns the apparent place, matching Swiss.** It used to
+  return the mean place of date, so a sidereal caller who subtracted
+  `swe_get_ayanamsa_ut_ex` still carried an annual aberration term and an
+  18.6-year nutation term of up to about 20 arcsec each. Nutation in longitude
+  and annual aberration are now applied; at 24 monthly epochs the Spica minus
+  TrueChitra difference moves from -4.698"..+38.787" to -0.006"..+0.006".
+  Callers that want the mean place can use
+  `xalen_stars::FixedStar::longitude_at_epoch`, as the function docs state
+  ([#91](https://github.com/vedika-io/xalen-ephemeris/issues/91)).
+
 ### Changed
 - **Dependency bumps: `ureq` 3 and `sha2` 0.11; `Cargo.lock` is now committed.**
   The kernel download (`xalen-ephem`, `kernel-autodownload`) and the remote

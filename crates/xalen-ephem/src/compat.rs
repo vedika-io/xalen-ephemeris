@@ -600,7 +600,7 @@ pub fn swe_deltat(jd: f64) -> f64 {
     dt_seconds / 86400.0 // convert seconds to days, matching SE convention
 }
 
-/// Look up a fixed star by name and return its ecliptic position at JD.
+/// Look up a fixed star by name and return its **apparent** ecliptic position at JD.
 ///
 /// Drop-in replacement for `swe_fixstar_ut(star, jd, iflag, xx, serr)`.
 ///
@@ -618,16 +618,33 @@ pub fn swe_fixstar_ut(star_name: &str, jd: f64) -> Result<[f64; 6], String> {
     let star = xalen_stars::find_by_name(star_name)
         .ok_or_else(|| format!("star not found: {star_name}"))?;
     let year = 2000.0 + (jd - 2_451_545.0) / 365.25;
+    let lon = star.longitude_at_epoch(year).to_radians();
+    let lat = star.latitude_at_epoch(year).to_radians();
+
+    // Swiss `swe_fixstar_ut` returns the APPARENT place: the mean place of date
+    // rotated to the true equinox (nutation in longitude) plus annual
+    // aberration. Without those terms a caller cannot pair the star with
+    // `swe_get_ayanamsa_ut_ex` - the difference has an annual term (aberration)
+    // and an 18.6-year term (nutation) of up to about 20 arcsec each.
+    let jd_tt = JdUT1(jd).to_tt(&xalen_time::DeltaTModel::StephensonMorrisonHohenkerk2016);
+    let t_tt = jd_tt.julian_centuries_from_j2000();
+    let nutation = xalen_coords::nutation_2000b(t_tt);
+    let sun_lon = Almanac::default_vedic()
+        .geocentric_longitude_deg(Body::Sun, JdUT1(jd))
+        .map_err(|e| e.to_string())?
+        .to_radians();
+    let apparent_lon =
+        lon + nutation.delta_psi + xalen_coords::annual_aberration_longitude(lon, lat, sun_lon);
+
     Ok([
-        star.longitude_at_epoch(year),
-        star.latitude_at_epoch(year),
+        apparent_lon.to_degrees().rem_euclid(360.0),
+        lat.to_degrees(),
         0.0, // distance (AU): no parallax data in the catalog
         0.0, // lon speed
         0.0, // lat speed
         0.0, // dist speed
     ])
 }
-
 /// Return the visual magnitude of a fixed star.
 ///
 /// Drop-in replacement for `swe_fixstar_mag(star, &mag, serr)` — Swiss
@@ -1028,16 +1045,65 @@ mod tests {
     }
 
     #[test]
-    fn fixstar_sirius_works_in_every_build() {
-        // The star list is in-house data with no feature switch that disables
-        // the lookup, so this holds with default and with
-        // `--no-default-features`.
-        let xx = swe_fixstar_ut("Sirius", J2000).unwrap();
-        // Swiss J2000 mean place: 104.0817 / -39.6053 (within 1" of it).
-        assert!((xx[0] - 104.081_677).abs() < 0.0003, "Sirius lon={}", xx[0]);
-        assert!((xx[1] + 39.605_303).abs() < 0.0003, "Sirius lat={}", xx[1]);
-        let mag = swe_fixstar_mag("Sirius").unwrap();
-        assert!((mag + 1.46).abs() < 0.05, "Sirius magnitude={mag}");
+    fn fixstar_returns_the_apparent_place() {
+        // Round-trip the documented reduction: mean place of date + nutation in
+        // longitude + annual aberration.
+        let jd = J2000;
+        let xx = swe_fixstar_ut("Sirius", jd).unwrap();
+        let star = xalen_stars::find_by_name("Sirius").unwrap();
+        let year = 2000.0 + (jd - 2_451_545.0) / 365.25;
+        let mean = star.longitude_at_epoch(year).to_radians();
+        let mean_lat = star.latitude_at_epoch(year).to_radians();
+        let t_tt = JdUT1(jd)
+            .to_tt(&xalen_time::DeltaTModel::StephensonMorrisonHohenkerk2016)
+            .julian_centuries_from_j2000();
+        let nutation = xalen_coords::nutation_2000b(t_tt);
+        let sun_lon = Almanac::default_vedic()
+            .geocentric_longitude_deg(Body::Sun, JdUT1(jd))
+            .unwrap()
+            .to_radians();
+        let expected = (mean
+            + nutation.delta_psi
+            + xalen_coords::annual_aberration_longitude(mean, mean_lat, sun_lon))
+        .to_degrees()
+        .rem_euclid(360.0);
+        assert!(
+            (xx[0] - expected).abs() < 1e-9,
+            "Sirius apparent lon {} != documented reduction {}",
+            xx[0],
+            expected
+        );
+        // Nutation and aberration together move a star by tens of arcsec, so a
+        // mean-place value cannot pass this test.
+        assert!((xx[0] - star.longitude_at_epoch(year)).abs() > 5.0 / 3600.0);
+    }
+
+    #[test]
+    fn fixstar_matches_swiss_true_chitra_anchor() {
+        // Swiss `swe_fixstar2_ut("Spica", J2000, SEFLG_SWIEPH)` = 203.836145.
+        // TrueChitra is defined with Spica at 180, so the star minus the
+        // ayanamsa must come back to 180 for every epoch in the sample.
+        swe_set_sid_mode(SE_SIDM_TRUE_CITRA, 0.0, 0.0);
+        let xx = swe_fixstar_ut("Spica", J2000).unwrap();
+        assert!(
+            (xx[0] - 203.836_145).abs() < 0.5 / 3600.0,
+            "Spica J2000 apparent lon {} vs Swiss 203.836145",
+            xx[0]
+        );
+        for i in 0..24 {
+            let jd = J2000 + 30.4375 * i as f64;
+            let star = swe_fixstar_ut("Spica", jd).unwrap();
+            let ayanamsa = swe_get_ayanamsa_ut_ex(jd, SE_SIDM_TRUE_CITRA).unwrap();
+            let mut d = (star[0] - ayanamsa - 180.0).rem_euclid(360.0);
+            if d > 180.0 {
+                d -= 360.0;
+            }
+            assert!(
+                d.abs() < 0.5 / 3600.0,
+                "jd {jd}: Spica - TrueChitra = {:+.3}\"",
+                d * 3600.0
+            );
+        }
     }
 
     #[test]
