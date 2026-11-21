@@ -27,20 +27,20 @@ maturin develop --release        # builds + installs into the active venv
 
 `maturin` enables the `extension-module` Cargo feature automatically (it is set in `pyproject.toml`), so the wheel resolves Python symbols against the host interpreter — no `libpython` link needed.
 
-Requires Python ≥ 3.8.
+Requires Python ≥ 3.9.
 
 ### Platform support
 
-Wheels are built with the **abi3** stable ABI (`abi3-py38`), so a **single wheel
-per platform** imports unchanged on CPython 3.8 and every later 3.x — there is no
+Wheels are built with the **abi3** stable ABI (`abi3-py39`), so a **single wheel
+per platform** imports unchanged on CPython 3.9 and every later 3.x — there is no
 per-interpreter-version wheel to pick.
 
 | Platform | On PyPI |
 |----------|---------|
-| Linux x86_64, glibc ≥ 2.17 (manylinux2014) | `cp38-abi3` wheel |
-| Linux aarch64, glibc ≥ 2.17 (manylinux2014) | `cp38-abi3` wheel |
-| macOS arm64, 11.0 or later | `cp38-abi3` wheel |
-| macOS x86_64, 10.12 or later | `cp38-abi3` wheel |
+| Linux x86_64, glibc ≥ 2.17 (manylinux2014) | `cp39-abi3` wheel |
+| Linux aarch64, glibc ≥ 2.17 (manylinux2014) | `cp39-abi3` wheel |
+| macOS arm64, 11.0 or later | `cp39-abi3` wheel |
+| macOS x86_64, 10.12 or later | `cp39-abi3` wheel |
 | **Windows, musl Linux and any other platform** | **sdist**: `pip install` builds from source (needs a Rust toolchain) |
 
 The wheels and the sdist are built on one Linux host by

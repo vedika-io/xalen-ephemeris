@@ -6,7 +6,7 @@ build-backend = "maturin"
 name = "xalen"
 description = "Pure-Rust astronomical & astrology ephemeris — VSOP87 planets, Vedic/Western/KP, house systems, ayanamsa, fixed stars, numerology. A pyswisseph drop-in."
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 license = "Apache-2.0"
 keywords = ["ephemeris", "astrology", "astronomy", "vedic", "vsop87", "swisseph", "pyswisseph", "jyotish", "panchang", "nakshatra"]
 classifiers = [
@@ -38,8 +38,8 @@ manifest-path = "Cargo.toml"
 # PyO3 extension module (vs cffi/uniffi). Stated explicitly so `maturin build`
 # and `maturin sdist` agree on the binding kind regardless of maturin defaults.
 bindings = "pyo3"
-# abi3: build one stable-ABI wheel (tag cp38-abi3) per platform that works on
-# CPython 3.8 and every later 3.x. The abi3-py38 Cargo feature on pyo3 (see
+# abi3: build one stable-ABI wheel (tag cp39-abi3) per platform that works on
+# CPython 3.9 and every later 3.x. The abi3-py39 Cargo feature on pyo3 (see
 # Cargo.toml) drives the compile; maturin tags the wheel from the lowest
 # abi3-pyXX feature it detects. `maturin build --release` therefore emits a
 # single forward-compatible wheel per platform instead of one per interpreter.
