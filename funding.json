@@ -1,28 +1,29 @@
 {
+  "$schema": "https://fundingjson.org/schema/v1.1.0.json",
   "version": "v1.1.0",
   "entity": {
     "type": "organisation",
-    "role": "steward",
-    "name": "XALEN TECHNOLOGY PRIVATE LIMITED",
+    "role": "owner",
+    "name": "Xalen Technology Private Limited",
     "email": "abhishek@vedika.io",
-    "description": "Xalen Technology Private Limited is the Indian commercial sponsor and steward of Xalen Ephemeris. Abhishek Raj is the proposed maintainer lead. This request funds public numerical-computing maintenance, reference provenance, reproducible builds and contributor documentation. The outputs will be available without buying Vedika or GrahaGuru services. Company sponsorship is disclosed; no exclusive copyright assignment is asserted.",
+    "description": "Xalen Technology Private Limited is a small, bootstrapped company in Pune, India (incorporated January 2026, recognised as a startup by India's DPIIT). We own and maintain Xalen Ephemeris and publish it under Apache-2.0. Today the engine is funded from our own product revenue: it is the calculation layer under our commercial Vedika API. We are asking for support so the open engine gets dedicated maintainer time, independent numerical review and documentation that do not depend on our commercial roadmap. Everything funded stays open source and is usable without buying any of our services. Maintainer lead: Abhishek Raj.",
     "webpageUrl": {
       "url": "https://github.com/vedika-io/xalen-ephemeris",
-      "wellKnown": "https://github.com/vedika-io/xalen-ephemeris/blob/funding/foss-united-2026-10-18/.well-known/funding-manifest-urls"
+      "wellKnown": "https://github.com/vedika-io/xalen-ephemeris/blob/main/.well-known/funding-manifest-urls"
     }
   },
   "projects": [
     {
-      "guid": "xalen-ephemeris-open-core",
-      "name": "Xalen Ephemeris — reproducible astronomical computation",
-      "description": "Xalen Ephemeris is an existing public Rust computation project for astronomical positions, time-scale and coordinate conversions, and cultural-calendar calculations. Source separates UTC/TAI/TT/UT1 conventions, supports analytical VSOP87 and file-backed DE440/SPK providers, includes primary-reference test designs and a seeded comparison harness with recorded backend provenance. Python, Node, WebAssembly and C binding source exists. The grant would make three numerical components and one initial binding easier for other developers to reproduce, inspect and maintain. Funded scope is the Apache-2.0 computation core with applicable BSD-3-Clause notices. The separately restricted optional catalogue and proprietary services are excluded. Existing source/test designs are not presented as independently certified accuracy, universal platform support or measured adoption.",
+      "guid": "xalen-ephemeris",
+      "name": "Xalen Ephemeris",
+      "description": "Xalen Ephemeris is a pure-Rust astronomical ephemeris and calendar library. It computes solar, lunar and planetary positions from analytical VSOP87 models or from JPL DE440/SPK kernels through its own NAIF DAF/SPK reader, handles UTC/TAI/TT/UT1 time scales and coordinate conversions, and implements calendar and chart calculations for Vedic, Western, Chinese and other traditions. It ships Python (PyO3), Node.js (napi-rs), WebAssembly and C bindings and a command-line tool.\n\nAccuracy is published and reproducible: BENCHMARK.md in the repository compares longitudes with NASA/JPL DE440 from 1900 to 2050 (Sun: mean difference 0.08 arc-seconds, worst case 0.19), and anyone can rerun it with the public de440s kernel.\n\nUsage as of 23 November 2026: 828 GitHub stars and 115 forks; about 711 npm downloads of @xalen/wasm and about 528 PyPI downloads of xalen in the last month; also published on crates.io. It runs in production as the calculation layer of the Vedika API.\n\nFunding would pay for maintainer time, independent numerical review, a public test-data suite against JPL references, stable releases of the Python, Node.js and WebAssembly bindings, and documentation, so developers of calendars, festival-date tools and astronomy education can depend on it. Funded scope is the open-source core; separately licensed optional data and our commercial services are excluded.",
       "webpageUrl": {
         "url": "https://github.com/vedika-io/xalen-ephemeris",
-        "wellKnown": "https://github.com/vedika-io/xalen-ephemeris/blob/funding/foss-united-2026-10-18/.well-known/funding-manifest-urls"
+        "wellKnown": "https://github.com/vedika-io/xalen-ephemeris/blob/main/.well-known/funding-manifest-urls"
       },
       "repositoryUrl": {
         "url": "https://github.com/vedika-io/xalen-ephemeris",
-        "wellKnown": "https://github.com/vedika-io/xalen-ephemeris/blob/funding/foss-united-2026-10-18/.well-known/funding-manifest-urls"
+        "wellKnown": "https://github.com/vedika-io/xalen-ephemeris/blob/main/.well-known/funding-manifest-urls"
       },
       "licenses": [
         "spdx:Apache-2.0",
@@ -31,31 +32,36 @@
       "tags": [
         "rust",
         "astronomy",
+        "ephemeris",
         "scientific-computing",
+        "calendar",
+        "libraries",
         "developer-tools",
-        "libraries"
+        "webassembly",
+        "python"
       ]
     }
   ],
   "funding": {
     "channels": [
       {
-        "guid": "grant-bank",
+        "guid": "company-bank",
         "type": "bank",
-        "description": "Grant payment details and tax/recipient documents will be supplied privately only after an agreed award process. No bank or government identifiers are published here."
+        "address": "",
+        "description": "Bank transfer to Xalen Technology Private Limited (India). Account and tax documents are shared privately with a funder after an award; no bank or government identifiers are published here."
       }
     ],
     "plans": [
       {
-        "guid": "core-maintenance-12m",
+        "guid": "open-maintenance-yearly",
         "status": "active",
-        "name": "12-month public reference and reproducibility programme",
-        "description": "INR 15L/12 months: xalen-time, xalen-coords, xalen-ephem and one binding. Q1 baseline/licences/schema; Q2 100 provenance-checked fixtures; Q3 two-platform binding and independent reviews; Q4 readiness report and quarterly public updates. Proposed budget: 9.6L maintainer, 2.4L reviews, 2.4L docs/support, up to 0.6L uncovered CI. Award-contingent detailed plan: https://github.com/vedika-io/xalen-ephemeris/blob/funding/foss-united-2026-10-18/FOSS_MAINTENANCE_PROPOSAL.md",
-        "amount": 1500000,
-        "currency": "INR",
-        "frequency": "one-time",
+        "name": "Open maintenance and reproducible accuracy",
+        "description": "Twelve months of open maintenance for the Apache-2.0 core: part-time maintainer (about US$15,000), independent numerical review of the time, coordinate and ephemeris code (about US$4,000), documentation and binding releases for Python, Node.js and WebAssembly (about US$4,000), and test-data hosting and build machines (about US$2,000). Progress is reported publicly each quarter.",
+        "amount": 25000,
+        "currency": "USD",
+        "frequency": "yearly",
         "channels": [
-          "grant-bank"
+          "company-bank"
         ]
       }
     ]
