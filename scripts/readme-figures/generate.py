@@ -31,13 +31,14 @@ Rust quick start in the README.
 """
 
 import argparse
+import html
 import json
 import math
 import os
 import subprocess
 import sys
+import urllib.parse
 import urllib.request
-from xml.sax.saxutils import escape
 
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 OUT = os.path.join(REPO, "docs", "assets")
@@ -50,10 +51,11 @@ COASTLINE_URL = (
     f"{NATURAL_EARTH_COMMIT}/geojson/ne_110m_coastline.geojson"
 )
 
-# The example birth. The date carries its own offset; the CLI turns it into UT.
-BIRTH_DATE = "1947-08-15T00:00:00+05:30"
-BIRTH_PLACE = "delhi"
-BIRTH_LABEL = "Indian independence, 15 August 1947, 00:00 IST (UTC+05:30), Delhi"
+# The example moment: a historic event, not a person's data. The date carries its
+# own offset; the CLI turns it into UT.
+EXAMPLE_DATE = "1947-08-15T00:00:00+05:30"
+EXAMPLE_PLACE = "delhi"
+EXAMPLE_LABEL = "Indian independence, 15 August 1947, 00:00 IST (UTC+05:30), Delhi"
 AYANAMSA = "Lahiri"
 HOUSE_SYSTEM = "placidus"
 
@@ -93,6 +95,43 @@ DARK = {
     },
     "other": "#9198a1",
 }
+
+
+def escape(text):
+    """Escape text for SVG element content: & < > (quotes stay, text nodes need none).
+
+    The same output as xml.sax.saxutils.escape, without importing an xml module: this script
+    only writes XML text and never parses any.
+    """
+    return html.escape(text, quote=False)
+
+
+def https_only_opener():
+    """A urllib opener that can open https URLs and nothing else.
+
+    urllib.request.urlopen also opens file:// and ftp:// URLs. This opener has only the https
+    handler, the redirect and HTTP-error handlers and UnknownHandler, so any other scheme (also
+    one reached through a redirect) fails with URLError, and a non-2xx answer raises HTTPError.
+    """
+    opener = urllib.request.OpenerDirector()
+    for handler in (
+        urllib.request.HTTPSHandler(),
+        urllib.request.UnknownHandler(),
+        urllib.request.HTTPRedirectHandler(),
+        urllib.request.HTTPDefaultErrorHandler(),
+        urllib.request.HTTPErrorProcessor(),
+    ):
+        opener.add_handler(handler)
+    return opener
+
+
+def fetch_coastline(url=COASTLINE_URL):
+    """Download and parse the pinned coastline GeoJSON, over https only."""
+    scheme = urllib.parse.urlsplit(url).scheme
+    if scheme != "https":
+        raise ValueError(f"coastline URL must be an https URL, got scheme {scheme!r}")
+    with https_only_opener().open(url, timeout=60) as resp:
+        return json.loads(resp.read().decode("utf-8"))
 
 
 def run_xalen(xalen, args):
@@ -189,7 +228,7 @@ def chart_wheel(chart, pal, dark):
     lines = svg_open(
         W, H,
         "Birth chart wheel computed by xalen chart",
-        f"{BIRTH_LABEL}. Sidereal zodiac, {aya['name']} ayanamsa, "
+        f"{EXAMPLE_LABEL}. Sidereal zodiac, {aya['name']} ayanamsa, "
         f"{chart['house_system_name']} houses. Planets at their computed longitudes.",
     )
     lines.append(f'<g font-family="{SANS}" fill="none" stroke-linecap="round">')
@@ -266,7 +305,7 @@ def chart_wheel(chart, pal, dark):
             f" · sidereal, {aya['name']} {aya['value_deg']:.4f}° · {chart['house_system_name']}")
     lines.append(f'<text x="{cx}" y="{H - 70}" fill="{pal["fg"]}" stroke="none" font-size="15" font-weight="600" text-anchor="middle">{escape(cap1)}</text>')
     lines.append(f'<text x="{cx}" y="{H - 48}" fill="{pal["muted"]}" stroke="none" font-size="13" text-anchor="middle">{escape(cap2)}</text>')
-    lines.append(f'<text x="{cx}" y="{H - 28}" fill="{pal["muted"]}" stroke="none" font-size="11" text-anchor="middle" font-family="{MONO}">xalen chart --date {BIRTH_DATE} --place {BIRTH_PLACE} --sidereal --house-system {HOUSE_SYSTEM}</text>')
+    lines.append(f'<text x="{cx}" y="{H - 28}" fill="{pal["muted"]}" stroke="none" font-size="11" text-anchor="middle" font-family="{MONO}">xalen chart --date {EXAMPLE_DATE} --place {EXAMPLE_PLACE} --sidereal --house-system {HOUSE_SYSTEM}</text>')
     lines.append(f'<text x="{cx}" y="{H - 10}" fill="{pal["muted"]}" stroke="none" font-size="11" text-anchor="middle" font-family="{MONO}">--bodies {",".join(CHART_BODIES)} --json</text>')
     lines.append("</g>")
     lines.append("</svg>")
@@ -362,7 +401,7 @@ def astro_map(lines_geo, coast_d, delhi, pal, dark):
     out = svg_open(
         W, H,
         "Astrocartography map computed by xalen map",
-        f"{BIRTH_LABEL}. MC, IC, ascendant and descendant lines of the Sun, Moon, "
+        f"{EXAMPLE_LABEL}. MC, IC, ascendant and descendant lines of the Sun, Moon, "
         "Mercury, Venus, Mars, Jupiter and Saturn over a world coastline, with three parans.",
     )
     out.append("<!-- Coastline: Natural Earth 110m coastline, public domain (naturalearthdata.com), "
@@ -537,7 +576,7 @@ def accuracy_chart(pal, dark):
 # --------------------------------------------------------------------------
 
 TERMINAL_ARGS = [
-    "positions", "--date", BIRTH_DATE, "--tz", "+05:30", "--sidereal",
+    "positions", "--date", EXAMPLE_DATE, "--tz", "+05:30", "--sidereal",
     "--bodies", "sun,moon,mercury,venus,mars,jupiter,saturn,rahu,ketu",
 ]
 
@@ -546,7 +585,7 @@ def terminal(xalen):
     text = run_xalen(xalen, TERMINAL_ARGS)
     body = text.rstrip("\n").split("\n")
     cmd = [
-        ("$ ", "xalen positions --date " + BIRTH_DATE + " --tz +05:30 \\"),
+        ("$ ", "xalen positions --date " + EXAMPLE_DATE + " --tz +05:30 \\"),
         ("", "    --sidereal --bodies sun,moon,mercury,venus,mars,jupiter,saturn,rahu,ketu"),
     ]
     fs, lh, cw = 13, 19, 7.85
@@ -589,21 +628,20 @@ def main():
     os.makedirs(OUT, exist_ok=True)
 
     chart = json.loads(run_xalen(xalen, [
-        "chart", "--date", BIRTH_DATE, "--place", BIRTH_PLACE, "--sidereal",
+        "chart", "--date", EXAMPLE_DATE, "--place", EXAMPLE_PLACE, "--sidereal",
         "--house-system", HOUSE_SYSTEM, "--bodies", ",".join(CHART_BODIES), "--json",
     ]))
     write("chart-wheel.svg", chart_wheel(chart, LIGHT, False))
     write("chart-wheel-dark.svg", chart_wheel(chart, DARK, True))
 
     lines_geo = json.loads(run_xalen(xalen, [
-        "map", "--date", BIRTH_DATE, "--bodies", ",".join(CLASSICAL), "--geojson", "--parans",
+        "map", "--date", EXAMPLE_DATE, "--bodies", ",".join(CLASSICAL), "--geojson", "--parans",
     ]))
     if args.coastline:
         with open(args.coastline, encoding="utf-8") as f:
             coast = json.load(f)
     else:
-        with urllib.request.urlopen(COASTLINE_URL, timeout=60) as resp:
-            coast = json.loads(resp.read().decode("utf-8"))
+        coast = fetch_coastline()
     # Leave room above the map for the rows of MC and IC labels.
     global MAP_Y0
     MAP_Y0 = 62.0 + 13.0 * meridian_labels(lines_geo)[1]
@@ -628,7 +666,7 @@ def main():
     print("--- chart summary")
     print(json.dumps({k: chart[k] for k in ("date", "place", "ayanamsa", "house_system_name", "ascendant", "mc")}, indent=1))
     for b in chart["bodies"]:
-        print(f"{b['id']:10s} {b['longitude']:9.4f} {b['sign']:12s} {b['degree_in_sign']:6.2f} house {b.get('house')}")
+        print(f"{b['id']:10s} {b['sign']:12s} {b['degree_in_sign']:6.2f} house {b.get('house')}")
     return 0
 
 
