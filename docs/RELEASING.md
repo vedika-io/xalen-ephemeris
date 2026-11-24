@@ -48,7 +48,7 @@ bash scripts/build-release-artifacts.sh
 
 It writes, into `dist/`:
 
-- the Python abi3 wheels (CPython 3.9 and newer) for Linux x86_64 and aarch64
+- the Python abi3 wheels (CPython 3.10 and newer) for Linux x86_64 and aarch64
   (manylinux2014, glibc 2.17) and macOS arm64 (11.0) and x86_64 (10.12);
 - the Python source distribution `xalen-X.Y.Z.tar.gz`;
 - `xalen-wasm-X.Y.Z.tgz`, the npm tarball of `@xalen/wasm`;

@@ -3,7 +3,7 @@
 #
 # Produces, into the repository:
 #   dist/                              — Python abi3 wheels + sdist (one wheel
-#                                        per platform, valid for CPython >= 3.9)
+#                                        per platform, valid for CPython >= 3.10)
 #   dist/                              — npm tarballs of the Node addon (one per
 #                                        platform plus the loader), Linux host only
 #   crates/xalen-wasm/pkg/             — platform-independent WebAssembly package
@@ -50,7 +50,7 @@ PY_MANIFEST="$REPO_ROOT/crates/xalen-python/Cargo.toml"
 HOST_OS="$(uname -s)"   # Darwin | Linux
 HOST_ARCH="$(uname -m)" # arm64 | x86_64 | aarch64
 
-# Python abi3 wheels: ONE wheel per platform serves all CPython >= 3.9.
+# Python abi3 wheels: ONE wheel per platform serves all CPython >= 3.10.
 PY_TARGETS=(
   "aarch64-apple-darwin"
   "x86_64-apple-darwin"
@@ -85,7 +85,7 @@ EOF
 
 # --- Python (maturin, abi3) ------------------------------------------------
 build_python() {
-  log "Python — abi3 wheels (cp39-abi3) + sdist"
+  log "Python — abi3 wheels (cp310-abi3) + sdist"
   command -v maturin >/dev/null 2>&1 || { err "maturin not found; pip install maturin"; OVERALL_RC=1; return; }
   mkdir -p "$DIST_DIR"
 

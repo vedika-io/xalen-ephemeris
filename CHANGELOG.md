@@ -34,6 +34,12 @@ exception that `except swe.Error` can catch
   is now built with `abi3-py39` (tag `cp39-abi3`) and `requires-python` is
   `>=3.9`. The accuracy suite output is unchanged by the bump.
 
+- **Python 3.10 or newer, Node.js 20 or newer.** Python 3.9 and Node.js 16 and 18
+  are past end of life. The wheel is now built with `abi3-py310` (tag
+  `cp310-abi3`), `requires-python` is `>=3.10`, the package lists the Python
+  3.10 to 3.13 classifiers, the npm package declares `engines.node` `>=20`, and
+  `scripts/gate.sh` requires the same minimums.
+
 ### Added
 - **Parans in `xalen-maps` and `xalen map --parans`.** `parans(&map,
   &ParanOptions)` returns every crossing of one body's line with another's (a

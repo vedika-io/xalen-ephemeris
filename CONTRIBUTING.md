@@ -19,7 +19,7 @@ astrological computation library; correctness and accuracy are the priorities.
 
 - Rust **1.85+** (edition 2024). Pinned MSRV: `rust-version = "1.85"`.
 - `rustup component add clippy rustfmt`
-- For `scripts/gate.sh`: Python **3.9+** and Node **18+** (it stops with a
+- For `scripts/gate.sh`: Python **3.10+** and Node **20+** (it stops with a
   message when either is older), plus curl, nm and strings.
 
 ## Project layout
