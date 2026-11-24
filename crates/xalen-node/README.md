@@ -15,7 +15,7 @@
 npm install @xalen/ephemeris
 ```
 
-Requires Node.js 16 or newer. npm installs only the prebuilt binary that matches
+Requires Node.js 20 or newer. npm installs only the prebuilt binary that matches
 your machine (see the table below); no compiler, `node-gyp` or data files are
 needed.
 
@@ -48,7 +48,7 @@ so they load on any glibc 2.17 or newer system (CentOS 7 and later, for example)
 
 The Windows binary is linked with a static C runtime, so it does not need the
 Visual C++ Redistributable. It is expected to load on 64-bit Windows 10 /
-Server 2016 or later with Node 16 or later (unverified; no Windows run yet).
+Server 2016 or later with Node 20 or later (unverified; no Windows run yet).
 It is built on Linux and checked there (file type,
 exports, imported DLLs), not loaded on a Windows machine before release; please
 [open an issue](https://github.com/vedika-io/xalen-ephemeris/issues) if it does

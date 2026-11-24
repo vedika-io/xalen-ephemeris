@@ -35,9 +35,9 @@ def test_pyo3_has_abi3_feature():
     m = re.search(r'^pyo3\s*=\s*\{[^}]*\}', cargo, re.MULTILINE)
     assert m, "pyo3 dependency line not found in Cargo.toml"
     pyo3_line = m.group(0)
-    assert "abi3-py39" in pyo3_line, (
-        "pyo3 must enable the abi3-py39 feature so one wheel covers CPython "
-        f">=3.9 (pyo3 0.30 dropped Python 3.8); got: {pyo3_line}"
+    assert "abi3-py310" in pyo3_line, (
+        "pyo3 must enable the abi3-py310 feature so one wheel covers CPython "
+        f">=3.10; got: {pyo3_line}"
     )
     assert 'version = "0.30"' in pyo3_line, (
         f"pyo3 must be on the 0.30 line; got: {pyo3_line}"
@@ -52,10 +52,17 @@ def test_pyproject_declares_pyo3_bindings():
 
 
 def test_requires_python_matches_abi3_floor():
-    # The abi3 floor (abi3-py39) and the project's requires-python must agree:
-    # a cp39-abi3 wheel must not be offered to a Python older than 3.9.
+    # The abi3 floor (abi3-py310) and the project's requires-python must agree:
+    # a cp310-abi3 wheel must not be offered to a Python older than 3.10.
     pyproject = _read(PKG_DIR / "pyproject.toml")
-    assert 'requires-python = ">=3.9"' in pyproject
+    assert 'requires-python = ">=3.10"' in pyproject
+
+
+def test_python_classifiers_cover_supported_minors():
+    pyproject = _read(PKG_DIR / "pyproject.toml")
+    for minor in ("3.10", "3.11", "3.12", "3.13"):
+        assert f'"Programming Language :: Python :: {minor}"' in pyproject, minor
+    assert '"Programming Language :: Python :: 3.9"' not in pyproject
 
 
 # ---------------------------------------------------------------------------
@@ -172,7 +179,7 @@ def test_built_wheel_is_abi3():
             wheels.extend(d.glob("xalen-*.whl"))
     if not wheels:
         pytest.skip("no built wheel found (build with `maturin build --release`)")
-    # An abi3 wheel is tagged like `...-cp39-abi3-<platform>.whl`.
+    # An abi3 wheel is tagged like `...-cp310-abi3-<platform>.whl`.
     assert any("abi3" in w.name for w in wheels), (
         "no abi3 wheel found among built wheels: "
         + ", ".join(w.name for w in wheels)

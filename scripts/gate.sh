@@ -4,7 +4,7 @@
 # status; contributors can run it locally. It works on any Linux or macOS host
 # that has rustup, python3 with pip, node with npm, curl, nm and strings.
 #
-# Minimum versions: Python 3.9, Node 18 (for `node --test`), and Rust 1.85, the
+# Minimum versions: Python 3.10, Node 20 (for `node --test`), and Rust 1.85, the
 # workspace `rust-version` (MSRV; cargo refuses an older toolchain). The gate
 # stops at once with a message when python3 or node is older.
 #
@@ -155,15 +155,15 @@ need_version() { # need_version <tool> <minimum> <check command...>
     exit 2
   fi
 }
-need_version python3 3.9 \
-  python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 9) else 1)'
+need_version python3 3.10 \
+  python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)'
 case "$SKIP" in
   *" release-config "*) case "$SKIP" in *" node-binding "*) NEED_NODE=0 ;; *) NEED_NODE=1 ;; esac ;;
   *) NEED_NODE=1 ;;
 esac
 if [ "$NEED_NODE" -eq 1 ]; then
-  need_version node 18 \
-    node -e 'process.exit(Number(process.versions.node.split(".")[0]) >= 18 ? 0 : 1)'
+  need_version node 20 \
+    node -e 'process.exit(Number(process.versions.node.split(".")[0]) >= 20 ? 0 : 1)'
 fi
 
 if [ -n "${GATE_TOOLS:-}" ]; then
