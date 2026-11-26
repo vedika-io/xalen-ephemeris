@@ -440,6 +440,20 @@ pub fn swe_houses(jd: f64, lat: f64, lon: f64, hsys: char) -> Result<HouseCusps,
 /// Returns a [`HouseCusps`] with 12 cusps and angles, all in degrees, including
 /// the four auxiliary ascendants Swiss exposes in `ascmc[4..8]`.
 ///
+/// # High latitudes: Swiss parity ends near 69 degrees
+///
+/// Near the polar circle the ecliptic can meet the horizon at two points that
+/// are both physically meaningful, and a chart can flip end for end. XALEN
+/// returns the continuous rising intersection at every latitude; Swiss
+/// Ephemeris switches to the opposite intersection somewhere between 69.00 and
+/// 69.65 degrees of latitude. At 69.65 N, J2000, Lahiri, Porphyry, XALEN gives
+/// the ascendant as 95.2301 while Swiss gives 275.2299.
+///
+/// This is a documented divergence rather than an accuracy claim. Callers that
+/// migrate from Swiss and work above roughly 69 degrees should treat which
+/// intersection is returned as unspecified, or pick the branch they need
+/// themselves. Below that latitude the two agree.
+///
 /// # Examples
 ///
 /// ```
